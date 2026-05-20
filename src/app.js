@@ -19,6 +19,9 @@ const COUNTS = window.VOICE_COUNTS;
 const DAYS = 30;
 const BAR_MAX = 50;            // a day with 50+ answers fills the bar to the top
 const LOG_MAX = 2000;          // localStorage.mora_log, newline-separated
+// Per-vowel level thresholds: correct count in a vowel group unlocks more
+// distractors. Wrong answers drop the count just below the current step.
+const LEVELS = [10, 15, 20];   // cap = 2 + (thresholds crossed) → 2/3/4/5
 const Z = () => ({ correct: 0, total: 0 });
 const pad2 = (x) => ("0" + x).slice(-2);
 
@@ -26,6 +29,7 @@ const pad2 = (x) => ("0" + x).slice(-2);
 // message, score, streak, audio, topbar).
 let stats = {};                // {YYYY-MM-DD: {correct,total}}
 let run = 0;                   // running streak of correct answers
+let skill = {};                // {vowel: count} — persistent per-vowel level counter
 let current = null;            // {target, voice}
 let locked = false;            // true while reviewing a wrong answer
 
@@ -34,7 +38,7 @@ function load() {
   try { return JSON.parse(localStorage.mora) || {}; }
   catch { return {}; }
 }
-const save = () => localStorage.mora = JSON.stringify({ s: stats, k: run });
+const save = () => localStorage.mora = JSON.stringify({ s: stats, k: run, x: skill });
 
 // Compact answer log persisted across sessions; capped at LOG_MAX entries.
 // Format per line:
@@ -67,10 +71,19 @@ function nowStamp() {
 const today = () => stats[key(0)] || Z();
 const acc = (s) => s.total ? s.correct / s.total : 0;
 
-function record(correct) {
+function record(correct, vowel) {
   const s = (stats[key(0)] ||= Z());
   s.total++;
-  if (correct) { s.correct++; run++; } else run = 0;
+  if (correct) {
+    s.correct++;
+    skill[vowel] = (skill[vowel] || 0) + 1;
+    run++;
+  } else {
+    const c = skill[vowel] || 0;
+    const i = LEVELS.findLastIndex((t) => c >= t);
+    skill[vowel] = i < 0 ? 0 : LEVELS[i] - 1;
+    run = 0;
+  }
   const cutoff = key(DAYS - 1);
   for (const x of Object.keys(stats)) if (x < cutoff) delete stats[x];
   save();
@@ -92,9 +105,12 @@ function mastered() {
   return w.length >= 22 && w.every((s) => acc(s) >= .95);
 }
 
+// Returns "ace" (high accuracy / streak), "grind" (sheer volume), or null.
 const doneToday = () => {
   const s = today();
-  return s.total >= 50 && acc(s) >= .95 || run >= 30;
+  if (s.total >= 50 && acc(s) >= .95 || run >= 30) return "ace";
+  if (s.total >= 100) return "grind";
+  return null;
 };
 
 // ---------- rendering ----------
@@ -104,11 +120,20 @@ function render() {
   streak.hidden = run < 2;
   streak.textContent = `streak: ${run}`;
 
-  const [cls, text] = mastered()
-    ? ["mastered", "You mastered this. Maybe try learning something else?"]
-    : doneToday()
-      ? ["done", "That's enough for today! Come again tomorrow!"]
-      : ["", "Let's train some more today!"];
+  let cls = "", text = "Let's train some more today!";
+  if (mastered()) {
+    cls = "mastered";
+    text = "You mastered this. Maybe try learning something else?";
+  } else {
+    const mode = doneToday();
+    if (mode === "ace") {
+      cls = "done";
+      text = "You are doing good! That's enough for today! Come again tomorrow!";
+    } else if (mode === "grind") {
+      cls = "done";
+      text = "Putting the work in! That's enough for today! Come again tomorrow!";
+    }
+  }
   message.className = cls;
   message.textContent = text;
 
@@ -156,12 +181,13 @@ function play(src) {
 
 function newQuestion() {
   locked = false;
-  const c = today().correct;
-  const cap = c >= 15 ? 5 : c >= 5 ? 4 : 2;
   const target = pick(ALL);
   // Stay strictly within the target's vowel group (last char of kunrei).
   // The cap is a maximum; small groups (e.g. i has only si/zi/ti) give fewer.
+  // Level is tracked per vowel group: each group ramps up independently.
   const v = target.slice(-1);
+  const c = skill[v] || 0;
+  const cap = 2 + LEVELS.filter((t) => c >= t).length;
   const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
   const opts = shuffle([target, ...shuffle(sibs).slice(0, cap - 1)]);
   const idx = rand(target);
@@ -194,7 +220,7 @@ function replay(m, btn) {
 function submit(picked, btn) {
   const { target, idx } = current;
   const correct = picked === target;
-  record(correct);
+  record(correct, target.slice(-1));
   appendLog(target, idx, picked);
   if (correct) {
     btn.classList.add("correct");
@@ -229,4 +255,5 @@ onkeydown = (e) => {
 const t = load();
 stats = t.s || {};
 run = t.k || 0;
+skill = t.x || {};
 render();

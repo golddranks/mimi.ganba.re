@@ -65,7 +65,6 @@ body {
     font-size: 1.15rem;
     font-weight: bold;
     letter-spacing: 0.5em;
-    background: var(--panel);
     color: var(--fg);
     z-index: 11;
 }
@@ -77,16 +76,13 @@ body {
     position: fixed;
     top: 9rem;
     font-size: .95rem;
-    background: var(--bg);
-    padding: .1rem .4rem;
-    border-radius: 4px;
     z-index: 5;
 }
 
 #message {
     left: 1rem;
     color: var(--muted);
-    max-width: calc(100vw - 14rem);
+    max-width: calc(100vw - 12rem);
 }
 
 #score {
@@ -119,6 +115,7 @@ body {
     gap: 1px;
     padding: .2rem 0;
     background: var(--panel);
+    border-top: 1px solid var(--panel-2);
     border-bottom: 1px solid var(--panel-2);
     z-index: 10;
 }
@@ -147,9 +144,6 @@ body {
     border-radius: 2px 2px 0 0;
 }
 
-.bar-bin.today .bar-stack {
-    outline: 1px solid var(--accent);
-}
 
 .bar-bin.today.empty::after {
     content: "";
