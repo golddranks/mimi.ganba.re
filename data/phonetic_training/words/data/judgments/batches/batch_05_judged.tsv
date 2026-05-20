@@ -1,0 +1,61 @@
+expression	reading	keep	example_sentence	note
+する	する	yes	写真をTシャツにする。
+まず	まず	yes	まず手を洗ってください。
+七	しち	yes	七時に起きます。
+中世	ちゅうせい	yes	中世のお城を見学した。
+主要	しゅよう	yes	主要なメンバーが集まった。
+人生	じんせい	yes	人生は短い。
+住む	すむ	yes	東京に住んでいます。
+優勝	ゆうしょう	yes	日本が優勝した。
+再三	さいさん	yes	再三注意したのに。
+勝ち	かち	yes	今日は勝ちだ。
+協調	きょうちょう	yes	協調が大切です。
+同志	どうし	yes	彼は私の同志です。
+商社	しょうしゃ	yes	商社で働いています。
+土地	とち	yes	この土地は高い。
+基地	きち	yes	米軍の基地がある。
+大層	たいそう	yes	大層喜んでいた。
+定規	じょうぎ	yes	定規で線を引く。
+将棋	しょうぎ	yes	父と将棋を指す。
+屑	くず	yes	紙の屑を捨てる。
+市	いち	yes	日曜日に市が立つ。
+強調	きょうちょう	yes	安全を強調した。
+情	じょう	yes	彼は情が深い。
+慎重	しんちょう	yes	慎重に運転する。
+指導	しどう	yes	先生の指導を受ける。
+撃つ	うつ	yes	的を撃つ練習をする。
+数	すう	no		bound morpheme; standalone is 数(かず)
+日	にち	no		bound/counter; standalone is 日(ひ)
+末	まつ	no		bound morpheme; standalone is 末(すえ)
+校長	こうちょう	yes	校長が話を始めた。
+正	せい	no		bound morpheme; only in compounds
+氏名	しめい	yes	氏名を書いてください。
+注意	ちゅうい	yes	車に注意してください。
+渦	うず	yes	川に渦ができている。
+為す	なす	yes	為すべきことをする。
+牛	うし	yes	牛が草を食べている。
+用事	ようじ	yes	用事があって行けない。
+相	そう	no		bound morpheme; only in compounds
+知人	ちじん	yes	知人に会いました。
+税	ぜい	no		bound morpheme/suffix, requires modifier
+競争	きょうそう	yes	徒競走で競争した。
+経つ	たつ	yes	時間が経つのは早い。
+習慣	しゅうかん	yes	早起きの習慣がある。
+菓子	かし	yes	お菓子を食べる。
+表紙	ひょうし	yes	本の表紙が破れた。
+角	すみ	yes	部屋の角に置く。
+調査	ちょうさ	yes	警察が調査している。
+貸す	かす	yes	お金を貸してください。
+趣味	しゅみ	yes	私の趣味は読書です。
+近く	ちかく	yes	駅の近くに住んでいる。
+連れる	つれる	yes	子供を連れて来た。
+部首	ぶしゅ	yes	漢字の部首を覚える。
+重量	じゅうりょう	yes	荷物の重量を量る。
+長期	ちょうき	yes	長期の休みを取る。
+集金	しゅうきん	yes	集金に伺います。
+順調	じゅんちょう	yes	仕事は順調です。
+～ちゃん	～ちゃん	no		suffix only
+～場	～じょう	no		suffix only
+～所	～しょ	no		suffix only
+～省	～しょう	no		suffix only
+～集	～しゅう	no		suffix only

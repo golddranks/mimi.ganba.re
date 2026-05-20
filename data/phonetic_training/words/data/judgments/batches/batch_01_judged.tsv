@@ -1,0 +1,61 @@
+expression	reading	keep	example_sentence	note
+いつ	いつ	yes	いつ来ますか。
+そっと	そっと	yes	そっとドアを閉めた。
+ミス	ミス	yes	ミスをしてしまった。
+上品	じょうひん	yes	彼女は上品な人です。
+中止	ちゅうし	yes	試合は中止になった。
+交差	こうさ	no		usually appears as 交差点 or サ変動詞; rarely standalone noun
+付属	ふぞく	yes	付属の説明書を読んでください。
+修正	しゅうせい	yes	文章を修正しました。
+全集	ぜんしゅう	yes	夏目漱石の全集を買った。
+劇場	げきじょう	yes	劇場で映画を見た。
+包装	ほうそう	yes	包装をお願いします。
+各地	かくち	yes	各地で雪が降った。
+周囲	しゅうい	yes	周囲を見回した。
+四角	しかく	yes	紙を四角に切る。
+地帯	ちたい	no		bound; appears in 安全地帯 etc., not standalone
+増大	ぞうだい	yes	人口が増大している。
+姓	せい	no		bound/formal; standalone use rare, usually 名字
+密	みつ	yes	人と人との接触が密になる。
+少女	しょうじょ	yes	少女が公園で遊んでいる。
+工事	こうじ	yes	道路の工事が始まった。
+幼児	ようじ	yes	幼児向けの本を買った。
+循環	じゅんかん	yes	血液の循環が悪い。
+感ずる	かんずる	yes	責任を感ずる。
+扇子	せんす	yes	扇子で涼んだ。
+挿す	さす	yes	花瓶に花を挿す。
+支給	しきゅう	yes	給料が支給された。
+文字	もじ	yes	文字を大きくしてください。
+時期	じき	yes	今は忙しい時期です。
+枚数	まいすう	yes	枚数を数えてください。
+櫛	くし	yes	櫛で髪をとかす。
+死	し	yes	死を恐れる。
+治療	ちりょう	yes	治療を受けた。
+清む	すむ	no		archaic/literary variant of 澄む; rarely used standalone
+澄む	すむ	yes	空気が澄んでいる。
+無数	むすう	yes	空に無数の星が輝く。
+現象	げんしょう	yes	不思議な現象が起きた。
+発	はつ	no		bound suffix (e.g., 東京発), not standalone noun
+着く	つく	yes	駅に着きました。
+磁気	じき	yes	磁気を帯びている。
+突く	つく	yes	棒で地面を突く。
+紅茶	こうちゃ	yes	紅茶を飲みましょう。
+線	せん	yes	線をまっすぐ引いてください。
+自動	じどう	yes	このドアは自動です。
+虹	にじ	yes	空に虹が出た。
+要旨	ようし	yes	論文の要旨を書く。
+詩	し	yes	詩を書きました。
+象	ぞう	yes	動物園で象を見た。
+賞品	しょうひん	yes	賞品をもらった。
+車掌	しゃしょう	yes	車掌に切符を見せた。
+通学	つうがく	yes	毎日電車で通学している。
+遅刻	ちこく	yes	会議に遅刻した。
+重役	じゅうやく	yes	父は会社の重役です。
+銃	じゅう	yes	銃を持っている。
+附属	ふぞく	yes	附属の部品を確認してください。
+需要	じゅよう	yes	需要が高まっている。
+餅	もち	yes	お正月に餅を食べる。
+～前	～ぜん	no		suffix only (e.g., 食事前)
+～山	～さん	no		suffix only for mountain names (e.g., 富士山)
+～条	～じょう	no		counter/suffix only, requires number
+～色	～しょく	no		suffix only (e.g., 三色)

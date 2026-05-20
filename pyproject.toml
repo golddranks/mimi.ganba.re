@@ -1,0 +1,21 @@
+[project]
+name = "mimi.ganba.re"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "numpy",
+    "pyopenjtalk",
+    "soundfile",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]

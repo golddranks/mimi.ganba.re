@@ -1,0 +1,60 @@
+expression	reading	keep	example_sentence	note
+ずっと	ずっと	yes	ずっと待っていました。
+もし	もし	yes	もし雨なら、行きません。
+丈夫	じょうぶ	yes	この机は丈夫です。
+中学	ちゅうがく	yes	弟は中学に通っています。
+乗車	じょうしゃ	yes	乗車の際は切符が必要です。
+人造	じんぞう	no		bound modifier; standalone use rare, appears in 人造湖/人造人間
+体操	たいそう	yes	毎朝体操をします。
+先週	せんしゅう	yes	先週京都に行きました。
+初～	しょ～	no		prefix only
+勝つ	かつ	yes	試合に勝ちました。
+友情	ゆうじょう	yes	友情は大切です。
+同時	どうじ	yes	二人は同時に答えました。
+善	ぜん	no		bound/abstract; standalone use is literary, normally in compounds 善悪/最善
+地	ち	no		bound morpheme; standalone use rare, appears in 土地/地面
+境	さかい	yes	県の境を越えました。
+失礼	しつれい	yes	失礼します。
+実例	じつれい	yes	実例を挙げてください。
+小	しょう	no		bound morpheme; standalone use only in set phrases
+岸	きし	yes	川の岸を歩いた。
+市	し	yes	この市は人口が多い。
+待つ	まつ	yes	駅で待っています。
+意地	いじ	yes	意地を張るな。
+成人	せいじん	yes	来年成人になります。
+指揮	しき	yes	彼は指揮を執った。
+操作	そうさ	yes	機械の操作は簡単です。
+数字	すうじ	yes	数字を書いてください。
+昼食	ちゅうしょく	yes	昼食を食べました。
+札	さつ	yes	千円札を出した。
+椅子	いす	yes	椅子に座ってください。
+正体	しょうたい	yes	正体がわかった。
+水	みず	yes	水を飲みます。
+消化	しょうか	yes	消化に良い食べ物です。
+測量	そくりょう	yes	土地の測量をする。
+為る	する	yes	宿題をします。
+状態	じょうたい	yes	車の状態を確認した。
+申請	しんせい	yes	ビザを申請しました。
+相互	そうご	no		bound modifier; appears in 相互理解/相互作用, rarely standalone
+石	いし	yes	石を投げた。
+種類	しゅるい	yes	たくさんの種類があります。
+箸	はし	yes	箸でご飯を食べる。
+維持	いじ	yes	健康を維持しています。
+耕地	こうち	no		technical/written; rarely used in casual speech
+葬式	そうしき	yes	葬式に出ました。
+製造	せいぞう	yes	車を製造する工場です。
+討つ	うつ	no		archaic/literary; standalone use limited to historical contexts
+調節	ちょうせつ	yes	温度を調節してください。
+資料	しりょう	yes	資料を準備しました。
+足; 脚	あし	yes	足が痛い。
+迷信	めいしん	yes	それは迷信です。
+週	しゅう	no		bound; standalone use rare, normally 今週/来週/一週間
+郵送	ゆうそう	yes	書類を郵送しました。
+釣	つり	yes	週末は釣に行きます。
+長～	ちょう～	no		prefix only
+雑巾	ぞうきん	yes	雑巾で床を拭いた。
+領事	りょうじ	yes	日本の領事に会った。
+～中	～じゅう	no		suffix only
+～女	～じょ	no		counter suffix only
+～所	～じょ	no		suffix only
+～紙	～し	no		suffix only

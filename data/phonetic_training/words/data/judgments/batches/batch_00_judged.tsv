@@ -1,0 +1,61 @@
+expression	reading	keep	example_sentence	note
+×	ばつ	yes	答えに×をつけた。
+そう	そう	yes	そう、その通りです。
+バス	バス	yes	バスで学校に行く。
+上司	じょうし	yes	上司に相談しました。
+中性	ちゅうせい	yes	この洗剤は中性です。
+事件	じけん	yes	大きな事件が起きた。
+付く	つく	yes	服に泥が付いた。
+信仰	しんこう	yes	彼は強い信仰を持っている。
+全	ぜん	no		bound morpheme; standalone form needs 全部/全て
+刺す	さす	yes	蜂に刺された。
+包丁	ほうちょう	yes	包丁で野菜を切る。
+司会	しかい	yes	司会を務めます。
+吸う	すう	yes	深く息を吸う。
+四季	しき	yes	日本には四季がある。
+地名	ちめい	yes	地名を覚えるのは難しい。
+増加	ぞうか	yes	人口が増加している。
+好き	すき	yes	犬が好きです。
+家族	かぞく	yes	家族と旅行に行く。
+少々	しょうしょう	yes	少々お待ちください。
+巣	す	yes	鳥が巣を作った。
+年	とし	yes	年を取りました。
+復習	ふくしゅう	yes	毎日復習をします。
+意思	いし	yes	自分の意思で決めた。
+所為	せい	yes	君のせいじゃないよ。
+振興	しんこう	yes	地域の振興を図る。
+支店	してん	yes	東京支店で働いています。
+敷く	しく	yes	布団を敷く。
+時刻	じこく	yes	出発の時刻を確認する。
+松	まつ	yes	庭に松が生えている。
+橋	はし	yes	橋を渡る。
+武士	ぶし	yes	昔、武士がいました。
+汁	しる	yes	味噌汁の汁を飲む。
+添う	そう	no		archaic/literary; mostly in compounds 寄り添う/付き添う
+演奏	えんそう	yes	ピアノの演奏を聞いた。
+無地	むじ	yes	無地のシャツを買った。
+現状	げんじょう	yes	現状を説明します。
+症状	しょうじょう	yes	症状を医者に話す。
+省～	しょう～	no		prefix only
+磁器	じき	yes	きれいな磁器の皿だ。
+空く	すく	yes	お腹が空いた。
+精神	せいしん	yes	精神を集中する。
+総～	そう～	no		prefix only
+膳	ぜん	no		mostly counter or in compounds; rarely standalone
+虫	むし	yes	虫が飛んでいる。
+西	にし	yes	西の空が赤い。
+試験	しけん	yes	明日試験があります。
+講師	こうし	yes	新しい講師が来た。
+賞	しょう	yes	賞をもらいました。
+身長	しんちょう	yes	身長を測る。
+通勤	つうきん	yes	毎日電車で通勤する。
+進行	しんこう	yes	工事が進行している。
+酢	す	yes	酢を少し入れる。
+鉢	はち	yes	花を鉢に植えた。
+関する	かんする	yes	環境に関する話をした。
+電池	でんち	yes	電池が切れた。
+食糧	しょくりょう	yes	食糧を備える。
+～兆	～ちょう	no		counter requiring number
+～寺	～じ	no		suffix only
+～時	～じ	no		counter requiring number
+～艘	～そう	no		counter requiring number

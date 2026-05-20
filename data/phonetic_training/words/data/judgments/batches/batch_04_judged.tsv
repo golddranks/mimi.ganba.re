@@ -1,0 +1,61 @@
+expression	reading	keep	example_sentence	note
+すり	すり	yes	電車ですりに気をつけて。
+はず	はず	no		grammatical/formal noun, only used with modifiers (〜はず)
+一生	いっしょう	yes	一生忘れません。
+中	ちゅう	no		bound morpheme/suffix; standalone middle is 中(なか)
+主義	しゅぎ	yes	私の主義に反する。
+人工	じんこう	yes	これは人工の湖です。
+住	じゅう	no		bound morpheme; standalone is 住む or compound 住所
+僧	そう	no		bound; usually お坊さん in speech
+内	うち	yes	うちの中で遊ぶ。
+勘定	かんじょう	yes	お勘定をお願いします。
+千	せん	yes	千円ください。
+同士	どうし	no		suffix-like, attaches to nouns (友達同士 etc.)
+商店	しょうてん	yes	駅前の商店で買った。
+図	ず	yes	図を見てください。
+地理	ちり	yes	地理の勉強が好きです。
+夢中	むちゅう	yes	ゲームに夢中になる。
+官庁	かんちょう	yes	官庁で働いている。
+射す	さす	no		rare/literary; usually 光が差す uses 差す
+尻	しり	yes	尻が痛い。
+差す	さす	yes	傘を差す。
+建つ	たつ	yes	新しい家が建つ。
+患者	かんじゃ	yes	患者を診察する。
+感謝	かんしゃ	yes	感謝しています。
+指す	さす	yes	地図を指す。
+摘む	つむ	yes	花を摘む。
+数	かず	yes	数を数える。
+新興	しんこう	no		bound/attributive only (新興国, 新興企業 etc.)
+月	つき	yes	月がきれいですね。
+校舎	こうしゃ	yes	新しい校舎ができた。
+歌手	かしゅ	yes	好きな歌手は誰ですか。
+氏	し	no		suffix/highly formal; not used standalone
+注す	さす	no		rare kanji form; standalone use uncommon
+減少	げんしょう	yes	人口が減少している。
+点く	つく	yes	電気が点く。
+父	ちち	yes	父は会社員です。
+生長	せいちょう	no		technical/botanical term; everyday usage is 成長
+直線	ちょくせん	yes	直線を引く。
+知事	ちじ	yes	知事が発表した。
+禅	ぜん	yes	禅を学んでいます。
+端	はし	yes	道の端を歩く。
+終点	しゅうてん	yes	終点で降ります。
+習字	しゅうじ	yes	習字を習っています。
+茶	ちゃ	yes	お茶をどうぞ。
+表示	ひょうじ	yes	画面に表示される。
+親類	しんるい	yes	親類が集まった。
+調子	ちょうし	yes	調子はどうですか。
+貸し	かし	yes	君に貸しがある。
+超過	ちょうか	yes	時間を超過した。
+近い	ちかい	yes	駅は近いです。
+造船	ぞうせん	yes	造船の仕事をしている。
+選手	せんしゅ	yes	選手が入場します。
+重視	じゅうし	yes	安全を重視する。
+長所	ちょうしょ	yes	彼の長所は優しさだ。
+隙	すき	yes	隙を見せるな。
+頂点	ちょうてん	yes	頂点に達した。
+～さん	～さん	no		suffix only
+～商	～しょう	no		suffix only
+～戦	～せん	no		counter/suffix only
+～畳	～じょう	no		counter requiring number
+～長	～ちょう	no		suffix only

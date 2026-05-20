@@ -1,0 +1,61 @@
+expression	reading	keep	example_sentence	note
+うち	うち	yes	うちに帰ります。
+ちょうだい	ちょうだい	yes	お水ちょうだい。
+一	いち	yes	一から始めよう。
+上等	じょうとう	yes	これは上等なワインだ。
+中間	ちゅうかん	yes	中間テストがあります。
+交通	こうつう	yes	交通が便利です。
+会場	かいじょう	yes	会場はどこですか。
+修飾	しゅうしょく	no		technical grammar/literary term, rarely used standalone in simple speech
+八	はち	yes	八時に会いましょう。
+加速	かそく	yes	車が加速した。
+医師	いし	yes	医師に相談してください。
+各自	かくじ	yes	各自で持ってきてください。
+味	あじ	yes	この味が好きです。
+回数	かいすう	yes	回数を数える。
+地点	ちてん	yes	この地点で待ち合わせよう。
+墨	すみ	yes	墨で字を書く。
+字	じ	yes	字をきれいに書く。
+対照	たいしょう	yes	二つを対照する。
+就く	つく	yes	新しい仕事に就いた。
+工場	こうじょう	yes	工場で働いています。
+幼稚	ようち	yes	考えが幼稚だ。
+心臓	しんぞう	yes	心臓がドキドキする。
+感情	かんじょう	yes	感情を抑える。
+打つ	うつ	yes	ボールを打つ。
+捜査	そうさ	yes	警察が捜査している。
+改造	かいぞう	yes	車を改造した。
+斜	はす	no		rarely standalone; usually 斜め(ななめ) or in compounds
+最中	さいちゅう	yes	食事の最中です。
+果実	かじつ	yes	果実を収穫する。
+次	つぎ	yes	次は私の番です。
+死体	したい	yes	死体が見つかった。
+沿う	そう	yes	川に沿って歩く。
+清掃	せいそう	yes	教室の清掃をする。
+激増	げきぞう	yes	事故が激増した。
+無視	むし	yes	信号を無視するな。
+生	せい	no		bound morpheme; standalone "birth/life" uses 命 or 人生
+直	じき	yes	直に着きます。
+瞬間	しゅんかん	yes	その瞬間を忘れない。
+社会	しゃかい	yes	社会のルールを守る。
+立つ	たつ	yes	椅子から立つ。
+純情	じゅんじょう	yes	彼は純情な人だ。
+縁	ふち	yes	コップの縁が欠けた。
+自治	じち	yes	自治を守る。
+血	ち	yes	血が出た。
+視点	してん	yes	違う視点で考える。
+詩人	しじん	yes	彼は有名な詩人です。
+財産	ざいさん	yes	財産を守る。
+賞金	しょうきん	yes	賞金をもらった。
+辞典	じてん	yes	辞典で調べる。
+通用	つうよう	yes	ここでは英語が通用する。
+過剰	かじょう	yes	過剰な反応だ。
+重点	じゅうてん	yes	文法に重点を置く。
+鑑賞	かんしょう	yes	映画を鑑賞する。
+隅	すみ	yes	部屋の隅に置く。
+靴	くつ	yes	靴を履く。
+首相	しゅしょう	yes	首相が演説した。
+～勝	～しょう	no		counter requiring number
+～帳	～ちょう	no		suffix only
+～産	～さん	no		suffix only (origin marker)
+～足	～そく	no		counter requiring number
