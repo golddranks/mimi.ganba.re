@@ -110,8 +110,38 @@ body {
     bottom: 1rem;
     color: var(--muted);
     font-size: .85rem;
-    max-width: calc(100vw - 2rem);
+    max-width: calc(100vw - 6rem);
     z-index: 5;
+}
+
+#relisten {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 999px;
+    border: 0;
+    background: var(--panel);
+    color: var(--fg);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .2);
+    z-index: 5;
+}
+
+#relisten:hover {
+    background: var(--panel-2);
+}
+
+#relisten:active {
+    transform: scale(.97);
+}
+
+#relisten:disabled {
+    opacity: .4;
+    cursor: default;
 }
 
 #topbar {

@@ -276,13 +276,28 @@ function submit(picked, btn) {
   }
 }
 
+// Re-listen replays the current question but drops the vowel's skill to
+// the current level's start and breaks the streak — leaning on it costs.
+function relistenCurrent() {
+  if (!current) return;
+  const v = current.target.slice(-1);
+  const c = skill[v] || 0;
+  const i = LEVELS.findLastIndex((t) => c >= t);
+  skill[v] = i < 0 ? 0 : LEVELS[i];
+  run = 0;
+  save();
+  render();
+  play(current.voice);
+}
+
 // ---------- input ----------
 primary.onclick = newQuestion;
+relisten.onclick = relistenCurrent;
 
 onkeydown = (e) => {
   if (e.key === " " || e.key === "Enter") {
     if (!primary.hidden) primary.click();
-    else if (current && !locked) play(current.voice);
+    else if (current && !locked) relistenCurrent();
     else return;
     e.preventDefault();
   } else if (/^[1-9]$/.test(e.key)) {
@@ -301,9 +316,10 @@ const TIPS = [
   "Tip: True masters aren't made in a day. But 30 days of effort will show!",
   "Tip: Close your eyes — let your ears do the work.",
   "Tip: Voiced sounds (ず, じゅ) make your vocal cords buzz.",
-  "Tip: 'つ' bursts; 'す' hisses. Listen for the start.",
+  "Tip: つ bursts; す hisses. Listen for the start.",
   "Tip: Hear the friction! Hear the bursts! Hear the voicing!",
   "Tip: A few minutes, multiple times a day beats one marathon session.",
+  "Tip: You can listen again with the button bottom right, but once you get good, try to ace it at once!",
 ];
 
 // ---------- boot ----------
