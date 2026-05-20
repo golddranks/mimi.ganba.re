@@ -104,6 +104,16 @@ body {
     color: var(--accent);
 }
 
+#tip {
+    position: fixed;
+    left: 1rem;
+    bottom: 1rem;
+    color: var(--muted);
+    font-size: .85rem;
+    max-width: calc(100vw - 2rem);
+    z-index: 5;
+}
+
 #topbar {
     position: fixed;
     top: 2.2rem;

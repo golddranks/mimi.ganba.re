@@ -201,13 +201,52 @@ function newQuestion() {
   play(current.voice);
 }
 
+// Long-press = "guess": if right, counts as correct but stays in review mode
+// (no auto-advance) so the user can re-listen before moving on.
+const LONG_MS = 500;
+let pressTimer = null;
+let longHandled = false;
+
+choices.onpointerdown = (e) => {
+  const btn = e.target.closest(".choice");
+  if (!btn) return;
+  // Always reset on a fresh press: if the post-long-press click didn't
+  // fire (common on touch), the flag would otherwise eat the next tap.
+  longHandled = false;
+  if (!current || locked) return;
+  pressTimer = setTimeout(() => {
+    pressTimer = null;
+    longHandled = true;
+    guess(btn);
+  }, LONG_MS);
+};
+const cancelPress = () => {
+  if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+};
+choices.onpointerup = cancelPress;
+choices.onpointercancel = cancelPress;
+choices.onpointerleave = cancelPress;
+
 choices.onclick = (e) => {
   const btn = e.target.closest(".choice");
   if (!btn || !current) return;
+  if (longHandled) { longHandled = false; return; }
   const m = btn.dataset.mora;
   if (locked) replay(m, btn);
   else submit(m, btn);
 };
+
+function guess(btn) {
+  const picked = btn.dataset.mora;
+  const { target, idx } = current;
+  if (picked !== target) { submit(picked, btn); return; }
+  record(true, target.slice(-1));
+  appendLog(target, idx, picked);
+  btn.classList.add("correct");
+  locked = true;
+  primary.textContent = "Next";
+  primary.hidden = false;
+}
 
 function replay(m, btn) {
   for (const b of choices.querySelectorAll(".choice.playing")) b.classList.remove("playing");
@@ -251,9 +290,26 @@ onkeydown = (e) => {
   }
 };
 
+const TIPS = [
+  "Tip: Pressing long counts as a guess answer, and let's you listen again.",
+  "Tip: After answering wrong, try pressing the buttons to listen again.",
+  "Tip: Once you get good, there will be more buttons to choose from!",
+  "Tip: Try achieving long streaks!",
+  "Tip: Flawless streak, and your day is over in 30 answers!",
+  "Tip: Doing well enough, and your day is over in 50 answers!",
+  "Tip: Missing a bunch? Put the work in, you are still done in 100 answers.",
+  "Tip: True masters aren't made in a day. But 30 days of effort will show!",
+  "Tip: Close your eyes — let your ears do the work.",
+  "Tip: Voiced sounds (ず, じゅ) make your vocal cords buzz.",
+  "Tip: 'つ' bursts; 'す' hisses. Listen for the start.",
+  "Tip: Hear the friction! Hear the bursts! Hear the voicing!",
+  "Tip: A few minutes, multiple times a day beats one marathon session.",
+];
+
 // ---------- boot ----------
 const t = load();
 stats = t.s || {};
 run = t.k || 0;
 skill = t.x || {};
+tip.textContent = pick(TIPS);
 render();
