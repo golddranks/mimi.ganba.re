@@ -80,10 +80,10 @@ function record(correct) {
 function mastered() {
   const days = Object.keys(stats).filter((k) => stats[k].total).sort();
   if (!days.length) return false;
-  // Tier 1: first ever day, 100%.
+  // Tier 1: first ever day, completed at 100%.
   if (days.length === 1) {
     const s = stats[days[0]];
-    return s.correct === s.total;
+    return s.correct === s.total && doneToday();
   }
   // Tier 2: first 5 trained days all >=95%.
   if (days.length >= 5 && days.slice(0, 5).every((k) => acc(stats[k]) >= .95)) return true;

@@ -47,10 +47,27 @@ body {
     align-items: center;
     justify-content: center;
     gap: 2rem;
-    padding: 7.8rem 1rem 2rem;
+    padding: 10rem 1rem 2rem;
     width: 100%;
     max-width: 540px;
     margin: 0 auto;
+}
+
+#title {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2.2rem;
+    line-height: 2.2rem;
+    text-align: center;
+    font-family: "Tahoma", sans-serif;
+    font-size: 1.15rem;
+    font-weight: bold;
+    letter-spacing: 0.5em;
+    background: var(--panel);
+    color: var(--fg);
+    z-index: 11;
 }
 
 /* Floating header readouts share most styling. */
@@ -58,7 +75,7 @@ body {
 #score,
 #streak {
     position: fixed;
-    top: 6.8rem;
+    top: 9rem;
     font-size: .95rem;
     background: var(--bg);
     padding: .1rem .4rem;
@@ -79,7 +96,7 @@ body {
 
 #streak {
     right: 1rem;
-    top: 8.4rem;
+    top: 10.6rem;
     color: var(--accent);
 }
 
@@ -93,7 +110,7 @@ body {
 
 #topbar {
     position: fixed;
-    top: 0;
+    top: 2.2rem;
     left: 0;
     right: 0;
     height: 6rem;

@@ -150,6 +150,7 @@ def bundle_index(counts: dict[str, int]) -> None:
     html = re.sub(r">\s+<", "><", html).strip()
     (DIST / "index.html").write_text(html, encoding="utf-8")
     (DIST / ".nojekyll").write_text("")
+    shutil.copy(SRC / "favicon.svg", DIST / "favicon.svg")
 
 
 def main() -> None:
