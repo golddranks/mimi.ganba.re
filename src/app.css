@@ -131,10 +131,6 @@ body {
     z-index: 5;
 }
 
-#relisten:hover {
-    background: var(--panel-2);
-}
-
 #relisten:active {
     transform: scale(.97);
 }
@@ -206,10 +202,6 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, .2);
 }
 
-#primary:hover {
-    background: var(--accent);
-}
-
 #primary:active {
     transform: scale(.97);
 }
@@ -241,9 +233,17 @@ body {
     transition: border-color 120ms, background 120ms;
 }
 
-.choice:hover:not(.correct):not(.wrong) {
-    border-color: var(--accent);
-    background: var(--panel-2);
+@media (hover: hover) {
+    .choice:hover:not(.correct):not(.wrong) {
+        border-color: var(--accent);
+        background: var(--panel-2);
+    }
+    #primary:hover {
+        background: var(--accent);
+    }
+    #relisten:hover {
+        background: var(--panel-2);
+    }
 }
 
 .choice:active {
