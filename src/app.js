@@ -20,7 +20,7 @@ const DAYS = 30;
 const BAR_MAX = 50;            // a day with 50+ answers fills the bar to the top
 const LOG_MAX = 2000;          // localStorage.mora_log, newline-separated
 // Per-vowel level thresholds: correct count in a vowel group unlocks more
-// distractors. Wrong answers drop the count just below the current step.
+// distractors. Wrong answers drop the count to the previous level's start.
 const LEVELS = [10, 15, 20];   // cap = 2 + (thresholds crossed) → 2/3/4/5
 const Z = () => ({ correct: 0, total: 0 });
 const pad2 = (x) => ("0" + x).slice(-2);
@@ -121,7 +121,9 @@ function record(correct, vowel) {
   } else {
     const c = skill[vowel] || 0;
     const i = LEVELS.findLastIndex((t) => c >= t);
-    skill[vowel] = i < 0 ? 0 : LEVELS[i] - 1;
+    // Drop to the start of the previous level so one correct doesn't
+    // immediately bump you back over the threshold.
+    skill[vowel] = i <= 0 ? 0 : LEVELS[i - 1];
     run = 0;
   }
   const cutoff = key(DAYS - 1);
@@ -140,9 +142,12 @@ function mastered() {
   }
   // Tier 2: first 5 trained days all >=95%.
   if (days.length >= 5 && days.slice(0, 5).every((k) => acc(stats[k]) >= .95)) return true;
-  // Tier 3: in the last 30 days, >=22 days trained and every trained day >=95%.
+  // Tier 3: last 30 days, >=22 trained, every trained day >=90%, last 5 >=95%.
+  // w is most-recent-first since key(0)=today, key(1)=yesterday, etc.
   const w = Array.from({ length: DAYS }, (_, i) => stats[key(i)]).filter((s) => s?.total);
-  return w.length >= 22 && w.every((s) => acc(s) >= .95);
+  return w.length >= 22
+    && w.every((s) => acc(s) >= .90)
+    && w.slice(0, 5).every((s) => acc(s) >= .95);
 }
 
 // Returns "ace" (high accuracy / streak), "grind" (sheer volume), or null.
