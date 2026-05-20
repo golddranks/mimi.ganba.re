@@ -94,7 +94,7 @@ function mastered() {
 
 const doneToday = () => {
   const s = today();
-  return s.total >= 50 && acc(s) >= .95 || run >= 20;
+  return s.total >= 50 && acc(s) >= .95 || run >= 30;
 };
 
 // ---------- rendering ----------
