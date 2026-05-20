@@ -23,6 +23,8 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - uses: DeterminateSystems/magic-nix-cache-action@v13
+        with:
+          use-flakehub: false
       - name: Build
         run: nix-shell --run "python scripts/build.py"
       - name: Write CNAME for custom domain
