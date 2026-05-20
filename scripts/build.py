@@ -103,14 +103,24 @@ def minify_css(src: str) -> str:
 
 
 def minify_js(src: str) -> str:
-    src = re.sub(r"/\*[\s\S]*?\*/", "", src)
-    src = re.sub(r"//[^\n]*", "", src)
-    # Stash string/template literals so whitespace collapse doesn't touch them.
+    # Single pass: at each position try strings/templates and comments together,
+    # so a `'` inside a `// comment` doesn't get mistaken for a string opener
+    # and a `//` inside a "https://..." doesn't get mistaken for a comment.
     preserved: list[str] = []
-    def stash(m: re.Match) -> str:
-        preserved.append(m.group(0))
+    def handle(m: re.Match) -> str:
+        s = m.group(0)
+        if s.startswith("/*") or s.startswith("//"):
+            return ""           # drop comment
+        preserved.append(s)
         return f"\x00{len(preserved) - 1}\x00"
-    src = re.sub(r"`(?:\\.|[^`\\])*`|'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"", stash, src)
+    src = re.sub(
+        r"`(?:\\.|[^`\\])*`"
+        r"|'(?:\\.|[^'\\])*'"
+        r"|\"(?:\\.|[^\"\\])*\""
+        r"|/\*[\s\S]*?\*/"
+        r"|//[^\n]*",
+        handle, src,
+    )
     src = re.sub(r"\s+", " ", src)
     src = re.sub(r" ?([^\w\s$]) ?", r"\1", src).strip()
     return re.sub(r"\x00(\d+)\x00", lambda m: preserved[int(m.group(1))], src)

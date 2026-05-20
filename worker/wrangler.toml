@@ -1,0 +1,8 @@
+name = "mimi-stats"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "mimi_stats"
+database_name = "mimi-stats"
+database_id = "cb06eaa2-5051-4cf5-8626-0d1d0eba5262"

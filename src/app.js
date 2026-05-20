@@ -56,6 +56,46 @@ function appendLog(target, idx, picked) {
   console.log(entry);
 }
 
+// ---------- server-side stats ----------
+// Fill in after deploying worker/. Empty string disables all uploads.
+const STATS_URL = "https://mimi-stats.golddranks.workers.dev";
+
+// The uid + per-answer events carry no information linking back to a real
+// person — anonymous behavioral data, not personal data under GDPR Art. 4(1).
+// We send these freely from day 1, no consent prompt.
+const uid = (localStorage.uid ||= crypto.randomUUID());
+let evQueue = [];
+try { evQueue = JSON.parse(localStorage.ev_queue || "[]"); } catch { }
+
+function pushEvent(ev) {
+  if (!STATS_URL) return;
+  evQueue.push(ev);
+  localStorage.ev_queue = JSON.stringify(evQueue);
+  flushEvents();
+}
+
+let flushing = false;
+async function flushEvents() {
+  if (!STATS_URL || flushing || evQueue.length === 0) return;
+  flushing = true;
+  const batch = evQueue.slice(0, 100);
+  try {
+    const res = await fetch(STATS_URL + "/v1/events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ uid, events: batch }),
+    });
+    if (res.ok) {
+      evQueue.splice(0, batch.length);
+      localStorage.ev_queue = JSON.stringify(evQueue);
+    }
+  } catch { /* offline; retry next event or session */ }
+  finally {
+    flushing = false;
+    if (evQueue.length > 0) setTimeout(flushEvents, 5000);
+  }
+}
+
 // ---------- dates: YYYY-MM-DD for n days ago ----------
 function key(n) {
   const d = new Date();
@@ -191,7 +231,7 @@ function newQuestion() {
   const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
   const opts = shuffle([target, ...shuffle(sibs).slice(0, cap - 1)]);
   const idx = rand(target);
-  current = { target, idx, voice: path(target, idx) };
+  current = { target, idx, voice: path(target, idx), cap: opts.length };
   primary.hidden = true;
   choices.dataset.n = opts.length;
   choices.innerHTML = opts
@@ -238,10 +278,11 @@ choices.onclick = (e) => {
 
 function guess(btn) {
   const picked = btn.dataset.mora;
-  const { target, idx } = current;
+  const { target, idx, cap } = current;
   if (picked !== target) { submit(picked, btn); return; }
   record(true, target.slice(-1));
   appendLog(target, idx, picked);
+  pushEvent({ ts: Date.now(), target, idx, picked, cap });
   btn.classList.add("correct");
   locked = true;
   primary.textContent = "Next";
@@ -257,10 +298,11 @@ function replay(m, btn) {
 }
 
 function submit(picked, btn) {
-  const { target, idx } = current;
+  const { target, idx, cap } = current;
   const correct = picked === target;
   record(correct, target.slice(-1));
   appendLog(target, idx, picked);
+  pushEvent({ ts: Date.now(), target, idx, picked, cap });
   if (correct) {
     btn.classList.add("correct");
     current = null;                          // lock out further clicks
@@ -329,3 +371,4 @@ run = t.k || 0;
 skill = t.x || {};
 tip.textContent = pick(TIPS);
 render();
+flushEvents();
