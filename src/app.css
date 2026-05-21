@@ -69,6 +69,22 @@ body {
     z-index: 11;
 }
 
+#privacy {
+    position: fixed;
+    top: 0;
+    right: .8rem;
+    height: 2.2rem;
+    line-height: 2.2rem;
+    font-size: .7rem;
+    color: var(--muted);
+    text-decoration: none;
+    z-index: 12;
+}
+
+#privacy:hover {
+    color: var(--accent);
+}
+
 /* Floating header readouts share most styling. */
 #message,
 #score,

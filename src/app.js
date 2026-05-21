@@ -332,8 +332,11 @@ function replay(m, btn, random = false) {
   audio.onended = () => { btn.classList.remove("playing"); audio.onended = null; };
   const i = random ? rand(m) : +btn.dataset.idx;
   play(path(m, i));
-  const { target, idx, cap, startTs } = current;
-  pushEvent({ ts: Date.now(), target, idx, picked: m, cap, ms: Date.now() - startTs, ev: "p" });
+  const { target, cap, startTs } = current;
+  // For 'p' events, idx describes what was *played*: the voice sample of the
+  // tapped mora `m` (= picked). The question's voice is implicit via the
+  // sibling 'a'/'g' event at (uid, target, ts - ms). See worker/schema.sql.
+  pushEvent({ ts: Date.now(), target, idx: i, picked: m, cap, ms: Date.now() - startTs, ev: "p" });
 }
 
 function submit(picked, btn, wasGuess = false) {

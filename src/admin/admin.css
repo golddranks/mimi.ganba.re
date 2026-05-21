@@ -1,0 +1,469 @@
+:root {
+    --bg: #0f1419;
+    --panel: #1c2330;
+    --panel-2: #2a3344;
+    --fg: #e8eaed;
+    --muted: #8893a3;
+    --accent: #5da9ff;
+    --good: #6fd49a;
+    --bad: #e88592;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        --bg: #f7f8fa;
+        --panel: #fff;
+        --panel-2: #e8ecf1;
+        --fg: #1a1a1a;
+        --muted: #6b7480;
+        --accent: #2664c4;
+        --good: #1f8a4c;
+        --bad: #c43838;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scrollbar-gutter: stable;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    padding: 1rem;
+}
+
+.no-uid #dash {
+    display: none;
+}
+
+#hdr {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 0 auto 1rem;
+    max-width: 1200px;
+    flex-wrap: wrap;
+}
+
+#hdr h1 {
+    margin: 0;
+    font-family: "Tahoma", sans-serif;
+    font-size: 1.05rem;
+    letter-spacing: 0.4em;
+}
+
+#hdr .back {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: .85rem;
+}
+
+#hdr .back:hover {
+    color: var(--accent);
+}
+
+#uidform {
+    margin-left: auto;
+    display: flex;
+    gap: .4rem;
+}
+
+#uidform input {
+    padding: .4rem .6rem;
+    border-radius: 6px;
+    border: 1px solid var(--panel-2);
+    background: var(--panel);
+    color: var(--fg);
+    font: inherit;
+    width: 22rem;
+    max-width: 50vw;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: .85rem;
+}
+
+#uidform button {
+    padding: .4rem .9rem;
+    border-radius: 6px;
+    border: 0;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+}
+
+#msg {
+    color: var(--muted);
+    padding: 1rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: none;
+}
+
+#msg:not(:empty),
+.no-uid #msg {
+    display: block;
+}
+
+.no-uid #msg:empty::before {
+    content: "Enter your uid above (must have power_user=1).";
+}
+
+#dash {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+@media (min-width: 880px) {
+    #dash {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    #dash > .span2 {
+        grid-column: 1 / -1;
+    }
+}
+
+.card {
+    background: var(--panel);
+    border: 1px solid var(--panel-2);
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    min-width: 0;
+}
+
+.card h2 {
+    margin: 0 0 .8rem;
+    font-size: .8rem;
+    color: var(--muted);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+
+.card h2 .sub {
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: .4rem;
+}
+
+.card h3 {
+    margin: .6rem 0 .3rem;
+    font-size: .75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+}
+
+.card svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+}
+
+/* ---- overview ---- */
+.stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.4rem 2.2rem;
+}
+
+.stat .n {
+    font-size: 1.6rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat .l {
+    font-size: .7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+}
+
+.stat .n[data-stat="events"],
+.stat .n[data-stat="answers"],
+.stat .n[data-stat="relisten"] {
+    min-width: 6ch;
+}
+
+.stat .n[data-stat="users"],
+.stat .n[data-stat="active7"],
+.stat .n[data-stat="active30"],
+.stat .n[data-stat="days"] {
+    min-width: 4ch;
+}
+
+.stat .n[data-stat="accuracy"] {
+    min-width: 6ch;
+}
+
+/* ---- chart containers ---- */
+#dailychart {
+    aspect-ratio: 960 / 200;
+}
+
+#hourlychart {
+    aspect-ratio: 480 / 180;
+}
+
+/* ---- per-mora ---- */
+.mrow {
+    display: grid;
+    grid-template-columns: 2rem 1fr 7rem;
+    align-items: center;
+    gap: .6rem;
+    margin: .25rem 0;
+}
+
+.mname {
+    font-size: 1.3rem;
+    text-align: center;
+}
+
+.mbar {
+    height: 12px;
+    background: color-mix(in srgb, var(--panel-2) 60%, transparent);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.mbar-total {
+    background: color-mix(in srgb, var(--bad) 55%, var(--panel-2));
+    height: 100%;
+    border-radius: 3px;
+    position: relative;
+}
+
+.mbar-correct {
+    background: var(--good);
+    height: 100%;
+    border-radius: 3px;
+}
+
+.mtxt {
+    font-size: .78rem;
+    color: var(--muted);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* ---- voice table ---- */
+.voicefilter {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: 0 0 .6rem;
+    font-size: .85rem;
+    color: var(--muted);
+}
+
+.voicefilter input {
+    padding: .25rem .5rem;
+    border-radius: 4px;
+    border: 1px solid var(--panel-2);
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    width: 4rem;
+}
+
+.sub {
+    color: var(--muted);
+    font-weight: normal;
+    font-size: .85em;
+}
+
+#voicetable {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    font-size: .85rem;
+}
+
+#voicetable th,
+#voicetable td {
+    text-align: right;
+    padding: .25rem .6rem;
+    border-bottom: 1px solid var(--panel-2);
+}
+
+#voicetable th {
+    color: var(--muted);
+    font-weight: 400;
+    text-transform: uppercase;
+    font-size: .7rem;
+    letter-spacing: .08em;
+}
+
+#voicetable td:first-child,
+#voicetable th:first-child {
+    text-align: left;
+    font-size: 1.2rem;
+}
+
+/* voice-name column: left-aligned, monospace so the names line up. */
+#voicetable td:nth-child(2),
+#voicetable th:nth-child(2) {
+    text-align: left;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: .85rem;
+}
+
+#voicetable tbody tr:hover {
+    background: color-mix(in srgb, var(--panel-2) 40%, transparent);
+}
+
+.acc {
+    color: var(--good);
+}
+
+.acc.bad {
+    color: var(--bad);
+}
+
+.acc.mid {
+    color: color-mix(in srgb, var(--bad) 50%, var(--good));
+}
+
+/* ---- sound-file confusion ---- */
+#voiceconf {
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+}
+
+.vconfgrid {
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.vconfgrid th,
+.vconfgrid td {
+    box-sizing: border-box;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.vconfgrid thead th {
+    font-weight: 400;
+    color: var(--muted);
+    font-size: 1.05rem;
+    width: 2.2rem;
+    height: 2.2rem;
+}
+
+.vconfgrid tbody th.vmora {
+    font-weight: 400;
+    color: var(--muted);
+    font-size: 1.05rem;
+    width: 2.5rem;
+}
+
+.vconfgrid tbody th.vname {
+    font-family: ui-monospace, Menlo, monospace;
+    font-weight: 400;
+    color: var(--fg);
+    font-size: .75rem;
+    text-align: left;
+    padding: 0 .8rem 0 .2rem;
+    white-space: nowrap;
+}
+
+.vconfgrid td {
+    width: 2.2rem;
+    height: 1.6rem;
+    border: 1px solid var(--panel-2);
+    font-size: .75rem;
+    color: var(--fg);
+}
+
+.vconfgrid td.diag {
+    border-color: color-mix(in srgb, var(--good) 50%, var(--panel-2));
+}
+
+.vconfgrid td.empty {
+    color: var(--muted);
+    opacity: .35;
+}
+
+/* ---- confusion (aggregated, per-mora) ---- */
+#confchart {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.4rem 2rem;
+}
+
+.confgroup h3 {
+    text-align: center;
+}
+
+.confgrid {
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-variant-numeric: tabular-nums;
+}
+
+.confgrid th,
+.confgrid td {
+    width: 2.2rem;
+    height: 2.2rem;
+    padding: 0;
+    text-align: center;
+    vertical-align: middle;
+    box-sizing: border-box;
+}
+
+.confgrid th {
+    font-weight: 400;
+    color: var(--muted);
+    font-size: 1.05rem;
+    border: 0;
+}
+
+.confgrid td {
+    border: 1px solid var(--panel-2);
+    font-size: .8rem;
+    color: var(--fg);
+}
+
+.confgrid td.diag {
+    border-color: color-mix(in srgb, var(--good) 50%, var(--panel-2));
+}
+
+.confgrid td.empty {
+    color: var(--muted);
+    opacity: .35;
+}
+
+/* ---- legend ---- */
+.legend {
+    display: flex;
+    gap: 1rem;
+    font-size: .75rem;
+    color: var(--muted);
+    margin-top: .4rem;
+}
+
+.conflegend {
+    flex-basis: 100%;
+}
+
+.legend .sw {
+    display: inline-block;
+    width: .7rem;
+    height: .7rem;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-right: .3rem;
+}

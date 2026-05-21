@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>mimi.ganba.re – Privacy</title>
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="stylesheet" href="privacy.css">
+</head>
+
+<body>
+    <header id="hdr">
+        <a class="back" href="../">← back</a>
+        <h1>PRIVACY</h1>
+    </header>
+
+    <main>
+        <article>
+            <p><strong>mimi.ganba.re</strong> is an anonymous Japanese mora ear-training tool. This page describes what
+                it collects and why.</p>
+
+            <h2>What's stored locally on your device</h2>
+            <p>The app uses your browser's <code>localStorage</code> to keep:</p>
+            <ul>
+                <li>A randomly-generated user id (UUID), created on your first visit</li>
+                <li>Per-day correct / total counts, your current streak, and per-vowel skill levels</li>
+                <li>A rolling log of your last 2,000 answers (mora, timestamp, ms taken)</li>
+                <li>A queue of unsent event records (for offline use)</li>
+                <li>An optional nickname, if you set one</li>
+            </ul>
+
+            <h2>What's sent to the server</h2>
+            <p>When you answer a question, the app sends to the stats worker:</p>
+            <ul>
+                <li>Your random uid</li>
+                <li>The mora you heard, the mora you picked, and whether you re-listened</li>
+                <li>A timestamp, ms taken to answer, and difficulty (number of buttons shown)</li>
+            </ul>
+            <p>The server stores these in a Cloudflare D1 database.</p>
+
+            <h2>Is this personal data?</h2>
+            <p>The uid is a random UUID minted by your browser. With no nickname attached, it carries no link to a real
+                person, so the event records are anonymous behavioral data — not personal data under GDPR Art. 4(1).
+                Events are therefore sent from day 1 without a consent prompt.</p>
+
+            <h2>Nickname (opt-in)</h2>
+            <p>You can set a nickname by visiting the site with <code>?nick=YourName</code> in the URL. Once set, your
+                nickname is linked to your uid and all prior and future events under that uid become identifiable. The
+                <em>act</em> of setting one is treated as your consent moment. To withdraw, clear your browser data for
+                this site or visit with <code>?nick=</code> (empty) to unset it.</p>
+
+            <h2>Cloudflare</h2>
+            <p>The site itself is served from GitHub Pages; the stats worker runs on Cloudflare Workers + D1. The worker
+                does not read or store client IP addresses. Cloudflare may keep IPs in its own edge logs for
+                security/abuse purposes — their data as your processor, not part of what mimi.ganba.re collects.</p>
+
+            <h2>Third-party tracking</h2>
+            <p>None. No analytics, no advertising, no third-party scripts.</p>
+
+            <h2>Deletion</h2>
+            <p>To delete your local data: clear your browser data for this site. Events already submitted under your
+                random uid remain in the database but are not linked to you unless you've set a nickname.</p>
+            <p>To request deletion of events under a specific uid (especially relevant after setting a nickname), open
+                an issue at <a
+                    href="https://github.com/golddranks/ear_training/issues">github.com/golddranks/ear_training/issues</a>.
+            </p>
+
+            <h2>Source code</h2>
+            <p><a href="https://github.com/golddranks/mimi.ganba.re">github.com/golddranks/mimi.ganba.re</a></p>
+        </article>
+    </main>
+</body>
+
+</html>

@@ -1,3 +1,7 @@
 node_modules/
 .wrangler/
 .dev.vars
+
+# One-shot scripts (regenerated/handwritten as needed; no need to commit).
+migrate-voices.sql
+fix-voices.sql

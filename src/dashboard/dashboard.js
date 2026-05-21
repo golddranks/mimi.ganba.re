@@ -1,0 +1,301 @@
+// Read-only per-user dashboard. Pulls events from the stats worker and renders
+// a handful of visualizations. No localStorage writes, no event posts.
+//
+// The page's static structure (overview tiles, per-mora rows, confusion matrix
+// grids) lives in dashboard.html; the JS here only fills in values. The SVG
+// charts (daily/hourly/streak/reaction-time) are dynamic in shape and built
+// here.
+
+const STATS_URL = "https://mimi-stats.golddranks.workers.dev";
+
+const pad2 = (x) => ("0" + x).slice(-2);
+const dayKey = (ts) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
+
+const params = new URLSearchParams(location.search);
+const uid = params.get("uid");
+
+uidform.onsubmit = (e) => {
+  e.preventDefault();
+  const v = uidinput.value.trim();
+  if (!v) return;
+  location.search = "?uid=" + encodeURIComponent(v);
+};
+
+if (uid) {
+  uidinput.value = uid;
+  load(uid);
+}
+
+// First paint shows the dash skeleton (zeros + reserved chart space). #msg
+// stays empty (and therefore display:none) during the loading window, so the
+// dash doesn't shift when we'd otherwise hide a "Loading…" line. CSS handles
+// the no-uid prompt via ::before; JS only writes to #msg for error states.
+async function load(uid) {
+  try {
+    const res = await fetch(STATS_URL + "/v1/user/" + encodeURIComponent(uid) + "/events");
+    if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
+    const { events } = await res.json();
+    events.sort((a, b) => a.ts - b.ts);
+    if (events.length === 0) {
+      msg.textContent = "No events for this user.";
+      return;
+    }
+    renderOverview(uid, events);
+    renderDaily(events);
+    renderHourly(events);
+    renderMora(events);
+    renderConfusion(events);
+    renderStreak(events);
+    renderRtime(events);
+  } catch (e) {
+    msg.textContent = "Error: " + (e && e.message);
+  }
+}
+
+// ---------- overview ----------
+const setStat = (k, v) => overview.querySelector(`[data-stat="${k}"]`).textContent = v;
+
+function renderOverview(uid, events) {
+  const ag = events.filter((e) => e.ev === "a" || e.ev === "g");
+  const correct = ag.filter((e) => e.picked === e.target).length;
+  const acc = ag.length ? correct / ag.length : 0;
+  let topStreak = 0, run = 0;
+  for (const e of events) {
+    if (e.ev === "a" || e.ev === "g") {
+      if (e.picked === e.target) { run++; if (run > topStreak) topStreak = run; }
+      else run = 0;
+    } else if (e.ev === "r") {
+      run = 0;
+    }
+  }
+  const days = new Set(ag.map((e) => dayKey(e.ts))).size;
+  const relisten = events.filter((e) => e.ev === "r").length;
+
+  overview.querySelector(".uid").textContent = uid;
+  setStat("answers", ag.length);
+  setStat("correct", correct);
+  setStat("accuracy", (acc * 100).toFixed(1) + "%");
+  setStat("topstreak", topStreak);
+  setStat("days", days);
+  setStat("relisten", relisten);
+  setStat("first", dayKey(events[0].ts));
+  setStat("last", dayKey(events[events.length - 1].ts));
+}
+
+// ---------- daily ----------
+function renderDaily(events) {
+  const ag = events.filter((e) => e.ev === "a" || e.ev === "g");
+  const map = new Map();
+  for (const e of ag) {
+    const k = dayKey(e.ts);
+    const v = map.get(k) || { correct: 0, wrong: 0 };
+    if (e.picked === e.target) v.correct++; else v.wrong++;
+    map.set(k, v);
+  }
+  const first = new Date(events[0].ts); first.setHours(0, 0, 0, 0);
+  const last = new Date(events[events.length - 1].ts); last.setHours(0, 0, 0, 0);
+  const days = [];
+  for (const d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
+    const k = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    const v = map.get(k) || { correct: 0, wrong: 0 };
+    days.push({ k, ...v, total: v.correct + v.wrong });
+  }
+  const max = Math.max(1, ...days.map((d) => d.total));
+  // Fixed viewBox so the rendered height matches the container's aspect-ratio
+  // regardless of how many days the user has. Bars scale to fit.
+  const w = 960, h = 200;
+  const innerH = h - 40;
+  const bw = (w - 40) / Math.max(1, days.length);
+  let bars = "", labels = "";
+  let lastMonth = "";
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i];
+    const x = 20 + i * bw;
+    const totH = d.total / max * innerH;
+    const cH = d.total ? d.correct / d.total * totH : 0;
+    const tip = `${d.k}  ${d.correct}/${d.total}`;
+    if (d.total) {
+      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
+      bars += `<rect x="${x}" y="${h - 20 - cH}" width="${bw * 0.8}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+    }
+    const month = d.k.slice(0, 7);
+    if (month !== lastMonth) {
+      lastMonth = month;
+      labels += `<text x="${x}" y="${h - 4}" fill="var(--muted)" font-size="10">${month}</text>`;
+    }
+  }
+  let axis = "";
+  for (const t of niceTicks(max)) {
+    const y = h - 20 - t / max * innerH;
+    axis += `<text x="0" y="${y + 3}" fill="var(--muted)" font-size="10">${t}</text>`;
+    axis += `<line x1="20" x2="${w}" y1="${y}" y2="${y}" stroke="var(--panel-2)" stroke-width=".5"/>`;
+  }
+  dailychart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${axis}${bars}${labels}</svg>`;
+}
+
+// ---------- hourly ----------
+function renderHourly(events) {
+  const ag = events.filter((e) => e.ev === "a" || e.ev === "g");
+  const hrs = Array.from({ length: 24 }, () => ({ correct: 0, wrong: 0 }));
+  for (const e of ag) {
+    const hour = new Date(e.ts).getHours();
+    if (e.picked === e.target) hrs[hour].correct++; else hrs[hour].wrong++;
+  }
+  const max = Math.max(1, ...hrs.map((h) => h.correct + h.wrong));
+  const w = 480, h = 180;
+  const innerH = h - 40;
+  const bw = (w - 40) / 24;
+  let bars = "", labels = "";
+  for (let i = 0; i < 24; i++) {
+    const x = 20 + i * bw;
+    const tot = hrs[i].correct + hrs[i].wrong;
+    const totH = tot / max * innerH;
+    const cH = tot ? hrs[i].correct / tot * totH : 0;
+    const tip = `${pad2(i)}:00  ${hrs[i].correct}/${tot}`;
+    if (tot) {
+      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
+      bars += `<rect x="${x}" y="${h - 20 - cH}" width="${bw * 0.8}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+    }
+    if (i % 3 === 0) {
+      labels += `<text x="${x + bw * 0.4}" y="${h - 4}" fill="var(--muted)" font-size="10" text-anchor="middle">${i}</text>`;
+    }
+  }
+  hourlychart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${bars}${labels}</svg>`;
+}
+
+// ---------- per-mora ----------
+// Updates the 19 static .mrow elements in dashboard.html; each carries its
+// own data-mora attribute, so we only set widths and the text readout.
+function renderMora(events) {
+  const counts = {};
+  for (const e of events) {
+    if (e.ev !== "a" && e.ev !== "g") continue;
+    const c = counts[e.target] || (counts[e.target] = { correct: 0, total: 0 });
+    c.total++;
+    if (e.picked === e.target) c.correct++;
+  }
+  const maxN = Math.max(1, ...Object.values(counts).map((c) => c.total));
+  for (const mrow of morachart.querySelectorAll(".mrow")) {
+    const c = counts[mrow.dataset.mora] || { correct: 0, total: 0 };
+    const accPct = c.total ? c.correct / c.total : 0;
+    mrow.querySelector(".mbar-total").style.width = (c.total / maxN * 100) + "%";
+    mrow.querySelector(".mbar-correct").style.width = (accPct * 100) + "%";
+    mrow.querySelector(".mtxt").textContent = c.total
+      ? `${c.correct}/${c.total} · ${(accPct * 100).toFixed(0)}%`
+      : "0/0";
+  }
+}
+
+// ---------- confusion ----------
+// Walks the static td[data-t][data-p] cells across all four vowel-group tables.
+// Color intensity is per-category (diag vs off-diag) so off-diagonal errors
+// don't get drowned out by big correct counts.
+function renderConfusion(events) {
+  const counts = {};
+  for (const e of events) {
+    if (e.ev !== "a" && e.ev !== "g") continue;
+    const k = `${e.target}/${e.picked}`;
+    counts[k] = (counts[k] || 0) + 1;
+  }
+  const cells = confchart.querySelectorAll("td[data-t]");
+  let maxOn = 0, maxOff = 0;
+  for (const td of cells) {
+    const n = counts[`${td.dataset.t}/${td.dataset.p}`] || 0;
+    if (td.dataset.t === td.dataset.p) maxOn = Math.max(maxOn, n);
+    else maxOff = Math.max(maxOff, n);
+  }
+  for (const td of cells) {
+    const n = counts[`${td.dataset.t}/${td.dataset.p}`] || 0;
+    const diag = td.dataset.t === td.dataset.p;
+    let bg = "transparent";
+    if (n > 0) {
+      const a = diag ? (maxOn ? n / maxOn : 0) : (maxOff ? n / maxOff : 0);
+      const base = diag ? "var(--good)" : "var(--bad)";
+      const pct = Math.round((diag ? 15 : 20) + a * (diag ? 55 : 60));
+      bg = `color-mix(in srgb, ${base} ${pct}%, transparent)`;
+    }
+    td.style.background = bg;
+    td.textContent = n || "";
+    td.classList.toggle("empty", n === 0);
+  }
+}
+
+// ---------- streak ----------
+function renderStreak(events) {
+  let run = 0;
+  const series = [];
+  for (const e of events) {
+    if (e.ev === "a" || e.ev === "g") {
+      if (e.picked === e.target) run++; else run = 0;
+      series.push({ ts: e.ts, run });
+    } else if (e.ev === "r") {
+      run = 0;
+      series.push({ ts: e.ts, run });
+    }
+  }
+  if (series.length === 0) { streakchart.textContent = "(no answers)"; return; }
+  const max = Math.max(1, ...series.map((s) => s.run));
+  const w = 960, h = 160;
+  const innerH = h - 30;
+  const t0 = series[0].ts, t1 = series[series.length - 1].ts;
+  const xspan = Math.max(1, t1 - t0);
+  const pts = series
+    .map((s) => `${(20 + (s.ts - t0) / xspan * (w - 40)).toFixed(1)},${(h - 10 - s.run / max * innerH).toFixed(1)}`)
+    .join(" ");
+  const area = `20,${h - 10} ${pts} ${(w - 20).toFixed(1)},${h - 10}`;
+  streakchart.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}">
+      <polygon points="${area}" fill="color-mix(in srgb, var(--accent) 22%, transparent)"/>
+      <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1"/>
+      <text x="20" y="14" fill="var(--muted)" font-size="11">peak: ${max}</text>
+    </svg>`;
+}
+
+// ---------- reaction time ----------
+function renderRtime(events) {
+  const ag = events.filter(
+    (e) => (e.ev === "a" || e.ev === "g") && e.ms != null && e.ms >= 0 && e.ms < 20000
+  );
+  if (ag.length === 0) { rtchart.textContent = "(no timed answers)"; return; }
+  const cap = 6000;
+  const buckets = 30;
+  const cb = new Array(buckets).fill(0);
+  const wb = new Array(buckets).fill(0);
+  for (const e of ag) {
+    const b = Math.min(buckets - 1, Math.floor(e.ms / (cap / buckets)));
+    if (e.picked === e.target) cb[b]++; else wb[b]++;
+  }
+  const mx = Math.max(1, ...cb, ...wb);
+  const w = 900, h = 200;
+  const innerH = h - 40;
+  const bw = (w - 40) / buckets;
+  let bars = "";
+  for (let i = 0; i < buckets; i++) {
+    const x = 20 + i * bw;
+    const ch = cb[i] / mx * innerH;
+    const wh = wb[i] / mx * innerH;
+    const lo = Math.round(i * cap / buckets);
+    const hi = Math.round((i + 1) * cap / buckets);
+    bars += `<rect x="${x}" y="${h - 20 - ch}" width="${bw * 0.45}" height="${ch}" fill="var(--good)"><title>${lo}-${hi}ms: ${cb[i]} correct</title></rect>`;
+    bars += `<rect x="${x + bw * 0.5}" y="${h - 20 - wh}" width="${bw * 0.45}" height="${wh}" fill="var(--bad)"><title>${lo}-${hi}ms: ${wb[i]} wrong</title></rect>`;
+  }
+  let axis = "";
+  for (let t = 0; t <= cap; t += 1000) {
+    const x = 20 + (t / cap) * (w - 40);
+    axis += `<text x="${x}" y="${h - 4}" fill="var(--muted)" font-size="10" text-anchor="middle">${t / 1000}s</text>`;
+  }
+  rtchart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${bars}${axis}</svg>`;
+}
+
+// ---------- helpers ----------
+function niceTicks(max) {
+  const exp = Math.pow(10, Math.floor(Math.log10(max)));
+  const m = max / exp;
+  const step = m < 2 ? 0.5 * exp : m < 5 ? 1 * exp : 2 * exp;
+  const out = [];
+  for (let t = step; t <= max; t += step) out.push(Math.round(t));
+  return out;
+}
