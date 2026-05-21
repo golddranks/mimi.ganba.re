@@ -32,14 +32,15 @@ from the current voice set before deploying, so the deployed map always
 matches what's in the data dir on `main`.
 
 Required GitHub secret: `CLOUDFLARE_API_TOKEN`. Don't use the *Edit Workers*
-template — it grants more than CI needs (Routes, KV, User Details, …).
-Create a **Custom token** with the minimum that lets `wrangler deploy`
-upload the script and verify its D1 binding:
+template — it grants more than CI needs (Routes, KV, …). Create a
+**Custom token** with the minimum that lets `wrangler deploy` upload the
+script and verify its D1 binding:
 
-| Permission                         | Why                                                       |
-|------------------------------------|-----------------------------------------------------------|
-| Account → Workers Scripts: Edit    | Upload and publish the worker bundle.                     |
-| Account → D1: Read                 | Validate the `[[d1_databases]]` binding in wrangler.toml. |
+| Permission                         | Why                                                                |
+|------------------------------------|--------------------------------------------------------------------|
+| Account → Workers Scripts: Edit    | Upload and publish the worker bundle.                              |
+| Account → D1: Read                 | Validate the `[[d1_databases]]` binding in wrangler.toml.          |
+| User → User Details: Read          | wrangler's pre-deploy `whoami` check; without it, deploy aborts.   |
 
 (If `wrangler deploy` ever errors that it can't write D1, upgrade that one
 to *Edit*. D1 schema migrations are done manually with `wrangler d1 execute`
