@@ -21,7 +21,7 @@ const BAR_MAX = 50;            // a day with 50+ answers fills the bar to the to
 const LOG_MAX = 2000;          // localStorage.mora_log, newline-separated
 // Per-vowel level thresholds: correct count in a vowel group unlocks more
 // distractors. Wrong answers drop the count to the previous level's start.
-const LEVELS = [10, 15, 20];   // cap = 2 + (thresholds crossed) → 2/3/4/5
+const LEVELS = [10, 15, 20, 25]; // cap = 2 + (thresholds crossed) → 2/3/4/5/6
 const Z = () => ({ correct: 0, total: 0 });
 const pad2 = (x) => ("0" + x).slice(-2);
 
@@ -48,8 +48,10 @@ const save = () => localStorage.mora = JSON.stringify({ s: stats, k: run, x: ski
 const log = (localStorage.mora_log || "").split("\n").filter(Boolean);
 window.log = log;
 if (log.length) console.log(log.join("\n"));    // dump history on page load
-function appendLog(target, idx, picked) {
-  const entry = `${nowStamp()} ${target}/${idx}` + (picked === target ? "" : ` ${picked}`);
+function appendLog(target, idx, picked, ms) {
+  const entry = `${nowStamp()} ${target}/${idx}`
+    + (picked === target ? "" : ` ${picked}`)
+    + ` ${ms}ms`;
   log.push(entry);
   if (log.length > LOG_MAX) log.splice(0, log.length - LOG_MAX);
   localStorage.mora_log = log.join("\n");
@@ -236,7 +238,7 @@ function newQuestion() {
   const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
   const opts = shuffle([target, ...shuffle(sibs).slice(0, cap - 1)]);
   const idx = rand(target);
-  current = { target, idx, voice: path(target, idx), cap: opts.length };
+  current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now() };
   primary.hidden = true;
   choices.dataset.n = opts.length;
   choices.innerHTML = opts
@@ -283,11 +285,12 @@ choices.onclick = (e) => {
 
 function guess(btn) {
   const picked = btn.dataset.mora;
-  const { target, idx, cap } = current;
-  if (picked !== target) { submit(picked, btn); return; }
+  const { target, idx, cap, startTs } = current;
+  if (picked !== target) { submit(picked, btn, true); return; }
+  const ms = Date.now() - startTs;
   record(true, target.slice(-1));
-  appendLog(target, idx, picked);
-  pushEvent({ ts: Date.now(), target, idx, picked, cap });
+  appendLog(target, idx, picked, ms);
+  pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: "g" });
   btn.classList.add("correct");
   locked = true;
   primary.textContent = "Next";
@@ -300,14 +303,17 @@ function replay(m, btn) {
   audio.onended = () => { btn.classList.remove("playing"); audio.onended = null; };
   // Correct choice replays the exact question clip; distractors play a fresh sample.
   play(m === current.target ? current.voice : path(m, rand(m)));
+  const { target, idx, cap, startTs } = current;
+  pushEvent({ ts: Date.now(), target, idx, picked: m, cap, ms: Date.now() - startTs, ev: "p" });
 }
 
-function submit(picked, btn) {
-  const { target, idx, cap } = current;
+function submit(picked, btn, wasGuess = false) {
+  const { target, idx, cap, startTs } = current;
   const correct = picked === target;
+  const ms = Date.now() - startTs;
   record(correct, target.slice(-1));
-  appendLog(target, idx, picked);
-  pushEvent({ ts: Date.now(), target, idx, picked, cap });
+  appendLog(target, idx, picked, ms);
+  pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: wasGuess ? "g" : "a" });
   if (correct) {
     btn.classList.add("correct");
     current = null;                          // lock out further clicks
@@ -327,13 +333,15 @@ function submit(picked, btn) {
 // the current level's start and breaks the streak — leaning on it costs.
 function relistenCurrent() {
   if (!current) return;
-  const v = current.target.slice(-1);
+  const { target, idx, cap, startTs } = current;
+  const v = target.slice(-1);
   const c = skill[v] || 0;
   const i = LEVELS.findLastIndex((t) => c >= t);
   skill[v] = i < 0 ? 0 : LEVELS[i];
   run = 0;
   save();
   render();
+  pushEvent({ ts: Date.now(), target, idx, picked: "", cap, ms: Date.now() - startTs, ev: "r" });
   play(current.voice);
 }
 
@@ -359,14 +367,14 @@ const TIPS = [
   "Tip: Try achieving long streaks!",
   "Tip: Flawless streak, and your day is over in 30 answers!",
   "Tip: Doing well enough, and your day is over in 50 answers!",
-  "Tip: Missing a bunch? Put the work in, you are still done in 100 answers.",
+  "Tip: Missing a bunch? Put the work in, and you are still done in 100 answers.",
   "Tip: True masters aren't made in a day. But 30 days of effort will show!",
   "Tip: Close your eyes — let your ears do the work.",
   "Tip: Voiced sounds (ず, じゅ) make your vocal cords buzz.",
   "Tip: つ bursts; す hisses. Listen for the start.",
   "Tip: Hear the friction! Hear the bursts! Hear the voicing!",
   "Tip: A few minutes, multiple times a day beats one marathon session.",
-  "Tip: You can listen again with the button bottom right, but once you get good, try to ace it at once!",
+  "Tip: Listen again with the button bottom right, but try not to resort to it too often!",
 ];
 
 // ---------- boot ----------

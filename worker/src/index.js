@@ -69,18 +69,21 @@ async function handleEvents(req, env) {
   }
 
   const insertEvent = env.mimi_stats.prepare(
-    "INSERT INTO events (uid, ts, target, idx, picked, cap) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO events (uid, ts, target, idx, picked, cap, ms, ev) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
   );
-  const inserts = body.events.map((e) =>
-    insertEvent.bind(
+  const inserts = body.events.map((e) => {
+    const ev = ["a", "g", "r", "p"].includes(e.ev) ? e.ev : "a";
+    return insertEvent.bind(
       body.uid,
       e.ts | 0,
       String(e.target || ""),
       e.idx | 0,
       String(e.picked || ""),
       e.cap | 0,
-    )
-  );
+      e.ms != null ? (e.ms | 0) : null,
+      ev,
+    );
+  });
   const now = Date.now();
   const userTouch = env.mimi_stats.prepare(
     "INSERT INTO users (uid, first_seen, last_seen) VALUES (?, ?, ?) " +
