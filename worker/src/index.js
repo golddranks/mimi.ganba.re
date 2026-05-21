@@ -77,7 +77,7 @@ async function handleEvents(req, env) {
     const ev = ["a", "g", "r", "p"].includes(e.ev) ? e.ev : "a";
     return insertEvent.bind(
       body.uid,
-      e.ts | 0,
+      +e.ts,            // full epoch ms; |0 truncates past 32 bits
       String(e.target || ""),
       e.idx | 0,
       String(e.picked || ""),
