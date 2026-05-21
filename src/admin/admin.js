@@ -8,19 +8,11 @@ const STATS_URL = "https://mimi-stats.golddranks.workers.dev";
 const pad2 = (x) => ("0" + x).slice(-2);
 
 // uid resolution mirrors the no-uid head script so first paint matches behaviour.
+// Pulled from localStorage by default (set by the main app); ?uid=… overrides
+// for cases like a fresh browser or testing as a different power user.
 const uid = new URLSearchParams(location.search).get("uid") || localStorage.getItem("uid") || "";
 
-uidform.onsubmit = (e) => {
-  e.preventDefault();
-  const v = uidinput.value.trim();
-  if (!v) return;
-  location.search = "?uid=" + encodeURIComponent(v);
-};
-
-if (uid) {
-  uidinput.value = uid;
-  load(uid);
-}
+if (uid) load(uid);
 
 async function load(uid) {
   try {
@@ -197,6 +189,7 @@ function renderVoice(byVoice, byPlayed) {
   }
   voiceData = [...idx.values()];
   vmin.oninput = redrawVoice;
+  vtop.oninput = redrawVoice;
   drawVoiceTable();
 }
 
@@ -212,11 +205,13 @@ function redrawVoice() {
 
 function drawVoiceTable() {
   const min = Math.max(1, parseInt(vmin.value, 10) || 1);
-  const rows = voiceData
+  const top = Math.max(1, parseInt(vtop.value, 10) || 1);
+  const filtered = voiceData
     .filter((r) => r.n >= min)
     .map((r) => ({ ...r, acc: r.n ? r.correct / r.n : 0 }))
     .sort((a, b) => a.acc - b.acc);
-  vcount.textContent = `(${rows.length} files)`;
+  const rows = filtered.slice(0, top);
+  vcount.textContent = `(showing ${rows.length} of ${filtered.length} files at min=${min})`;
   const tbody = voicetable.querySelector("tbody");
   tbody.innerHTML = rows.map((r) => {
     const accPct = (r.acc * 100).toFixed(1);

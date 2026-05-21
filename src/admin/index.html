@@ -14,10 +14,6 @@
     <header id="hdr">
         <a class="back" href="../">← back</a>
         <h1>ADMIN</h1>
-        <form id="uidform">
-            <input id="uidinput" placeholder="your uid" autocomplete="off" spellcheck="false">
-            <button type="submit">Load</button>
-        </form>
     </header>
 
     <div id="msg"></div>
@@ -79,7 +75,9 @@
             <h2>Sound-file difficulty <span class="sub">— hardest individual recordings</span></h2>
             <div class="voicefilter">
                 min attempts:
-                <input id="vmin" type="number" min="1" value="3" inputmode="numeric">
+                <input id="vmin" type="number" min="1" value="10" inputmode="numeric">
+                show top:
+                <input id="vtop" type="number" min="1" value="40" inputmode="numeric">
                 <span id="vcount" class="sub"></span>
             </div>
             <table id="voicetable">

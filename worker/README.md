@@ -32,19 +32,18 @@ from the current voice set before deploying, so the deployed map always
 matches what's in the data dir on `main`.
 
 Required GitHub secret: `CLOUDFLARE_API_TOKEN`. Don't use the *Edit Workers*
-template — it grants more than CI needs (Routes, KV, …). Create a
-**Custom token** with the minimum that lets `wrangler deploy` upload the
-script and verify its D1 binding:
+template — it grants way more than CI needs. Create a **Custom token** with
+a single permission:
 
-| Permission                         | Why                                                                |
-|------------------------------------|--------------------------------------------------------------------|
-| Account → Workers Scripts: Edit    | Upload and publish the worker bundle.                              |
-| Account → D1: Read                 | Validate the `[[d1_databases]]` binding in wrangler.toml.          |
-| User → User Details: Read          | wrangler's pre-deploy `whoami` check; without it, deploy aborts.   |
+| Permission                         | Why                                    |
+|------------------------------------|----------------------------------------|
+| Account → Workers Scripts: Edit    | Upload and publish the worker bundle.  |
 
-(If `wrangler deploy` ever errors that it can't write D1, upgrade that one
-to *Edit*. D1 schema migrations are done manually with `wrangler d1 execute`
-from a logged-in shell, not from CI, so CI shouldn't need D1 write.)
+That's it. Wrangler 4 (which the workflow pins) skips the pre-deploy
+`/memberships` and D1-binding probes that wrangler 3 made, so the token
+needs neither *User Details: Read* nor *D1: Read*. D1 schema migrations
+are done manually with `wrangler d1 execute` from a logged-in shell, not
+from CI.
 
 **Account Resources:** Include → *(your account only)*.
 **Zone Resources:** leave empty — the worker is on a `*.workers.dev` URL,

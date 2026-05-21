@@ -2,8 +2,11 @@
 DELETE FROM events WHERE uid = 'ef78ee05-92f3-458b-a16b-e38bd5547395';
 DELETE FROM users  WHERE uid = 'ef78ee05-92f3-458b-a16b-e38bd5547395';
 
-INSERT INTO users (uid, first_seen, last_seen) VALUES
-  ('ef78ee05-92f3-458b-a16b-e38bd5547395', 1778857200000, 1779289200000);
+-- nickname='TestUser' is a sentinel: the admin endpoint excludes any uid
+-- with this nickname from its aggregates, so seeded fixtures don't pollute
+-- global stats even if this file gets applied to the remote DB.
+INSERT INTO users (uid, first_seen, last_seen, nickname) VALUES
+  ('ef78ee05-92f3-458b-a16b-e38bd5547395', 1778857200000, 1779289200000, 'TestUser');
 
 -- All days seeded at JST midnight + i seconds.
 -- Today (JST) midnight = 2026-05-21 00:00 JST = 1779289200000 ms.

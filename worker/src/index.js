@@ -153,6 +153,12 @@ async function handleAdminStats(req, env, url) {
   const d7 = now - 7 * 86400000;
   const d30 = now - 30 * 86400000;
 
+  // Exclude users tagged as test fixtures so seeded data (worker/seed.sql)
+  // doesn't pollute global stats. The seed user is INSERTed with this
+  // nickname; add more nicknames here if other synthetic users get tagged.
+  // SQL-injection note: this fragment is hard-coded, never user-input.
+  const EXCLUDE_TEST = "uid NOT IN (SELECT uid FROM users WHERE nickname = 'TestUser')";
+
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
@@ -164,32 +170,33 @@ async function handleAdminStats(req, env, url) {
          SUM(CASE WHEN ev IN ('a','g') THEN 1 ELSE 0 END)                      AS answers,
          SUM(CASE WHEN ev IN ('a','g') AND picked = target THEN 1 ELSE 0 END)  AS correct,
          SUM(CASE WHEN ev = 'r' THEN 1 ELSE 0 END)                             AS relisten
-       FROM events`
+       FROM events
+       WHERE ${EXCLUDE_TEST}`
     ).first(),
     db.prepare(
       `SELECT
-         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ?) AS d7,
-         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ?) AS d30`
+         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d7,
+         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d30`
     ).bind(d7, d30).first(),
     db.prepare(
       `SELECT date(ts/1000, 'unixepoch') AS d,
               COUNT(*) AS n,
               SUM(CASE WHEN picked = target THEN 1 ELSE 0 END) AS correct
-       FROM events WHERE ev IN ('a','g')
+       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
        GROUP BY d ORDER BY d`
     ).all(),
     db.prepare(
       `SELECT CAST(strftime('%H', ts/1000, 'unixepoch') AS INTEGER) AS h,
               COUNT(*) AS n,
               SUM(CASE WHEN picked = target THEN 1 ELSE 0 END) AS correct
-       FROM events WHERE ev IN ('a','g')
+       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
        GROUP BY h ORDER BY h`
     ).all(),
     db.prepare(
       `SELECT target AS m,
               COUNT(*) AS n,
               SUM(CASE WHEN picked = target THEN 1 ELSE 0 END) AS correct
-       FROM events WHERE ev IN ('a','g')
+       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
        GROUP BY target`
     ).all(),
     // by_voice — per recording when it was the *question* (i.e. target).
@@ -202,18 +209,18 @@ async function handleAdminStats(req, env, url) {
               SUM(CASE WHEN ev IN ('a','g') AND picked = target THEN 1 ELSE 0 END)        AS correct,
               SUM(CASE WHEN ev = 'r' THEN 1 ELSE 0 END)                                   AS relisten
        FROM events
-       WHERE voice IS NOT NULL AND ev IN ('a','g','r')
+       WHERE voice IS NOT NULL AND ev IN ('a','g','r') AND ${EXCLUDE_TEST}
        GROUP BY target, voice`
     ).all(),
     db.prepare(
       `SELECT target AS t, picked AS p, COUNT(*) AS n
-       FROM events WHERE ev IN ('a','g')
+       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
        GROUP BY target, picked`
     ).all(),
     db.prepare(
       `SELECT target AS t, voice AS v, picked AS p, COUNT(*) AS n
        FROM events
-       WHERE ev IN ('a','g') AND voice IS NOT NULL
+       WHERE ev IN ('a','g') AND voice IS NOT NULL AND ${EXCLUDE_TEST}
        GROUP BY target, voice, picked`
     ).all(),
     // by_voice_played — this recording was the one *played* in some 'p'
@@ -222,7 +229,7 @@ async function handleAdminStats(req, env, url) {
     db.prepare(
       `SELECT picked AS m, voice AS v, COUNT(*) AS n
        FROM events
-       WHERE ev = 'p' AND voice IS NOT NULL
+       WHERE ev = 'p' AND voice IS NOT NULL AND ${EXCLUDE_TEST}
        GROUP BY picked, voice`
     ).all(),
   ]);

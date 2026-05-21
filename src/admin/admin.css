@@ -68,35 +68,6 @@ body {
     color: var(--accent);
 }
 
-#uidform {
-    margin-left: auto;
-    display: flex;
-    gap: .4rem;
-}
-
-#uidform input {
-    padding: .4rem .6rem;
-    border-radius: 6px;
-    border: 1px solid var(--panel-2);
-    background: var(--panel);
-    color: var(--fg);
-    font: inherit;
-    width: 22rem;
-    max-width: 50vw;
-    font-family: ui-monospace, Menlo, monospace;
-    font-size: .85rem;
-}
-
-#uidform button {
-    padding: .4rem .9rem;
-    border-radius: 6px;
-    border: 0;
-    background: var(--accent);
-    color: #fff;
-    cursor: pointer;
-    font: inherit;
-}
-
 #msg {
     color: var(--muted);
     padding: 1rem;
@@ -111,7 +82,7 @@ body {
 }
 
 .no-uid #msg:empty::before {
-    content: "Enter your uid above (must have power_user=1).";
+    content: "No uid found. Open this page via the main app (which stores your uid in localStorage), or use /admin/?uid=YOUR_UID directly.";
 }
 
 #dash {
