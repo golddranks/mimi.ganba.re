@@ -22,7 +22,7 @@ const LOG_MAX = 2000;          // localStorage.mora_log, newline-separated
 // Per-vowel level thresholds: correct count in a vowel group unlocks more
 // distractors. Wrong answers drop the count to the previous level's start.
 const LEVELS = [10, 15, 20, 25]; // cap = 2 + (thresholds crossed) → 2/3/4/5/6
-const Z = () => ({ correct: 0, total: 0 });
+const Z = () => ({ correct: 0, total: 0, maxRun: 0 });
 const pad2 = (x) => ("0" + x).slice(-2);
 
 // Elements with id attributes are auto-exposed on window (primary, choices,
@@ -128,6 +128,7 @@ function record(correct, vowel) {
     s.correct++;
     skill[vowel] = (skill[vowel] || 0) + 1;
     run++;
+    if (run > (s.maxRun || 0)) s.maxRun = run;
   } else {
     const c = skill[vowel] || 0;
     const i = LEVELS.findLastIndex((t) => c >= t);
@@ -195,6 +196,18 @@ function render() {
   renderBar();
 }
 
+// Done-day quality tier: "" / done / done90 / done95.
+// "done" means 50+@95% or 100+ answers; the 90/95 suffixes mark accuracy.
+function dayTier(s) {
+  if (!s.total) return "";
+  const a = s.correct / s.total;
+  const done = s.total >= 100 || (s.total >= 50 && a >= .95) || (s.maxRun >= 30);
+  if (!done) return "";
+  if (a >= .95) return " done95";
+  if (a >= .90) return " done90";
+  return " done";
+}
+
 function renderBar() {
   const t = key(0);
   let html = "";
@@ -203,8 +216,10 @@ function renderBar() {
     const s = stats[k] || Z();
     const isT = k === t;
     const cls = "bar-bin" + (isT ? " today" : "") + (isT && !s.total ? " empty" : "");
+    const stack = "bar-stack" + dayTier(s);
+    // Negative animation-delay desyncs each bar's pulse via inline --delay.
     const inner = s.total
-      ? `<div class="bar-stack" style="height:${Math.min(100, s.total / BAR_MAX * 100)}%">`
+      ? `<div class="${stack}" style="height:${Math.min(100, s.total / BAR_MAX * 100)}%;--delay:${-i * 0.37}s">`
       + `<div class="bar-correct" style="height:${s.correct / s.total * 100}%"></div></div>`
       : "";
     html += `<div class="${cls}" title="${k}  ${s.correct} correct out of ${s.total}">${inner}</div>`;
@@ -412,6 +427,7 @@ async function loadAsUser(targetUid) {
         s.correct++;
         skill[v] = (skill[v] || 0) + 1;
         run++;
+        if (run > (s.maxRun || 0)) s.maxRun = run;
       } else {
         const c = skill[v] || 0;
         const i = LEVELS.findLastIndex((t) => c >= t);

@@ -177,6 +177,35 @@ body {
     position: relative;
 }
 
+.bar-stack.done {
+    box-shadow: 0 0 4px #FFD700;
+}
+
+/* Per-bar negative animation-delay (set inline in renderBar) staggers the
+   pulses so the bars don't all flash in unison. */
+.bar-stack.done90 {
+    animation: sparkle-90 4.5s ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+}
+
+.bar-stack.done95 {
+    animation: sparkle-95 3s ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+}
+
+@keyframes sparkle-90 {
+    0%, 100% { box-shadow: 0 0 4px #FFB347; }
+    50%      { box-shadow: 0 0 10px #FFB347,
+                           0 0 14px #FFD27F; }
+}
+
+@keyframes sparkle-95 {
+    0%, 100% { box-shadow: 0 0 6px #FFA500; }
+    50%      { box-shadow: 0 0 14px #FFA500,
+                           0 0 22px #FF8C00,
+                           0 0 30px #FFD700; }
+}
+
 .bar-correct {
     position: absolute;
     inset: auto 0 0 0;
