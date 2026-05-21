@@ -17,7 +17,7 @@ function corsHeaders(origin) {
   if (!ok) return {};
   return {
     "access-control-allow-origin": origin,
-    "access-control-allow-methods": "POST, OPTIONS",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
     "access-control-allow-headers": "content-type",
     "access-control-max-age": "86400",
     "vary": "origin",
@@ -46,6 +46,8 @@ export default {
         res = await handleEvents(req, env);
       } else if (req.method === "POST" && url.pathname === "/v1/user") {
         res = await handleUser(req, env);
+      } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+\/events$/)) {
+        res = await handleGetEvents(req, env, url);
       } else {
         res = new Response("not found", { status: 404 });
       }
@@ -92,6 +94,14 @@ async function handleEvents(req, env) {
 
   await env.mimi_stats.batch([...inserts, userTouch]);
   return json({ ok: true, count: body.events.length });
+}
+
+async function handleGetEvents(req, env, url) {
+  const uid = decodeURIComponent(url.pathname.split("/")[3]);
+  const rows = await env.mimi_stats.prepare(
+    "SELECT ts, target, idx, picked, cap, ms, ev FROM events WHERE uid = ? ORDER BY ts ASC"
+  ).bind(uid).all();
+  return json({ events: rows.results || [] });
 }
 
 async function handleUser(req, env) {

@@ -38,7 +38,10 @@ function load() {
   try { return JSON.parse(localStorage.mora) || {}; }
   catch { return {}; }
 }
-const save = () => localStorage.mora = JSON.stringify({ s: stats, k: run, x: skill });
+const save = () => {
+  if (viewMode) return;
+  localStorage.mora = JSON.stringify({ s: stats, k: run, x: skill });
+};
 
 // Compact answer log persisted across sessions; capped at LOG_MAX entries.
 // Format per line:
@@ -54,7 +57,7 @@ function appendLog(target, idx, picked, ms) {
     + ` ${ms}ms`;
   log.push(entry);
   if (log.length > LOG_MAX) log.splice(0, log.length - LOG_MAX);
-  localStorage.mora_log = log.join("\n");
+  if (!viewMode) localStorage.mora_log = log.join("\n");
   console.log(entry);
 }
 
@@ -65,12 +68,17 @@ const STATS_URL = "https://mimi-stats.golddranks.workers.dev";
 // The uid + per-answer events carry no information linking back to a real
 // person — anonymous behavioral data, not personal data under GDPR Art. 4(1).
 // We send these freely from day 1, no consent prompt.
-const uid = (localStorage.uid ||= crypto.randomUUID());
+// ?uid=foo in the URL enables "view-as" mode: the page renders that user's
+// state pulled from the server, and nothing is persisted to localStorage or
+// sent back. Refresh without the param to return to your own state.
+const spoofedUid = new URLSearchParams(location.search).get("uid");
+const viewMode = !!spoofedUid;
+const uid = spoofedUid || (localStorage.uid ||= crypto.randomUUID());
 let evQueue = [];
 try { evQueue = JSON.parse(localStorage.ev_queue || "[]"); } catch { }
 
 function pushEvent(ev) {
-  if (!STATS_URL) return;
+  if (!STATS_URL || viewMode) return;
   evQueue.push(ev);
   localStorage.ev_queue = JSON.stringify(evQueue);
   flushEvents();
@@ -377,11 +385,56 @@ const TIPS = [
   "Tip: Listen again with the button bottom right, but try not to resort to it too often!",
 ];
 
+// Replay another user's event history into local state (view-as mode).
+// Stats are bucketed by the event's local date in the *viewer's* timezone,
+// which may drift slightly from the original user's bucketing — close enough
+// for a debug tool.
+async function loadAsUser(targetUid) {
+  const res = await fetch(STATS_URL + "/v1/user/" + encodeURIComponent(targetUid) + "/events");
+  if (!res.ok) { console.error("view-as: fetch failed", res.status); return; }
+  const { events } = await res.json();
+  events.sort((a, b) => a.ts - b.ts);
+  stats = {}; skill = {}; run = 0;
+  for (const e of events) {
+    if (e.ev === "a" || e.ev === "g") {
+      const d = new Date(e.ts);
+      const k = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      const s = (stats[k] ||= Z());
+      s.total++;
+      const v = e.target.slice(-1);
+      if (e.picked === e.target) {
+        s.correct++;
+        skill[v] = (skill[v] || 0) + 1;
+        run++;
+      } else {
+        const c = skill[v] || 0;
+        const i = LEVELS.findLastIndex((t) => c >= t);
+        skill[v] = i <= 0 ? 0 : LEVELS[i - 1];
+        run = 0;
+      }
+    } else if (e.ev === "r") {
+      const v = e.target.slice(-1);
+      const c = skill[v] || 0;
+      const i = LEVELS.findLastIndex((t) => c >= t);
+      skill[v] = i < 0 ? 0 : LEVELS[i];
+      run = 0;
+    }
+  }
+  render();
+}
+
 // ---------- boot ----------
-const t = load();
-stats = t.s || {};
-run = t.k || 0;
-skill = t.x || {};
-tip.textContent = pick(TIPS);
-render();
-flushEvents();
+if (viewMode) {
+  stats = {}; run = 0; skill = {};
+  tip.textContent = `(view-as: ${spoofedUid})`;
+  render();
+  loadAsUser(spoofedUid);
+} else {
+  const t = load();
+  stats = t.s || {};
+  run = t.k || 0;
+  skill = t.x || {};
+  tip.textContent = pick(TIPS);
+  render();
+  flushEvents();
+}
