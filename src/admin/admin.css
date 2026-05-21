@@ -307,6 +307,28 @@ body {
     color: color-mix(in srgb, var(--bad) 50%, var(--good));
 }
 
+/* ---- level histograms ---- */
+#levelhist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.lvlcol {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+
+.lvlcol h3 {
+    text-align: center;
+    margin-bottom: .2rem;
+}
+
+.lvllegend {
+    flex-basis: 100%;
+    margin-top: 0;
+}
+
 /* ---- sound-file confusion ---- */
 #voiceconf {
     display: flex;

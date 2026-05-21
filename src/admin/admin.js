@@ -25,6 +25,7 @@ async function load(uid) {
     if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
     const data = await res.json();
     renderOverview(data);
+    renderLevelHist(data.level_hist);
     renderDaily(data.daily);
     renderHourly(data.hourly);
     renderMora(data.by_mora);
@@ -97,6 +98,34 @@ function renderDaily(daily) {
     axis += `<line x1="20" x2="${w}" y1="${y}" y2="${y}" stroke="var(--panel-2)" stroke-width=".5"/>`;
   }
   dailychart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${axis}${bars}${labels}</svg>`;
+}
+
+// ---------- user-level histograms per vowel ----------
+// Levels 0..4 correspond to caps 2..6 in the main app (see LEVELS = [10,15,20,25]).
+function renderLevelHist(hist) {
+  const data = hist || { a: [0,0,0,0,0], i: [0,0,0,0,0], u: [0,0,0,0,0], o: [0,0,0,0,0] };
+  const html = [];
+  for (const v of ["a", "i", "u", "o"]) {
+    const bins = data[v] || [0, 0, 0, 0, 0];
+    const total = bins.reduce((a, b) => a + b, 0);
+    const max = Math.max(1, ...bins);
+    const w = 240, h = 140;
+    const innerH = h - 36;
+    const bw = (w - 20) / 5;
+    let bars = "", labels = "";
+    for (let i = 0; i < 5; i++) {
+      const x = 10 + i * bw;
+      const bh = bins[i] / max * innerH;
+      bars += `<rect x="${x + 3}" y="${h - 22 - bh}" width="${bw - 6}" height="${bh}" fill="var(--accent)"><title>level ${i} (cap ${i + 2}): ${bins[i]} users</title></rect>`;
+      bars += `<text x="${x + bw / 2}" y="${h - 22 - bh - 2}" fill="var(--muted)" font-size="10" text-anchor="middle">${bins[i] || ""}</text>`;
+      labels += `<text x="${x + bw / 2}" y="${h - 8}" fill="var(--muted)" font-size="10" text-anchor="middle">${i}</text>`;
+    }
+    html.push(`<div class="lvlcol">
+      <h3>-${v} <span class="sub">· ${total} users</span></h3>
+      <svg viewBox="0 0 ${w} ${h}">${bars}${labels}</svg>
+    </div>`);
+  }
+  levelhist.innerHTML = html.join("") + `<div class="legend lvllegend">x = level (0..4) → cap = level + 2 (number of choice buttons shown)</div>`;
 }
 
 // ---------- hourly (UTC) ----------

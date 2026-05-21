@@ -44,6 +44,7 @@ async function load(uid) {
       return;
     }
     renderOverview(uid, events);
+    renderLevels(events);
     renderDaily(events);
     renderHourly(events);
     renderMora(events);
@@ -83,6 +84,55 @@ function renderOverview(uid, events) {
   setStat("relisten", relisten);
   setStat("first", dayKey(events[0].ts));
   setStat("last", dayKey(events[events.length - 1].ts));
+}
+
+// ---------- skill levels per vowel ----------
+// Replays the same state machine the live app uses (LEVELS = [10,15,20,25])
+// to derive the user's current per-vowel skill and cap. See src/app.js record().
+const LEVELS = [10, 15, 20, 25];
+const lastLevelIdx = (c) => {
+  let i = -1;
+  for (let k = 0; k < LEVELS.length; k++) if (c >= LEVELS[k]) i = k;
+  return i;
+};
+
+function renderLevels(events) {
+  const skill = { a: 0, i: 0, u: 0, o: 0 };
+  const seen = { a: false, i: false, u: false, o: false };
+  for (const e of events) {
+    if (e.ev !== "a" && e.ev !== "g" && e.ev !== "r") continue;
+    const v = e.target.slice(-1);
+    if (!(v in skill)) continue;
+    seen[v] = true;
+    if (e.ev === "r") {
+      const i = lastLevelIdx(skill[v]);
+      skill[v] = i < 0 ? 0 : LEVELS[i];
+    } else if (e.picked === e.target) {
+      skill[v]++;
+    } else {
+      const i = lastLevelIdx(skill[v]);
+      skill[v] = i <= 0 ? 0 : LEVELS[i - 1];
+    }
+  }
+  for (const v of ["a", "i", "u", "o"]) {
+    const row = document.querySelector(`#levels [data-vowel="${v}"]`);
+    if (!row) continue;
+    const c = skill[v];
+    const lvl = lastLevelIdx(c) + 1;        // 0..4
+    const cap = 2 + lvl;                     // 2..6
+    const next = LEVELS[lvl];                // threshold to next level (undefined at max)
+    row.querySelector(".lvl-count").textContent = seen[v] ? c : "—";
+    row.querySelector(".lvl-level").textContent = seen[v] ? `level ${lvl}` : "—";
+    row.querySelector(".lvl-cap").textContent = seen[v] ? `cap ${cap}` : "—";
+    row.querySelector(".lvl-next").textContent = next != null && seen[v]
+      ? `${next - c} to lvl ${lvl + 1}`
+      : (seen[v] ? "max" : "");
+    // Progress bar inside current level
+    const start = lvl === 0 ? 0 : LEVELS[lvl - 1];
+    const end = next != null ? next : c;
+    const pct = end > start ? Math.max(0, Math.min(1, (c - start) / (end - start))) : 1;
+    row.querySelector(".lvl-fill").style.width = (pct * 100) + "%";
+  }
 }
 
 // ---------- daily ----------

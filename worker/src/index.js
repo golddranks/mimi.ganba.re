@@ -162,7 +162,7 @@ async function handleAdminStats(req, env, url) {
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
-  const [totals, active, daily, hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed] = await Promise.all([
+  const [totals, active, daily, hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, skillStream] = await Promise.all([
     db.prepare(
       `SELECT
          COUNT(*)                                                              AS events,
@@ -232,7 +232,51 @@ async function handleAdminStats(req, env, url) {
        WHERE ev = 'p' AND voice IS NOT NULL AND ${EXCLUDE_TEST}
        GROUP BY picked, voice`
     ).all(),
+    // Raw event stream for per-user skill replay. Cheaper than expressing
+    // the streak/decay rules in pure SQL. ORDER BY uid keeps each user's
+    // sequence contiguous so the JS loop below can compute incrementally.
+    db.prepare(
+      `SELECT uid, target, picked, ev FROM events
+       WHERE ev IN ('a','g','r') AND ${EXCLUDE_TEST}
+       ORDER BY uid, ts ASC`
+    ).all(),
   ]);
+
+  // Replay the skill-state machine per user to derive each user's current
+  // per-vowel skill. Same rules as app.js / dashboard view-as replay.
+  const LEVELS = [10, 15, 20, 25];
+  const lastIdx = (c) => {
+    let i = -1;
+    for (let k = 0; k < LEVELS.length; k++) if (c >= LEVELS[k]) i = k;
+    return i;
+  };
+  const perUser = {};
+  for (const e of skillStream.results || []) {
+    const v = e.target.slice(-1);
+    const cur = perUser[e.uid] || (perUser[e.uid] = {});
+    const c = cur[v] || 0;
+    if (e.ev === "a" || e.ev === "g") {
+      if (e.picked === e.target) cur[v] = c + 1;
+      else {
+        const i = lastIdx(c);
+        cur[v] = i <= 0 ? 0 : LEVELS[i - 1];
+      }
+    } else {
+      // 'r' — drop to the start of the current level
+      const i = lastIdx(c);
+      cur[v] = i < 0 ? 0 : LEVELS[i];
+    }
+  }
+
+  // Bucket each user's per-vowel skill into level bins (0..4). Users who
+  // never trained a given vowel don't contribute to that vowel's histogram.
+  const level_hist = { a: [0, 0, 0, 0, 0], i: [0, 0, 0, 0, 0], u: [0, 0, 0, 0, 0], o: [0, 0, 0, 0, 0] };
+  for (const uid in perUser) {
+    for (const v of ["a", "i", "u", "o"]) {
+      if (perUser[uid][v] === undefined) continue;
+      level_hist[v][lastIdx(perUser[uid][v]) + 1]++;
+    }
+  }
 
   return json({
     totals,
@@ -244,5 +288,6 @@ async function handleAdminStats(req, env, url) {
     confusion: confusion.results  || [],
     by_voice_confusion: byVoiceConf.results   || [],
     by_voice_played:    byVoicePlayed.results || [],
+    level_hist,
   });
 }

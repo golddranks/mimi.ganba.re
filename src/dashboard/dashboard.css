@@ -156,6 +156,13 @@ body {
     text-transform: uppercase;
 }
 
+.card h2 .sub {
+    text-transform: none;
+    letter-spacing: 0;
+    margin-left: .4rem;
+    font-weight: normal;
+}
+
 .card h3 {
     margin: .6rem 0 .3rem;
     font-size: .75rem;
@@ -238,6 +245,54 @@ body {
 
 #rtchart {
     aspect-ratio: 900 / 200;
+}
+
+/* ---- skill levels ---- */
+#levels {
+    display: grid;
+    gap: .3rem;
+}
+
+.lvlrow {
+    display: grid;
+    grid-template-columns: 3rem 3ch 5rem 4rem 1fr 6rem;
+    align-items: center;
+    gap: .8rem;
+    font-size: .85rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.lvl-vowel {
+    font-size: 1.1rem;
+    color: var(--fg);
+}
+
+.lvl-count {
+    text-align: right;
+    color: var(--fg);
+    font-weight: 500;
+}
+
+.lvl-bar {
+    height: 10px;
+    background: color-mix(in srgb, var(--panel-2) 60%, transparent);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.lvl-fill {
+    display: block;
+    background: var(--accent);
+    height: 100%;
+    border-radius: 3px;
+    width: 0;
+}
+
+.lvl-next {
+    font-size: .78rem;
+    white-space: nowrap;
 }
 
 /* ---- per-mora ---- */
