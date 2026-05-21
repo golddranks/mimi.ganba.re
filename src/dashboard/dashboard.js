@@ -63,14 +63,18 @@ function renderOverview(uid, events) {
   const ag = events.filter((e) => e.ev === "a" || e.ev === "g");
   const correct = ag.filter((e) => e.picked === e.target).length;
   const acc = ag.length ? correct / ag.length : 0;
-  let topStreak = 0, run = 0;
+  // Day-boundary resets match the live app's streak rules — see app.js load()
+  // and record(). Without this, topStreak could span multiple days and would
+  // never match what the user actually saw in #streak.
+  let topStreak = 0, run = 0, lastDay = null;
   for (const e of events) {
-    if (e.ev === "a" || e.ev === "g") {
-      if (e.picked === e.target) { run++; if (run > topStreak) topStreak = run; }
-      else run = 0;
-    } else if (e.ev === "r") {
-      run = 0;
-    }
+    if (e.ev !== "a" && e.ev !== "g" && e.ev !== "r") continue;
+    const d = dayKey(e.ts);
+    if (lastDay !== null && d !== lastDay) run = 0;
+    lastDay = d;
+    if (e.ev === "r") run = 0;
+    else if (e.picked === e.target) { run++; if (run > topStreak) topStreak = run; }
+    else run = 0;
   }
   const days = new Set(ag.map((e) => dayKey(e.ts))).size;
   const relisten = events.filter((e) => e.ev === "r").length;
@@ -274,17 +278,25 @@ function renderConfusion(events) {
 }
 
 // ---------- streak ----------
+// Replays the live app's streak rules, including the day-boundary reset
+// (a missed day, or even just an event on a new day, restarts the count).
 function renderStreak(events) {
   let run = 0;
+  let lastDay = null;
   const series = [];
   for (const e of events) {
-    if (e.ev === "a" || e.ev === "g") {
-      if (e.picked === e.target) run++; else run = 0;
-      series.push({ ts: e.ts, run });
-    } else if (e.ev === "r") {
+    if (e.ev !== "a" && e.ev !== "g" && e.ev !== "r") continue;
+    const d = dayKey(e.ts);
+    if (lastDay !== null && d !== lastDay) run = 0;
+    lastDay = d;
+    if (e.ev === "r") {
       run = 0;
-      series.push({ ts: e.ts, run });
+    } else if (e.picked === e.target) {
+      run++;
+    } else {
+      run = 0;
     }
+    series.push({ ts: e.ts, run });
   }
   if (series.length === 0) { streakchart.textContent = "(no answers)"; return; }
   const max = Math.max(1, ...series.map((s) => s.run));

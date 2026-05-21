@@ -35,8 +35,17 @@ let locked = false;            // true while reviewing a wrong answer
 
 // ---------- persistence ----------
 function load() {
-  try { return JSON.parse(localStorage.mora) || {}; }
-  catch { return {}; }
+  try {
+    const t = JSON.parse(localStorage.mora) || {};
+    // A streak only counts as long as the user keeps training — a missed
+    // day breaks it. If the most recent day in stats isn't today, drop the
+    // saved streak before it gets restored into `run`.
+    if (t.s && t.k) {
+      const lastDay = Object.keys(t.s).sort().pop();
+      if (lastDay && lastDay !== key(0)) t.k = 0;
+    }
+    return t;
+  } catch { return {}; }
 }
 const save = () => {
   if (viewMode) return;
@@ -122,7 +131,12 @@ const today = () => stats[key(0)] || Z();
 const acc = (s) => s.total ? s.correct / s.total : 0;
 
 function record(correct, vowel) {
-  const s = (stats[key(0)] ||= Z());
+  // Midnight rollover: if today's bucket doesn't exist yet but other days
+  // do, the streak from the most recent day is stale — same reset rule as
+  // load() applies, just from a long-open session crossing midnight.
+  const today = key(0);
+  if (!stats[today] && Object.keys(stats).length > 0) run = 0;
+  const s = (stats[today] ||= Z());
   s.total++;
   if (correct) {
     s.correct++;
@@ -419,10 +433,13 @@ async function loadAsUser(targetUid) {
   const { events } = await res.json();
   events.sort((a, b) => a.ts - b.ts);
   stats = {}; skill = {}; run = 0;
+  let lastDay = null;
   for (const e of events) {
     if (e.ev === "a" || e.ev === "g") {
       const d = new Date(e.ts);
       const k = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      if (lastDay !== null && k !== lastDay) run = 0;   // day boundary resets streak
+      lastDay = k;
       const s = (stats[k] ||= Z());
       s.total++;
       const v = e.target.slice(-1);
@@ -438,6 +455,10 @@ async function loadAsUser(targetUid) {
         run = 0;
       }
     } else if (e.ev === "r") {
+      const d = new Date(e.ts);
+      const k = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      if (lastDay !== null && k !== lastDay) run = 0;
+      lastDay = k;
       const v = e.target.slice(-1);
       const c = skill[v] || 0;
       const i = LEVELS.findLastIndex((t) => c >= t);
