@@ -249,8 +249,13 @@ function newQuestion() {
   current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now() };
   primary.hidden = true;
   choices.dataset.n = opts.length;
+  // Each button gets a fixed sample index — tapping a button during review
+  // always replays the same audio. Long-press during review plays a random one.
   choices.innerHTML = opts
-    .map((m) => `<button class="choice" data-mora="${m}">${DISPLAY[m]}</button>`)
+    .map((m) => {
+      const i = m === target ? idx : rand(m);
+      return `<button class="choice" data-mora="${m}" data-idx="${i}">${DISPLAY[m]}</button>`;
+    })
     .join("");
   choices.hidden = false;
   play(current.voice);
@@ -268,11 +273,12 @@ choices.onpointerdown = (e) => {
   // Always reset on a fresh press: if the post-long-press click didn't
   // fire (common on touch), the flag would otherwise eat the next tap.
   longHandled = false;
-  if (!current || locked) return;
+  if (!current) return;
   pressTimer = setTimeout(() => {
     pressTimer = null;
     longHandled = true;
-    guess(btn);
+    if (locked) replay(btn.dataset.mora, btn, true);   // random sample
+    else guess(btn);
   }, LONG_MS);
 };
 const cancelPress = () => {
@@ -305,12 +311,12 @@ function guess(btn) {
   primary.hidden = false;
 }
 
-function replay(m, btn) {
+function replay(m, btn, random = false) {
   for (const b of choices.querySelectorAll(".choice.playing")) b.classList.remove("playing");
   btn.classList.add("playing");
   audio.onended = () => { btn.classList.remove("playing"); audio.onended = null; };
-  // Correct choice replays the exact question clip; distractors play a fresh sample.
-  play(m === current.target ? current.voice : path(m, rand(m)));
+  const i = random ? rand(m) : +btn.dataset.idx;
+  play(path(m, i));
   const { target, idx, cap, startTs } = current;
   pushEvent({ ts: Date.now(), target, idx, picked: m, cap, ms: Date.now() - startTs, ev: "p" });
 }
