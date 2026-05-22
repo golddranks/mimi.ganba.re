@@ -17,57 +17,52 @@
 
     <main>
         <article>
-            <p><strong>mimi.ganba.re</strong> is an anonymous Japanese mora ear-training tool. This page describes what
-                it collects and why.</p>
+            <p><strong>mimi.ganba.re</strong> is a Japanese ear-training tool. This page describes what
+                data it collects and why. The site is anonymous and no personal data is tracked or stored,
+                but there are some data that are stored on user's device, and some data that are sent to the
+                server.</p>
 
-            <h2>What's stored locally on your device</h2>
-            <p>The app uses your browser's <code>localStorage</code> to keep:</p>
+            <h2>What's stored locally on user's device</h2>
+            <p>This site stores locally some data to implement its core functionality.</p>
             <ul>
-                <li>A randomly-generated user id (UUID), created on your first visit</li>
-                <li>Per-day correct / total counts, your current streak, and per-vowel skill levels</li>
-                <li>A rolling log of your last 2,000 answers (mora, timestamp, ms taken)</li>
-                <li>A queue of unsent event records (for offline use)</li>
-                <li>An optional nickname, if you set one</li>
+                <li>A randomly-generated device ID, created on first visit</li>
+                <li>Per-day correct / total counts, current streak, and per-vowel skill levels</li>
+                <li>A rolling log of the quizzes and answers</li>
+                <li>A queue of yet-to-be-sent event records</li>
             </ul>
 
             <h2>What's sent to the server</h2>
-            <p>When you answer a question, the app sends to the stats worker:</p>
+            <p>This site sents behavioural data to the server for linguistic research purposes. When answering a
+                question, the app sends to server:</p>
             <ul>
-                <li>Your random uid</li>
-                <li>The mora you heard, the mora you picked, and whether you re-listened</li>
-                <li>A timestamp, ms taken to answer, and difficulty (number of buttons shown)</li>
+                <li>The device ID</li>
+                <li>The sounds played and the buttons pushed</li>
+                <li>A timestamp, time taken to answer, and the current difficulty level</li>
             </ul>
-            <p>The server stores these in a Cloudflare D1 database.</p>
 
             <h2>Is this personal data?</h2>
-            <p>The uid is a random UUID minted by your browser. With no nickname attached, it carries no link to a real
-                person, so the event records are anonymous behavioral data — not personal data under GDPR Art. 4(1).
-                Events are therefore sent from day 1 without a consent prompt.</p>
-
-            <h2>Nickname (opt-in)</h2>
-            <p>You can set a nickname by visiting the site with <code>?nick=YourName</code> in the URL. Once set, your
-                nickname is linked to your uid and all prior and future events under that uid become identifiable. The
-                <em>act</em> of setting one is treated as your consent moment. To withdraw, clear your browser data for
-                this site or visit with <code>?nick=</code> (empty) to unset it.</p>
-
-            <h2>Cloudflare</h2>
-            <p>The site itself is served from GitHub Pages; the stats worker runs on Cloudflare Workers + D1. The worker
-                does not read or store client IP addresses. Cloudflare may keep IPs in its own edge logs for
-                security/abuse purposes — their data as your processor, not part of what mimi.ganba.re collects.</p>
+            <p>The device ID is a random string of characters. With no personal information attached, it carries no
+                link to a real person, so the event records are anonymous behavioral data — not personal data under GDPR
+                Art. 4(1). Events are therefore sent without a consent prompt. Users' IP addresses are not collected
+                by the operator of this site.
+            </p>
 
             <h2>Third-party tracking</h2>
             <p>None. No analytics, no advertising, no third-party scripts.</p>
 
             <h2>Deletion</h2>
-            <p>To delete your local data: clear your browser data for this site. Events already submitted under your
-                random uid remain in the database but are not linked to you unless you've set a nickname.</p>
-            <p>To request deletion of events under a specific uid (especially relevant after setting a nickname), open
-                an issue at <a
-                    href="https://github.com/golddranks/ear_training/issues">github.com/golddranks/ear_training/issues</a>.
+            <p>To delete locally stored data: clear your browser data for this site. Events already submitted under the
+                random device ID remain in the database but are not linked or linkable to the device once the
+                client-side data is purged.
+                Because sent data is not personal data under GDPR Art. 4(1), we don't process data
+                deletion requests.
             </p>
 
             <h2>Source code</h2>
-            <p><a href="https://github.com/golddranks/mimi.ganba.re">github.com/golddranks/mimi.ganba.re</a></p>
+            <p>Available at
+                <a href="https://github.com/golddranks/mimi.ganba.re">github.com/golddranks/mimi.ganba.re</a>
+            </p>
+
         </article>
     </main>
 </body>
