@@ -253,6 +253,8 @@ const VOWEL_GROUPS = {
   u: ["su", "zu", "tu", "syu", "zyu", "tyu"],
   o: ["so", "zo", "syo", "zyo", "tyo"],
 };
+// "<row-head>行" — Japanese for "<vowel>-row in the 50-sound chart"
+const VOWEL_GYO = { a: "あ行", i: "い行", u: "う行", o: "お行" };
 
 let voiceData = [];
 let voiceConfData = [];
@@ -391,7 +393,7 @@ function drawVoiceConfusion() {
     }
 
     html.push(`<div class="confgroup">
-      <h3>-${v}</h3>
+      <h3>${VOWEL_GYO[v]}</h3>
       <table class="vconfgrid">
         <thead>${header}</thead>
         <tbody>${body || `<tr><td colspan="${2 + morae.length}" style="text-align:left;color:var(--muted);padding:.4rem 0">no recordings meet the min-attempts threshold</td></tr>`}</tbody>
