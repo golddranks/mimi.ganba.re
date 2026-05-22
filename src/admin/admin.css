@@ -324,11 +324,6 @@ body {
     margin-bottom: .2rem;
 }
 
-.lvllegend {
-    flex-basis: 100%;
-    margin-top: 0;
-}
-
 /* ---- sound-file confusion ---- */
 #voiceconf {
     display: flex;

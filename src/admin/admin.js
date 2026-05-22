@@ -26,6 +26,8 @@ async function load(uid) {
     const data = await res.json();
     renderOverview(data);
     renderLevelHist(data.level_hist);
+    renderDaysHist(data.days_hist);
+    renderActivityHist(data.activity_hist);
     renderDaily(data.daily);
     renderHourly(data.hourly);
     renderMora(data.by_mora);
@@ -101,31 +103,86 @@ function renderDaily(daily) {
 }
 
 // ---------- user-level histograms per vowel ----------
-// Levels 0..4 correspond to caps 2..6 in the main app (see LEVELS = [10,15,20,25]).
+// Bins 0..4 correspond to caps 2..6 (= number of choice buttons shown for
+// questions at that level; see LEVELS = [10,15,20,25] in app.js). The
+// static skeleton for the 4 charts lives in admin/index.html; this only
+// updates bar heights, count labels, and tooltips, so the layout is fixed
+// from first paint and the section doesn't flash blank.
 function renderLevelHist(hist) {
-  const data = hist || { a: [0,0,0,0,0], i: [0,0,0,0,0], u: [0,0,0,0,0], o: [0,0,0,0,0] };
-  const html = [];
+  const data = hist || { a: [0, 0, 0, 0, 0], i: [0, 0, 0, 0, 0], u: [0, 0, 0, 0, 0], o: [0, 0, 0, 0, 0] };
+  const baseY = 118, innerH = 104; // must match the static SVG geometry
   for (const v of ["a", "i", "u", "o"]) {
     const bins = data[v] || [0, 0, 0, 0, 0];
     const total = bins.reduce((a, b) => a + b, 0);
     const max = Math.max(1, ...bins);
-    const w = 240, h = 140;
-    const innerH = h - 36;
-    const bw = (w - 20) / 5;
-    let bars = "", labels = "";
+    const col = levelhist.querySelector(`.lvlcol[data-vowel="${v}"]`);
+    col.querySelector(".lvltotal").textContent = total;
     for (let i = 0; i < 5; i++) {
-      const x = 10 + i * bw;
       const bh = bins[i] / max * innerH;
-      bars += `<rect x="${x + 3}" y="${h - 22 - bh}" width="${bw - 6}" height="${bh}" fill="var(--accent)"><title>level ${i} (cap ${i + 2}): ${bins[i]} users</title></rect>`;
-      bars += `<text x="${x + bw / 2}" y="${h - 22 - bh - 2}" fill="var(--muted)" font-size="10" text-anchor="middle">${bins[i] || ""}</text>`;
-      labels += `<text x="${x + bw / 2}" y="${h - 8}" fill="var(--muted)" font-size="10" text-anchor="middle">${i}</text>`;
+      const rect = col.querySelector(`rect[data-bin="${i}"]`);
+      rect.setAttribute("height", bh);
+      rect.setAttribute("y", baseY - bh);
+      rect.querySelector("title").textContent = `cap ${i + 2}: ${bins[i]} users`;
+      const text = col.querySelector(`text.bincount[data-bin="${i}"]`);
+      text.setAttribute("y", baseY - bh - 2);
+      text.textContent = bins[i] || "";
     }
-    html.push(`<div class="lvlcol">
-      <h3>-${v} <span class="sub">· ${total} users</span></h3>
-      <svg viewBox="0 0 ${w} ${h}">${bars}${labels}</svg>
-    </div>`);
   }
-  levelhist.innerHTML = html.join("") + `<div class="legend lvllegend">x = level (0..4) → cap = level + 2 (number of choice buttons shown)</div>`;
+}
+
+// ---------- distribution histograms (activity / days) ----------
+// Generic painter for an N-bin histogram. The outer `<svg>` (with its
+// viewBox) lives statically in admin/index.html so the section reserves
+// its layout; this function fills in the bars + axis labels on data load.
+// `labels[i]` is shown under bar i (use "" to suppress for crowded x-axes).
+function paintHist(svgEl, bins, labels, tooltipFn) {
+  const vb = svgEl.getAttribute("viewBox").split(" ").map(Number);
+  const vbw = vb[2], vbh = vb[3];
+  const padL = 14, padR = 14;
+  const baseY = vbh - 22, innerH = baseY - 14;
+  const n = bins.length;
+  const bw = (vbw - padL - padR) / n;
+  const barW = Math.max(2, bw * 0.78);
+  const max = Math.max(1, ...bins);
+  let html = "";
+  for (let i = 0; i < n; i++) {
+    const cx = padL + (i + 0.5) * bw;
+    const bh = bins[i] / max * innerH;
+    html += `<rect x="${cx - barW / 2}" y="${baseY - bh}" width="${barW}" height="${bh}" fill="var(--accent)"><title>${tooltipFn(i, bins[i])}</title></rect>`;
+    if (bins[i] > 0) {
+      html += `<text x="${cx}" y="${baseY - bh - 4}" fill="var(--muted)" font-size="11" text-anchor="middle">${bins[i]}</text>`;
+    }
+    if (labels[i]) {
+      html += `<text x="${cx}" y="${vbh - 6}" fill="var(--muted)" font-size="11" text-anchor="middle">${labels[i]}</text>`;
+    }
+  }
+  svgEl.innerHTML = html;
+}
+
+const ACTIVITY_LABELS = ["1-3", "4-9", "10-29", "30-99", "100-299", "300-999", "1000-2999", "3000+"];
+function renderActivityHist(bins) {
+  paintHist(
+    activityhist.querySelector("svg"),
+    bins || new Array(8).fill(0),
+    ACTIVITY_LABELS,
+    (i, n) => `${ACTIVITY_LABELS[i]} answers: ${n} users`,
+  );
+}
+
+// Sparse labels at 1, 5, 10, 15, 20, 25, 30, 30+ so the x-axis isn't crowded.
+const DAYS_LABELS = (() => {
+  const a = new Array(31).fill("");
+  for (const i of [0, 4, 9, 14, 19, 24, 29]) a[i] = String(i + 1);
+  a[30] = "30+";
+  return a;
+})();
+function renderDaysHist(bins) {
+  paintHist(
+    dayshist.querySelector("svg"),
+    bins || new Array(31).fill(0),
+    DAYS_LABELS,
+    (i, n) => (i === 30 ? "31+ days" : `${i + 1} day${i === 0 ? "" : "s"}`) + `: ${n} users`,
+  );
 }
 
 // ---------- hourly (UTC) ----------
@@ -218,9 +275,15 @@ function renderVoice(byVoice, byPlayed) {
   }
   voiceData = [...idx.values()];
   vmin.oninput = redrawVoice;
+  vlisten.oninput = redrawVoice;
   vtop.oninput = redrawVoice;
   drawVoiceTable();
 }
+
+// Sum of re-listens + after-plays — the "uncertainty after hearing this
+// recording" signal. High values at low attempt counts often indicate an
+// unclear or wrong recording.
+const listenCount = (r) => (r.relisten || 0) + (r.afterplay || 0);
 
 function renderVoiceConfusion(rows) {
   voiceConfData = rows || [];
@@ -234,23 +297,26 @@ function redrawVoice() {
 
 function drawVoiceTable() {
   const min = Math.max(1, parseInt(vmin.value, 10) || 1);
+  const minL = Math.max(0, parseInt(vlisten.value, 10) || 0);
   const top = Math.max(1, parseInt(vtop.value, 10) || 1);
+  // OR semantic: keep a recording if it crosses either threshold. Lets a
+  // 1-attempt recording with many post-error listens still surface.
   const filtered = voiceData
-    .filter((r) => r.n >= min)
+    .filter((r) => r.n >= min || listenCount(r) >= minL)
     .map((r) => ({ ...r, acc: r.n ? r.correct / r.n : 0 }))
     .sort((a, b) => a.acc - b.acc);
   const rows = filtered.slice(0, top);
-  vcount.textContent = `(showing ${rows.length} of ${filtered.length} files at min=${min})`;
+  vcount.textContent = `(${filtered.length} match attempts≥${min} or listens≥${minL}; showing top ${rows.length})`;
   const tbody = voicetable.querySelector("tbody");
   tbody.innerHTML = rows.map((r) => {
-    const accPct = (r.acc * 100).toFixed(1);
-    const cls = r.acc < 0.6 ? "bad" : r.acc < 0.85 ? "mid" : "";
+    const accPct = r.n ? (r.acc * 100).toFixed(1) + "%" : "—";
+    const cls = r.n === 0 ? "" : r.acc < 0.6 ? "bad" : r.acc < 0.85 ? "mid" : "";
     return `<tr>
       <td>${DISPLAY[r.m] || r.m}</td>
       <td>${r.v || "?"}</td>
       <td>${r.n}</td>
       <td>${r.correct}</td>
-      <td class="acc ${cls}">${accPct}%</td>
+      <td class="acc ${cls}">${accPct}</td>
       <td>${r.relisten || 0}</td>
       <td>${r.afterplay || 0}</td>
     </tr>`;
@@ -265,6 +331,7 @@ function drawVoiceTable() {
 // view of current files).
 function drawVoiceConfusion() {
   const min = Math.max(1, parseInt(vmin.value, 10) || 1);
+  const minL = Math.max(0, parseInt(vlisten.value, 10) || 0);
   const map = window.VOICE_MAP || {};
   const counts = {};
   const totals = {};
@@ -272,6 +339,10 @@ function drawVoiceConfusion() {
     counts[`${r.t}/${r.v}/${r.p}`] = r.n;
     totals[`${r.t}/${r.v}`] = (totals[`${r.t}/${r.v}`] || 0) + r.n;
   }
+  // Look up post-error listens per recording from the merged voiceData so
+  // we can apply the same OR filter as the difficulty table above.
+  const listens = {};
+  for (const r of voiceData) listens[`${r.m}/${r.v}`] = listenCount(r);
 
   const html = [];
   for (const v of ["a", "i", "u", "o"]) {
@@ -280,7 +351,10 @@ function drawVoiceConfusion() {
     const rowsInGroup = [];
     for (const m of morae) {
       for (const voice of map[m] || []) {
-        if ((totals[`${m}/${voice}`] || 0) >= min) rowsInGroup.push({ m, voice });
+        const key = `${m}/${voice}`;
+        const attempts = totals[key] || 0;
+        const listenN = listens[key] || 0;
+        if (attempts >= min || listenN >= minL) rowsInGroup.push({ m, voice });
       }
     }
 

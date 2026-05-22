@@ -236,7 +236,7 @@ async function handleAdminStats(req, env, url) {
     // the streak/decay rules in pure SQL. ORDER BY uid keeps each user's
     // sequence contiguous so the JS loop below can compute incrementally.
     db.prepare(
-      `SELECT uid, target, picked, ev FROM events
+      `SELECT uid, ts, target, picked, ev FROM events
        WHERE ev IN ('a','g','r') AND ${EXCLUDE_TEST}
        ORDER BY uid, ts ASC`
     ).all(),
@@ -251,11 +251,16 @@ async function handleAdminStats(req, env, url) {
     return i;
   };
   const perUser = {};
+  const userAnswers = {};   // per-user count of 'a'/'g' events
+  const userDays = {};      // per-user set of YYYY-MM-DD strings (UTC) seen
   for (const e of skillStream.results || []) {
     const v = e.target.slice(-1);
     const cur = perUser[e.uid] || (perUser[e.uid] = {});
     const c = cur[v] || 0;
     if (e.ev === "a" || e.ev === "g") {
+      userAnswers[e.uid] = (userAnswers[e.uid] || 0) + 1;
+      const day = new Date(e.ts).toISOString().slice(0, 10);
+      (userDays[e.uid] = userDays[e.uid] || new Set()).add(day);
       if (e.picked === e.target) cur[v] = c + 1;
       else {
         const i = lastIdx(c);
@@ -278,6 +283,23 @@ async function handleAdminStats(req, env, url) {
     }
   }
 
+  // 8 ~3×-stepped buckets for total answers — wider than log2, finer than
+  // log10. Max bucket covers anyone above ~3000 answers (practical ceiling).
+  const activity_hist = new Array(8).fill(0);
+  for (const uid in userAnswers) {
+    const a = userAnswers[uid];
+    const b = a < 4 ? 0 : a < 10 ? 1 : a < 30 ? 2 : a < 100 ? 3 : a < 300 ? 4 : a < 1000 ? 5 : a < 3000 ? 6 : 7;
+    activity_hist[b]++;
+  }
+
+  // One bucket per day-count from 1..30 plus a "30+" overflow bucket.
+  const days_hist = new Array(31).fill(0);
+  for (const uid in userDays) {
+    const d = userDays[uid].size;
+    if (d <= 0) continue;
+    days_hist[Math.min(30, d - 1)]++;
+  }
+
   return json({
     totals,
     active,
@@ -289,5 +311,7 @@ async function handleAdminStats(req, env, url) {
     by_voice_confusion: byVoiceConf.results   || [],
     by_voice_played:    byVoicePlayed.results || [],
     level_hist,
+    activity_hist,
+    days_hist,
   });
 }
