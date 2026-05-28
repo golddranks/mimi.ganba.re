@@ -89,7 +89,9 @@ body {
     display: grid;
     gap: 1rem;
     grid-template-columns: 1fr;
-    max-width: 1200px;
+    /* Wider than the user dashboard (1200px) so the four sound-file
+       confusion vowel groups fit side-by-side on a typical workstation. */
+    max-width: 1400px;
     margin: 0 auto;
 }
 
@@ -360,10 +362,16 @@ body {
 }
 
 /* ---- sound-file confusion ---- */
+/* Four vowel-group tables laid out horizontally (wrapping on narrow screens).
+   Within each table, voices for the same mora cluster together and the
+   first row of each new mora gets .moragap — a thin top border + a hair
+   of padding — to separate sounds without an h4 header repeating the
+   kana label. */
 #voiceconf {
     display: flex;
-    flex-direction: column;
-    gap: 1.4rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1rem 1.5rem;
 }
 
 .vconfgrid {
@@ -378,30 +386,52 @@ body {
     vertical-align: middle;
 }
 
+/* Cells in the sound-file grid are tighter than in the main confusion
+   matrix so that all four vowel groups fit horizontally. */
 .vconfgrid thead th {
     font-weight: 400;
     color: var(--muted);
-    font-size: 1.05rem;
-    width: 2.2rem;
-    height: 2.2rem;
+    font-size: 0.9rem;
+    width: 1.7rem;
+    height: 1.7rem;
 }
 
 .vconfgrid tbody th.vmora {
     font-weight: 400;
     color: var(--muted);
-    font-size: 1.05rem;
-    width: 2.5rem;
+    font-size: 0.9rem;
+    width: 1.7rem;
+}
+
+/* Spacer row inserted between successive mora groups inside a single
+   vowel-group table — clusters voices for the same sound together without
+   needing an extra heading per group. */
+.vconfgrid tr.moragap td {
+    height: .6rem;
+    border: none;
+    padding: 0;
+    background: transparent;
 }
 
 .vconfgrid tbody th.vname {
     font-family: ui-monospace, Menlo, monospace;
     font-weight: 400;
     color: var(--fg);
-    font-size: .75rem;
+    font-size: 0.7rem;
     text-align: left;
-    padding: 0 .8rem 0 .2rem;
-    white-space: nowrap;
+    padding: 0 .35rem 0 .15rem;
     cursor: pointer;
+    /* Cap so a long voice name (e.g. "Chirp3-HD-Vindemiatrix") doesn't
+       widen the column past its peers; the span below truncates with
+       an ellipsis, and the full name is in the th's title attribute. */
+    max-width: 7rem;
+}
+
+.vconfgrid tbody th.vname > span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .vconfgrid tbody th.vname:hover {
@@ -418,10 +448,10 @@ body {
 }
 
 .vconfgrid td {
-    width: 2.2rem;
-    height: 1.6rem;
+    width: 1.7rem;
+    height: 1.3rem;
     border: 1px solid var(--panel-2);
-    font-size: .75rem;
+    font-size: 0.7rem;
     color: var(--fg);
 }
 

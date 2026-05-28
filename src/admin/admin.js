@@ -589,10 +589,21 @@ function drawVoiceConfusion() {
     header += `</tr>`;
 
     let body = "";
+    let lastMora = null;
+    const spacer = `<tr class="moragap" aria-hidden="true"><td colspan="${2 + morae.length}"></td></tr>`;
     for (const row of rowsInGroup) {
+      // Insert an empty spacer row when the mora changes. (Padding/border on
+      // the cluster's first row gets eaten by the fixed td height under
+      // box-sizing: border-box, so an explicit row is the only reliable way
+      // to get visible whitespace between sound clusters.)
+      if (row.m !== lastMora && body !== "") body += spacer;
+      lastMora = row.m;
       // vname carries data-mora/data-voice for the click-to-play delegation
-      // attached once at module load; vmora is katakana (heard side).
-      body += `<tr><th class="vmora">${KATAKANA[row.m]}</th><th class="vname" data-mora="${row.m}" data-voice="${row.voice}">${row.voice}</th>`;
+      // attached once at module load; vmora is katakana (heard side). The
+      // voice name lives inside a span so it can ellipsis-truncate without
+      // making the th itself wider than its max-width — table cells don't
+      // honour text-overflow on their own.
+      body += `<tr><th class="vmora">${KATAKANA[row.m]}</th><th class="vname" data-mora="${row.m}" data-voice="${row.voice}" title="${row.voice}"><span>${row.voice}</span></th>`;
       for (const p of morae) {
         const val = valueFor(row.m, row.voice, p);
         const diag = row.m === p;
@@ -610,7 +621,6 @@ function drawVoiceConfusion() {
     }
 
     html.push(`<div class="confgroup">
-      <h3>${VOWEL_GYO[v]}</h3>
       <table class="vconfgrid">
         <thead>${header}</thead>
         <tbody>${body || `<tr><td colspan="${2 + morae.length}" style="text-align:left;color:var(--muted);padding:.4rem 0">no recordings meet the filters</td></tr>`}</tbody>
