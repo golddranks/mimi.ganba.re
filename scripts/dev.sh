@@ -27,9 +27,27 @@ for arg in "$@"; do
   esac
 done
 
-# Build static site in four independent steps. Audio transcoding is the
-# slow one (ffmpeg) and idempotent — it skips files that already exist.
+# Build static site in four independent steps. Audio transcoding (ffmpeg)
+# is the only step that needs anything beyond plain Python; once dist/audio/
+# exists, transcode_audio.py is a no-op and dev.sh works outside nix-shell.
 python3 scripts/voicemap.py
+
+# Bail only when there's no way forward: no ffmpeg available AND no cached
+# audio to reuse. Either of those means transcode_audio.py can do its work
+# (or no work, if it's already up to date) and dev.sh continues normally.
+if ! command -v ffmpeg >/dev/null 2>&1 && [ ! -d dist/audio ]; then
+  cat <<'EOF' >&2
+
+No audio data — dist/audio/ doesn't exist yet, and ffmpeg isn't on PATH.
+
+Transcoding voices needs ffmpeg, which shell.nix provides. Bootstrap once with:
+  nix-shell --run ./scripts/dev.sh
+
+After that, ./scripts/dev.sh works outside nix-shell.
+EOF
+  exit 1
+fi
+
 python3 scripts/transcode_audio.py
 python3 scripts/minify.py
 python3 scripts/build.py
