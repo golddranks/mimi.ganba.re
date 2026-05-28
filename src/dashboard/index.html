@@ -86,7 +86,7 @@
             <div id="hourlychart"></div>
         </section>
 
-        <section class="card">
+        <section class="card tall">
             <h2>Per-sound accuracy
                 <span class="modeswitch" id="moramode">
                     <button type="button" data-mode="count" class="active">counts</button>
@@ -113,6 +113,15 @@
                 <div class="mrow" data-mora="syo"><div class="mname">ショ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
                 <div class="mrow" data-mora="zyo"><div class="mname">ジョ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
                 <div class="mrow" data-mora="tyo"><div class="mname">チョ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Reaction time</h2>
+            <div id="rtchart"></div>
+            <div class="legend">
+                <span><span class="sw" style="background:var(--good)"></span>correct</span>
+                <span><span class="sw" style="background:var(--bad)"></span>wrong</span>
             </div>
         </section>
 
@@ -194,15 +203,6 @@
         <section class="card span2">
             <h2>Daily peak streak <span class="sub">— longest correct-answer run on each day</span></h2>
             <div id="streakchart"></div>
-        </section>
-
-        <section class="card span2">
-            <h2>Reaction time</h2>
-            <div id="rtchart"></div>
-            <div class="legend">
-                <span><span class="sw" style="background:var(--good)"></span>correct</span>
-                <span><span class="sw" style="background:var(--bad)"></span>wrong</span>
-            </div>
         </section>
     </main>
 
