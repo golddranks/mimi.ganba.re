@@ -54,16 +54,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
-        with:
-          python-version: '3.14.0'
-      - run: python scripts/voicemap.py
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
         id: opus
         with:
           path: dist/audio
           key: opus-${{ hashFiles('data/phonetic_training/morae/good/**') }}
-      # Slow path: install nix only on cache miss, run transcode through nix-shell for ffmpeg.
+
+      # Fast path: cache hit → setup-python is enough (voicemap.py only, no ffmpeg).
+      - if: steps.opus.outputs.cache-hit == 'true'
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: '3.14.0'
+      - if: steps.opus.outputs.cache-hit == 'true'
+        run: python scripts/voicemap.py
+
+      # Slow path: cache miss → nix only, no setup-python.
+      # Mixing the two leaks LD_LIBRARY_PATH from setup-python's libpython into
+      # nix-shell, which then segfaults nix's python on startup. Keeping them
+      # mutually exclusive in this job avoids that.
       - if: steps.opus.outputs.cache-hit != 'true'
         uses: cachix/install-nix-action@ba0dd844c9180cbf77aa72a116d6fbc515d0e87b  # v27
         with:
@@ -73,7 +81,8 @@ jobs:
         with:
           use-flakehub: false
       - if: steps.opus.outputs.cache-hit != 'true'
-        run: nix-shell --run "python scripts/transcode_audio.py"
+        run: nix-shell --run "python scripts/voicemap.py && python scripts/transcode_audio.py"
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: audio
