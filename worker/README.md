@@ -18,9 +18,30 @@ Paste the deployed URL into `STATS_URL` near the top of `src/app.js`.
 
 ## Local dev
 
+For the combined site + worker stack — frontend on `:8080`, worker on `:8787`
+— use the dev script from the repo root:
+
 ```sh
-npx wrangler dev      # http://127.0.0.1:8787
-npx wrangler d1 execute mimi-stats --local --file=schema.sql
+./scripts/dev.sh            # default: --remote (worker hits production D1)
+./scripts/dev.sh --local    # isolated local miniflare D1
+```
+
+In `--remote` mode the worker code is hot-reloaded from local files but runs
+on Cloudflare's preview environment with the real D1 binding, so the
+dashboards show real data. Events you generate while practicing in dev are
+written to prod D1 — fine for personal dev; if that's a concern, use
+`--local` (no auth needed, no risk of polluting prod, but you start with an
+empty DB).
+
+The frontend auto-detects `localhost` and talks to the local worker; no
+source changes needed to switch between local and production targets.
+
+Worker-only:
+
+```sh
+npx wrangler dev --remote   # production D1
+npx wrangler dev            # local miniflare D1
+npx wrangler d1 execute mimi-stats --local --file=schema.sql   # one-time seed for local
 ```
 
 ## Deploy

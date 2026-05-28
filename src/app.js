@@ -71,8 +71,11 @@ function appendLog(target, idx, picked, ms) {
 }
 
 // ---------- server-side stats ----------
-// Fill in after deploying worker/. Empty string disables all uploads.
-const STATS_URL = "https://mimi-stats.golddranks.workers.dev";
+// When served from localhost (via scripts/dev.sh), talk to the local wrangler
+// dev worker instead of production. Set "" to disable uploads entirely.
+const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+  ? `http://${location.hostname}:8787`
+  : "https://mimi-stats.golddranks.workers.dev";
 
 // The uid + per-answer events carry no information linking back to a real
 // person — anonymous behavioral data, not personal data under GDPR Art. 4(1).

@@ -6,7 +6,11 @@
 // charts (daily/hourly/streak/reaction-time) are dynamic in shape and built
 // here.
 
-const STATS_URL = "https://mimi-stats.golddranks.workers.dev";
+// When served from localhost (via scripts/dev.sh) hit the local wrangler dev
+// worker so the dashboard reflects local-DB events rather than production.
+const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+  ? `http://${location.hostname}:8787`
+  : "https://mimi-stats.golddranks.workers.dev";
 
 const pad2 = (x) => ("0" + x).slice(-2);
 const dayKey = (ts) => {
