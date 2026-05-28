@@ -278,42 +278,60 @@ function renderConfusion(events) {
 }
 
 // ---------- streak ----------
-// Replays the live app's streak rules, including the day-boundary reset
-// (a missed day, or even just an event on a new day, restarts the count).
+// Per-day *peak* streak as a bar chart with a calendar-uniform x-axis. The
+// previous "polyline of every event's run" version made a misleading
+// diagonal across days with no activity. Daily peaks read cleanly and align
+// with the daily-activity chart's x-axis.
 function renderStreak(events) {
+  const peaks = new Map();          // YYYY-MM-DD → max run that day
   let run = 0;
   let lastDay = null;
-  const series = [];
   for (const e of events) {
     if (e.ev !== "a" && e.ev !== "g" && e.ev !== "r") continue;
     const d = dayKey(e.ts);
     if (lastDay !== null && d !== lastDay) run = 0;
     lastDay = d;
-    if (e.ev === "r") {
-      run = 0;
-    } else if (e.picked === e.target) {
-      run++;
-    } else {
-      run = 0;
-    }
-    series.push({ ts: e.ts, run });
+    if (e.ev === "r") run = 0;
+    else if (e.picked === e.target) run++;
+    else run = 0;
+    if (run > (peaks.get(d) || 0)) peaks.set(d, run);
   }
-  if (series.length === 0) { streakchart.textContent = "(no answers)"; return; }
-  const max = Math.max(1, ...series.map((s) => s.run));
+  if (peaks.size === 0) { streakchart.textContent = "(no answers)"; return; }
+
+  const first = new Date(events[0].ts); first.setHours(0, 0, 0, 0);
+  const last = new Date(events[events.length - 1].ts); last.setHours(0, 0, 0, 0);
+  const days = [];
+  for (const dt = new Date(first); dt <= last; dt.setDate(dt.getDate() + 1)) {
+    const k = `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+    days.push({ k, run: peaks.get(k) || 0 });
+  }
+  const max = Math.max(1, ...days.map((d) => d.run));
   const w = 960, h = 160;
-  const innerH = h - 30;
-  const t0 = series[0].ts, t1 = series[series.length - 1].ts;
-  const xspan = Math.max(1, t1 - t0);
-  const pts = series
-    .map((s) => `${(20 + (s.ts - t0) / xspan * (w - 40)).toFixed(1)},${(h - 10 - s.run / max * innerH).toFixed(1)}`)
-    .join(" ");
-  const area = `20,${h - 10} ${pts} ${(w - 20).toFixed(1)},${h - 10}`;
-  streakchart.innerHTML = `
-    <svg viewBox="0 0 ${w} ${h}">
-      <polygon points="${area}" fill="color-mix(in srgb, var(--accent) 22%, transparent)"/>
-      <polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="1"/>
-      <text x="20" y="14" fill="var(--muted)" font-size="11">peak: ${max}</text>
-    </svg>`;
+  const innerH = h - 40;
+  const bw = (w - 40) / Math.max(1, days.length);
+  let bars = "", labels = "";
+  let lastMonth = "";
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i];
+    const x = 20 + i * bw;
+    const bh = d.run / max * innerH;
+    if (d.run > 0) {
+      bars += `<rect x="${x}" y="${h - 20 - bh}" width="${bw * 0.8}" height="${bh}" fill="var(--accent)"><title>${d.k}  peak streak ${d.run}</title></rect>`;
+    }
+    const month = d.k.slice(0, 7);
+    if (month !== lastMonth) {
+      lastMonth = month;
+      labels += `<text x="${x}" y="${h - 4}" fill="var(--muted)" font-size="10">${month}</text>`;
+    }
+  }
+  let axis = "";
+  for (const t of niceTicks(max)) {
+    const y = h - 20 - t / max * innerH;
+    axis += `<text x="0" y="${y + 3}" fill="var(--muted)" font-size="10">${t}</text>`;
+    axis += `<line x1="20" x2="${w}" y1="${y}" y2="${y}" stroke="var(--panel-2)" stroke-width=".5"/>`;
+  }
+  streakchart.innerHTML =
+    `<svg viewBox="0 0 ${w} ${h}">${axis}${bars}${labels}<text x="${w - 20}" y="14" fill="var(--muted)" font-size="11" text-anchor="end">peak: ${max}</text></svg>`;
 }
 
 // ---------- reaction time ----------
