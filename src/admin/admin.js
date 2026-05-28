@@ -11,6 +11,45 @@ const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
 
 const pad2 = (x) => ("0" + x).slice(-2);
 
+// uid → nickname, populated on load. Used by showUidPopup to annotate the
+// drill-down list. Empty object until the first /v1/admin/stats response.
+let nicknames = {};
+
+// Display mode shared across the three count/per-sound-% toggles (per-sound,
+// confusion matrix, sound-file confusion). Clicking any of them updates
+// every switch and re-renders all three sections.
+let displayMode = "count";
+
+// Hiragana for the kana the user picks (button-side); katakana for the
+// sound the user heard (row-side). Same convention as the user dashboard.
+const DISPLAY = {
+  sa: "さ", za: "ざ", sya: "しゃ", zya: "じゃ", tya: "ちゃ",
+  si: "し", zi: "じ", ti: "ち",
+  su: "す", zu: "ず", tu: "つ", syu: "しゅ", zyu: "じゅ", tyu: "ちゅ",
+  so: "そ", zo: "ぞ", syo: "しょ", zyo: "じょ", tyo: "ちょ",
+};
+const KATAKANA = {
+  sa: "サ", za: "ザ", sya: "シャ", zya: "ジャ", tya: "チャ",
+  si: "シ", zi: "ジ", ti: "チ",
+  su: "ス", zu: "ズ", tu: "ツ", syu: "シュ", zyu: "ジュ", tyu: "チュ",
+  so: "ソ", zo: "ゾ", syo: "ショ", zyo: "ジョ", tyo: "チョ",
+};
+
+// Click-to-play for voice file names in the difficulty table and the
+// sound-file confusion grid. Looks up the recording's index in the current
+// VOICE_MAP (injected by build) and plays the bundled .opus relative to
+// the admin page. Reuses one Audio instance so a second click cancels the
+// previous playback.
+const voiceAudio = new Audio();
+function playVoice(mora, voice) {
+  const list = (window.VOICE_MAP || {})[mora] || [];
+  const idx = list.indexOf(voice);
+  if (idx < 0) return;
+  voiceAudio.src = `../audio/${mora.slice(-1)}/${mora}/${idx}.opus`;
+  voiceAudio.currentTime = 0;
+  voiceAudio.play().catch(() => { });
+}
+
 // uid resolution mirrors the no-uid head script so first paint matches behaviour.
 // Pulled from localStorage by default (set by the main app); ?uid=… overrides
 // for cases like a fresh browser or testing as a different power user.
@@ -28,6 +67,7 @@ async function load(uid) {
     }
     if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
     const data = await res.json();
+    nicknames = data.nicknames || {};
     renderOverview(data);
     renderLevelHist(data.level_hist, data.level_hist_uids);
     renderDaysHist(data.days_hist, data.days_hist_uids);
@@ -225,9 +265,26 @@ function showUidPopup(title, uidList) {
   const n = uidList.length;
   popup.querySelector(".uidpopup-title").textContent = `${title} — ${n} user${n === 1 ? "" : "s"}`;
   popup.querySelector(".uidpopup-list").innerHTML = uidList
-    .map((u) => `<li><a href="../dashboard/?uid=${encodeURIComponent(u)}" target="_blank" rel="noopener">${u}</a></li>`)
+    .map((u) => {
+      const nick = nicknames[u];
+      const nickHtml = nick ? `<span class="nick">${escapeHtml(nick)}</span>` : "";
+      return `<li><a href="../dashboard/?uid=${encodeURIComponent(u)}" target="_blank" rel="noopener"><span>${u}</span>${nickHtml}</a></li>`;
+    })
     .join("");
   popup.hidden = false;
+}
+
+// Nicknames are user-set free-form strings — escape before interpolating.
+// Uses replaceAll (string args) rather than one regex literal because the
+// minifier's tokenizer treats `"` / `'` inside a regex literal as a string
+// opener and runs amok eating subsequent code.
+function escapeHtml(s) {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function hideUidPopup() {
@@ -240,6 +297,39 @@ function hideUidPopup() {
   popup.querySelector(".uidpopup-backdrop").onclick = hideUidPopup;
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !popup.hidden) hideUidPopup();
+  });
+
+  // Count/per-sound-% toggle — three switches (per-sound, confusion, voiceconf)
+  // sharing one displayMode. Clicking any of them syncs every switch's
+  // active button and re-renders the three sections that honour the mode.
+  const switches = document.querySelectorAll(".modeswitch");
+  for (const sw of switches) {
+    sw.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-mode]");
+      if (!btn) return;
+      displayMode = btn.dataset.mode;
+      for (const s of switches) {
+        for (const b of s.querySelectorAll("button[data-mode]")) {
+          b.classList.toggle("active", b.dataset.mode === displayMode);
+        }
+      }
+      drawMora();
+      drawConfusion();
+      drawVoiceConfusion();
+    });
+  }
+
+  // Click-to-play delegations. Bound on stable parent elements so they
+  // survive each redraw (which replaces only the inner HTML).
+  voicetable.querySelector("tbody").addEventListener("click", (e) => {
+    const td = e.target.closest("td.voice");
+    if (!td) return;
+    playVoice(td.dataset.mora, td.dataset.voice);
+  });
+  voiceconf.addEventListener("click", (e) => {
+    const th = e.target.closest("th.vname");
+    if (!th) return;
+    playVoice(th.dataset.mora, th.dataset.voice);
   });
 })();
 
@@ -268,18 +358,26 @@ function renderHourly(hourly) {
   hourlychart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${bars}${labels}</svg>`;
 }
 
-// ---------- per-mora difficulty ----------
+// ---------- per-sound difficulty ----------
 // Reorders the static .mrow elements so hardest (lowest accuracy with at
-// least 1 attempt) comes first; unattempted morae sink to the bottom.
+// least 1 attempt) comes first; unattempted sounds sink to the bottom.
+let moraCounts = null;
+let moraMaxN = 1;
+
 function renderMora(byMora) {
   const counts = {};
   for (const r of byMora || []) counts[r.m] = { n: r.n, correct: r.correct };
+  moraCounts = counts;
+  moraMaxN = Math.max(1, ...Object.values(counts).map((c) => c.n || 0));
+  drawMora();
+}
+
+function drawMora() {
+  if (!moraCounts) return;
   const rows = [...morachart.querySelectorAll(".mrow")];
-  const maxN = Math.max(1, ...rows.map((r) => (counts[r.dataset.mora] || {}).n || 0));
-  // Sort: attempted rows by accuracy ascending; unattempted at the end.
   rows.sort((a, b) => {
-    const ca = counts[a.dataset.mora] || { n: 0, correct: 0 };
-    const cb = counts[b.dataset.mora] || { n: 0, correct: 0 };
+    const ca = moraCounts[a.dataset.mora] || { n: 0, correct: 0 };
+    const cb = moraCounts[b.dataset.mora] || { n: 0, correct: 0 };
     if (!ca.n && !cb.n) return 0;
     if (!ca.n) return 1;
     if (!cb.n) return -1;
@@ -287,24 +385,26 @@ function renderMora(byMora) {
   });
   for (const mrow of rows) {
     morachart.appendChild(mrow);
-    const c = counts[mrow.dataset.mora] || { n: 0, correct: 0 };
+    const c = moraCounts[mrow.dataset.mora] || { n: 0, correct: 0 };
     const acc = c.n ? c.correct / c.n : 0;
-    mrow.querySelector(".mbar-total").style.width = (c.n / maxN * 100) + "%";
-    mrow.querySelector(".mbar-correct").style.width = (acc * 100) + "%";
-    mrow.querySelector(".mtxt").textContent = c.n
-      ? `${c.correct}/${c.n} · ${(acc * 100).toFixed(0)}%`
-      : "0/0";
+    const total = mrow.querySelector(".mbar-total");
+    const correct = mrow.querySelector(".mbar-correct");
+    const txt = mrow.querySelector(".mtxt");
+    if (displayMode === "pct") {
+      total.style.width = c.n ? "100%" : "0%";
+      correct.style.width = (acc * 100) + "%";
+      txt.textContent = c.n ? String(Math.round(acc * 100)) : "—";
+    } else {
+      total.style.width = (c.n / moraMaxN * 100) + "%";
+      correct.style.width = (acc * 100) + "%";
+      txt.textContent = c.n
+        ? `${c.correct}/${c.n} · ${(acc * 100).toFixed(0)}%`
+        : "0/0";
+    }
   }
 }
 
 // ---------- sound-file difficulty ----------
-const DISPLAY = {
-  sa: "さ", za: "ざ", sya: "しゃ", zya: "じゃ", tya: "ちゃ",
-  si: "し", zi: "じ", ti: "ち",
-  su: "す", zu: "ず", tu: "つ", syu: "しゅ", zyu: "じゅ", tyu: "ちゅ",
-  so: "そ", zo: "ぞ", syo: "しょ", zyo: "じょ", tyo: "ちょ",
-};
-
 const VOWEL_GROUPS = {
   a: ["sa", "za", "sya", "zya", "tya"],
   i: ["si", "zi", "ti"],
@@ -334,9 +434,9 @@ function renderVoice(byVoice, byPlayed) {
     else idx.set(key, { m: r.m, v: r.v, n: 0, correct: 0, relisten: 0, afterplay: r.n });
   }
   voiceData = [...idx.values()];
-  vmin.oninput = redrawVoice;
-  vlisten.oninput = redrawVoice;
-  vtop.oninput = redrawVoice;
+  vmin.oninput = drawVoiceTable;
+  vlisten.oninput = drawVoiceTable;
+  vtop.oninput = drawVoiceTable;
   drawVoiceTable();
 }
 
@@ -347,11 +447,8 @@ const listenCount = (r) => (r.relisten || 0) + (r.afterplay || 0);
 
 function renderVoiceConfusion(rows) {
   voiceConfData = rows || [];
-  drawVoiceConfusion();
-}
-
-function redrawVoice() {
-  drawVoiceTable();
+  vcmin.oninput = drawVoiceConfusion;
+  vcwrong.oninput = drawVoiceConfusion;
   drawVoiceConfusion();
 }
 
@@ -368,12 +465,17 @@ function drawVoiceTable() {
   const rows = filtered.slice(0, top);
   vcount.textContent = `(${filtered.length} match attempts≥${min} or listens≥${minL}; showing top ${rows.length})`;
   const tbody = voicetable.querySelector("tbody");
+  // Voice cell is clickable (plays the recording). Sound column shows
+  // katakana — that's the heard side.
   tbody.innerHTML = rows.map((r) => {
     const accPct = r.n ? (r.acc * 100).toFixed(1) + "%" : "—";
     const cls = r.n === 0 ? "" : r.acc < 0.6 ? "bad" : r.acc < 0.85 ? "mid" : "";
+    const voiceCell = r.v
+      ? `<td class="voice" data-mora="${r.m}" data-voice="${r.v}">${r.v}</td>`
+      : `<td>?</td>`;
     return `<tr>
-      <td>${DISPLAY[r.m] || r.m}</td>
-      <td>${r.v || "?"}</td>
+      <td>${KATAKANA[r.m] || r.m}</td>
+      ${voiceCell}
       <td>${r.n}</td>
       <td>${r.correct}</td>
       <td class="acc ${cls}">${accPct}</td>
@@ -390,8 +492,8 @@ function drawVoiceTable() {
 // still have history in the DB silently disappear (acceptable for an admin
 // view of current files).
 function drawVoiceConfusion() {
-  const min = Math.max(1, parseInt(vmin.value, 10) || 1);
-  const minL = Math.max(0, parseInt(vlisten.value, 10) || 0);
+  const minA = Math.max(1, parseInt(vcmin.value, 10) || 1);
+  const minW = Math.max(0, parseInt(vcwrong.value, 10) || 0);
   const map = window.VOICE_MAP || {};
   const counts = {};
   const totals = {};
@@ -399,10 +501,22 @@ function drawVoiceConfusion() {
     counts[`${r.t}/${r.v}/${r.p}`] = r.n;
     totals[`${r.t}/${r.v}`] = (totals[`${r.t}/${r.v}`] || 0) + r.n;
   }
-  // Look up post-error listens per recording from the merged voiceData so
-  // we can apply the same OR filter as the difficulty table above.
-  const listens = {};
-  for (const r of voiceData) listens[`${r.m}/${r.v}`] = listenCount(r);
+
+  // Worst off-diagonal cell in a row, expressed in the current display unit
+  // (raw count in "count" mode, row-percentage in "pct"). Drives the
+  // min-wrong filter so the threshold stays meaningful in both modes.
+  const rowMaxOff = (m, voice) => {
+    const sib = VOWEL_GROUPS[m.slice(-1)] || [];
+    const rt = totals[`${m}/${voice}`] || 0;
+    let max = 0;
+    for (const p of sib) {
+      if (p === m) continue;
+      const n = counts[`${m}/${voice}/${p}`] || 0;
+      const val = displayMode === "pct" ? (rt > 0 ? n / rt * 100 : 0) : n;
+      if (val > max) max = val;
+    }
+    return max;
+  };
 
   const html = [];
   for (const v of ["a", "i", "u", "o"]) {
@@ -413,17 +527,34 @@ function drawVoiceConfusion() {
       for (const voice of map[m] || []) {
         const key = `${m}/${voice}`;
         const attempts = totals[key] || 0;
-        const listenN = listens[key] || 0;
-        if (attempts >= min || listenN >= minL) rowsInGroup.push({ m, voice });
+        if (attempts < minA) continue;
+        if (minW > 0 && rowMaxOff(m, voice) < minW) continue;
+        rowsInGroup.push({ m, voice });
       }
     }
+
+    // value{display, mag, raw} — same shape as drawConfusion's valueFor.
+    const valueFor = (m, voice, p) => {
+      const n = counts[`${m}/${voice}/${p}`] || 0;
+      if (displayMode === "pct") {
+        const rt = totals[`${m}/${voice}`] || 0;
+        const pct = rt > 0 ? n / rt * 100 : 0;
+        let display = "";
+        if (n > 0) {
+          const r = Math.round(pct);
+          display = r === 0 ? "<1" : String(r);
+        }
+        return { display, mag: pct, raw: n };
+      }
+      return { display: n ? String(n) : "", mag: n, raw: n };
+    };
 
     let maxOn = 0, maxOff = 0;
     for (const row of rowsInGroup) {
       for (const p of morae) {
-        const n = counts[`${row.m}/${row.voice}/${p}`] || 0;
-        if (row.m === p) maxOn = Math.max(maxOn, n);
-        else maxOff = Math.max(maxOff, n);
+        const val = valueFor(row.m, row.voice, p);
+        if (row.m === p) maxOn = Math.max(maxOn, val.mag);
+        else maxOff = Math.max(maxOff, val.mag);
       }
     }
 
@@ -433,19 +564,21 @@ function drawVoiceConfusion() {
 
     let body = "";
     for (const row of rowsInGroup) {
-      body += `<tr><th class="vmora">${DISPLAY[row.m]}</th><th class="vname">${row.voice}</th>`;
+      // vname carries data-mora/data-voice for the click-to-play delegation
+      // attached once at module load; vmora is katakana (heard side).
+      body += `<tr><th class="vmora">${KATAKANA[row.m]}</th><th class="vname" data-mora="${row.m}" data-voice="${row.voice}">${row.voice}</th>`;
       for (const p of morae) {
-        const n = counts[`${row.m}/${row.voice}/${p}`] || 0;
+        const val = valueFor(row.m, row.voice, p);
         const diag = row.m === p;
         let bg = "transparent";
-        if (n > 0) {
-          const a = diag ? (maxOn ? n / maxOn : 0) : (maxOff ? n / maxOff : 0);
+        if (val.mag > 0) {
+          const a = diag ? (maxOn ? val.mag / maxOn : 0) : (maxOff ? val.mag / maxOff : 0);
           const base = diag ? "var(--good)" : "var(--bad)";
           const pct = Math.round((diag ? 15 : 20) + a * (diag ? 55 : 60));
           bg = `color-mix(in srgb, ${base} ${pct}%, transparent)`;
         }
-        const cls = ((diag ? "diag" : "") + (n === 0 ? " empty" : "")).trim();
-        body += `<td class="${cls}" style="background:${bg}" title="${row.m} (${row.voice}) → ${p}: ${n}">${n || ""}</td>`;
+        const cls = ((diag ? "diag" : "") + (val.raw === 0 ? " empty" : "")).trim();
+        body += `<td class="${cls}" style="background:${bg}" title="${row.m} (${row.voice}) → ${p}: ${val.raw}">${val.display}</td>`;
       }
       body += `</tr>`;
     }
@@ -454,7 +587,7 @@ function drawVoiceConfusion() {
       <h3>${VOWEL_GYO[v]}</h3>
       <table class="vconfgrid">
         <thead>${header}</thead>
-        <tbody>${body || `<tr><td colspan="${2 + morae.length}" style="text-align:left;color:var(--muted);padding:.4rem 0">no recordings meet the min-attempts threshold</td></tr>`}</tbody>
+        <tbody>${body || `<tr><td colspan="${2 + morae.length}" style="text-align:left;color:var(--muted);padding:.4rem 0">no recordings meet the filters</td></tr>`}</tbody>
       </table>
     </div>`);
   }
@@ -462,29 +595,59 @@ function drawVoiceConfusion() {
 }
 
 // ---------- confusion (same shape as user dashboard, server-side counts) ----------
+let confusionCounts = null;
+let confusionRowTotals = null;
+
 function renderConfusion(rows) {
   const counts = {};
-  for (const r of rows || []) counts[`${r.t}/${r.p}`] = r.n;
+  const rowTotals = {};
+  for (const r of rows || []) {
+    counts[`${r.t}/${r.p}`] = r.n;
+    rowTotals[r.t] = (rowTotals[r.t] || 0) + r.n;
+  }
+  confusionCounts = counts;
+  confusionRowTotals = rowTotals;
+  drawConfusion();
+}
+
+function drawConfusion() {
+  if (!confusionCounts) return;
   const cells = confchart.querySelectorAll("td[data-t]");
+  // value{display, mag, raw} — mag drives the colour, display is the text.
+  const valueFor = (t, p) => {
+    const n = confusionCounts[`${t}/${p}`] || 0;
+    if (displayMode === "pct") {
+      const rt = confusionRowTotals[t] || 0;
+      const pct = rt > 0 ? n / rt * 100 : 0;
+      let display = "";
+      if (n > 0) {
+        const r = Math.round(pct);
+        display = r === 0 ? "<1" : String(r);
+      }
+      return { display, mag: pct, raw: n };
+    }
+    return { display: n ? String(n) : "", mag: n, raw: n };
+  };
+
   let maxOn = 0, maxOff = 0;
   for (const td of cells) {
-    const n = counts[`${td.dataset.t}/${td.dataset.p}`] || 0;
-    if (td.dataset.t === td.dataset.p) maxOn = Math.max(maxOn, n);
-    else maxOff = Math.max(maxOff, n);
+    const v = valueFor(td.dataset.t, td.dataset.p);
+    if (td.dataset.t === td.dataset.p) maxOn = Math.max(maxOn, v.mag);
+    else maxOff = Math.max(maxOff, v.mag);
   }
   for (const td of cells) {
-    const n = counts[`${td.dataset.t}/${td.dataset.p}`] || 0;
+    const v = valueFor(td.dataset.t, td.dataset.p);
     const diag = td.dataset.t === td.dataset.p;
     let bg = "transparent";
-    if (n > 0) {
-      const a = diag ? (maxOn ? n / maxOn : 0) : (maxOff ? n / maxOff : 0);
+    if (v.mag > 0) {
+      const a = diag ? (maxOn ? v.mag / maxOn : 0) : (maxOff ? v.mag / maxOff : 0);
       const base = diag ? "var(--good)" : "var(--bad)";
       const pct = Math.round((diag ? 15 : 20) + a * (diag ? 55 : 60));
       bg = `color-mix(in srgb, ${base} ${pct}%, transparent)`;
     }
     td.style.background = bg;
-    td.textContent = n || "";
-    td.classList.toggle("empty", n === 0);
+    td.textContent = v.display;
+    td.classList.toggle("empty", v.raw === 0);
   }
 }
 

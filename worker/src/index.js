@@ -177,7 +177,7 @@ async function handleAdminStats(req, env, url) {
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
-  const [totals, active, daily, hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, skillStream] = await Promise.all([
+  const [totals, active, daily, hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, skillStream, nicks] = await Promise.all([
     db.prepare(
       `SELECT
          COUNT(*)                                                              AS events,
@@ -254,6 +254,13 @@ async function handleAdminStats(req, env, url) {
       `SELECT uid, ts, target, picked, ev FROM events
        WHERE ev IN ('a','g','r') AND ${EXCLUDE_TEST}
        ORDER BY uid, ts ASC`
+    ).all(),
+    // User-set nicknames. Emitted as a flat uid→nickname map so the admin
+    // frontend can annotate the uid-drill-down popups without a second round
+    // trip. EXCLUDE_TEST keeps the seed fixture out.
+    db.prepare(
+      `SELECT uid, nickname FROM users
+       WHERE nickname IS NOT NULL AND nickname != '' AND ${EXCLUDE_TEST}`
     ).all(),
   ]);
 
@@ -343,5 +350,6 @@ async function handleAdminStats(req, env, url) {
     activity_hist_uids,
     days_hist,
     days_hist_uids,
+    nicknames: Object.fromEntries((nicks.results || []).map((r) => [r.uid, r.nickname])),
   });
 }
