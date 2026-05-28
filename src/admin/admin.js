@@ -189,11 +189,11 @@ function renderLevelHist(hist, uids) {
       const rect = col.querySelector(`rect[data-bin="${i}"]`);
       rect.setAttribute("height", bh);
       rect.setAttribute("y", baseY - bh);
-      rect.querySelector("title").textContent = `level ${i + 2}: ${bins[i]} users`;
+      rect.querySelector("title").textContent = `${i + 2} buttons: ${bins[i]} users`;
       const text = col.querySelector(`text.bincount[data-bin="${i}"]`);
       text.setAttribute("y", baseY - bh - 2);
       text.textContent = bins[i] || "";
-      rect.onclick = () => showUidPopup(`${VOWEL_GYO[v]} · level ${i + 2}`, bucketUids[i]);
+      rect.onclick = () => showUidPopup(`${VOWEL_GYO[v]} · ${i + 2} buttons`, bucketUids[i]);
     }
   }
 }

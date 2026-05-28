@@ -144,14 +144,14 @@ function renderLevels(events) {
     const row = document.querySelector(`#levels [data-vowel="${v}"]`);
     if (!row) continue;
     const c = skill[v];
-    // "level" = number of choice buttons shown for this vowel = 2..6.
+    // Skill is reported as the number of choice buttons shown (2..6).
     const idx = lastLevelIdx(c);             // -1..3
     const cap = 3 + idx;                     // 2..6
-    const next = LEVELS[idx + 1];            // threshold to next level (undefined at max)
+    const next = LEVELS[idx + 1];            // count needed to unlock one more button
     row.querySelector(".lvl-count").textContent = seen[v] ? c : "—";
-    row.querySelector(".lvl-level").textContent = seen[v] ? `level ${cap}` : "—";
+    row.querySelector(".lvl-level").textContent = seen[v] ? `${cap} buttons` : "—";
     row.querySelector(".lvl-next").textContent = next != null && seen[v]
-      ? `${next - c} to lvl ${cap + 1}`
+      ? `${next - c} to ${cap + 1} buttons`
       : (seen[v] ? "max" : "");
     // Progress bar inside current level
     const start = idx < 0 ? 0 : LEVELS[idx];
