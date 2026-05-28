@@ -296,7 +296,7 @@ body {
 
 .lvlrow {
     display: grid;
-    grid-template-columns: 3rem 3ch 5rem 1fr 6rem;
+    grid-template-columns: 3rem 6rem 5rem 1fr 14rem;
     align-items: center;
     gap: .8rem;
     font-size: .85rem;

@@ -148,10 +148,10 @@ function renderLevels(events) {
     const idx = lastLevelIdx(c);             // -1..3
     const cap = 3 + idx;                     // 2..6
     const next = LEVELS[idx + 1];            // count needed to unlock one more button
-    row.querySelector(".lvl-count").textContent = seen[v] ? c : "—";
+    row.querySelector(".lvl-count").textContent = seen[v] ? `streak of ${c}` : "—";
     row.querySelector(".lvl-level").textContent = seen[v] ? `${cap} buttons` : "—";
     row.querySelector(".lvl-next").textContent = next != null && seen[v]
-      ? `${next - c} to ${cap + 1} buttons`
+      ? `${next - c} correct answers to ${cap + 1} buttons`
       : (seen[v] ? "max" : "");
     // Progress bar inside current level
     const start = idx < 0 ? 0 : LEVELS[idx];
