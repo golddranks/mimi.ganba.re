@@ -415,7 +415,7 @@ function drawMora() {
     if (displayMode === "pct") {
       total.style.width = c.n ? "100%" : "0%";
       correct.style.width = (acc * 100) + "%";
-      txt.textContent = c.n ? String(Math.round(acc * 100)) : "—";
+      txt.textContent = c.n ? `${Math.round(acc * 100)}%` : "—";
     } else {
       total.style.width = (c.n / moraMaxN * 100) + "%";
       correct.style.width = (acc * 100) + "%";

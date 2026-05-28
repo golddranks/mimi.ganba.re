@@ -279,7 +279,7 @@ function drawMora() {
       // Equal-width bars so accuracy is comparable across rows regardless of volume.
       total.style.width = c.total ? "100%" : "0%";
       correct.style.width = (accPct * 100) + "%";
-      txt.textContent = c.total ? String(Math.round(accPct * 100)) : "—";
+      txt.textContent = c.total ? `${Math.round(accPct * 100)}%` : "—";
     } else {
       total.style.width = (c.total / moraMaxN * 100) + "%";
       correct.style.width = (accPct * 100) + "%";
