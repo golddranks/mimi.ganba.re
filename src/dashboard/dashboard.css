@@ -79,6 +79,12 @@ body {
     gap: .4rem;
 }
 
+/* `#uidform { display: flex }` outranks the UA's `[hidden] { display: none }`
+   on specificity, so we have to spell out the hidden case explicitly. */
+#uidform[hidden] {
+    display: none;
+}
+
 #uidform input {
     padding: .4rem .6rem;
     border-radius: 6px;
@@ -119,7 +125,7 @@ body {
 }
 
 .no-uid #msg:empty::before {
-    content: "Enter a user uid above to load their data.";
+    content: "Open mimi.ganba.re and play a round — your dashboard appears once your device has answered some questions.";
 }
 
 #dash {

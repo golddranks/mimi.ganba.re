@@ -18,7 +18,7 @@ async function load(uid) {
   try {
     const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid));
     if (res.status === 403) {
-      msg.textContent = "Access denied — this uid does not have power_user = 1.";
+      msg.textContent = "Unauthorized.";
       dash.style.display = "none";
       return;
     }

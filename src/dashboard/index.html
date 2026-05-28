@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>mimi.ganba.re – Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-    <script>if(!new URLSearchParams(location.search).get("uid"))document.documentElement.classList.add("no-uid");</script>
+    <script>if(!new URLSearchParams(location.search).get("uid")&&!localStorage.getItem("uid"))document.documentElement.classList.add("no-uid");</script>
     <link rel="stylesheet" href="dashboard.css">
 </head>
 
@@ -14,7 +14,7 @@
     <header id="hdr">
         <a class="back" href="../">← back</a>
         <h1>DASHBOARD</h1>
-        <form id="uidform">
+        <form id="uidform" hidden>
             <input id="uidinput" placeholder="user uid" autocomplete="off" spellcheck="false">
             <button type="submit">Load</button>
         </form>
@@ -25,7 +25,7 @@
     <main id="dash">
         <section id="overview" class="card span2">
             <div class="uid"></div>
-            <script>document.currentScript.previousElementSibling.textContent=new URLSearchParams(location.search).get("uid")||"";</script>
+            <script>document.currentScript.previousElementSibling.textContent=new URLSearchParams(location.search).get("uid")||localStorage.getItem("uid")||"";</script>
             <div class="stats">
                 <div class="stat"><div class="n" data-stat="answers">0</div><div class="l">answers</div></div>
                 <div class="stat"><div class="n" data-stat="correct">0</div><div class="l">correct</div></div>

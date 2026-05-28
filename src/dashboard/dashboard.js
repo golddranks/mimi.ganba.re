@@ -14,8 +14,16 @@ const dayKey = (ts) => {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 };
 
+// Two roles:
+//   viewer  — whose browser this is (localStorage.uid set by the main app)
+//   viewed  — whose dashboard to render (?uid=… overrides; otherwise the
+//             viewer themselves, so the default landing is "look at me").
+// The uid-load form is only revealed if the viewer is a power_user. Normal
+// users always see their own dashboard with no foot-shotgun for typing
+// other people's uids in.
 const params = new URLSearchParams(location.search);
-const uid = params.get("uid");
+const viewerUid = localStorage.getItem("uid") || "";
+const uid = params.get("uid") || viewerUid;
 
 uidform.onsubmit = (e) => {
   e.preventDefault();
@@ -27,6 +35,16 @@ uidform.onsubmit = (e) => {
 if (uid) {
   uidinput.value = uid;
   load(uid);
+}
+
+// Reveal the load-form only if the viewer has power_user=1 on the server.
+// Failure (no network, no row, 4xx) silently keeps the form hidden — the
+// dashboard still renders the viewed user's data.
+if (viewerUid) {
+  fetch(STATS_URL + "/v1/user/" + encodeURIComponent(viewerUid))
+    .then((r) => r.ok ? r.json() : null)
+    .then((info) => { if (info && info.power_user) uidform.hidden = false; })
+    .catch(() => { });
 }
 
 // First paint shows the dash skeleton (zeros + reserved chart space). #msg

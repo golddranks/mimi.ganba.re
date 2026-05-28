@@ -82,7 +82,7 @@ body {
 }
 
 .no-uid #msg:empty::before {
-    content: "No uid found. Open this page via the main app (which stores your uid in localStorage), or use /admin/?uid=YOUR_UID directly.";
+    content: "Unauthorized.";
 }
 
 #dash {

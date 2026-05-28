@@ -2,6 +2,7 @@
 // Endpoints:
 //   POST /v1/events                 body: { uid, events: [{ts, target, idx, picked, cap}, ...] }
 //   POST /v1/user                   body: { uid, nickname }
+//   GET  /v1/user/:uid               { power_user: 0|1 } — used by the dashboard to decide whether to show the uid-load form
 //   GET  /v1/user/:uid/events       all events for a single user
 //   GET  /v1/admin/stats?uid=…      app-wide aggregates; requires users.power_user = 1
 
@@ -52,6 +53,8 @@ export default {
         res = await handleUser(req, env);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+\/events$/)) {
         res = await handleGetEvents(req, env, url);
+      } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+$/)) {
+        res = await handleGetUser(req, env, url);
       } else if (req.method === "GET" && url.pathname === "/v1/admin/stats") {
         res = await handleAdminStats(req, env, url);
       } else {
@@ -118,6 +121,18 @@ async function handleGetEvents(req, env, url) {
     "SELECT ts, target, idx, picked, cap, ms, ev, voice FROM events WHERE uid = ? ORDER BY ts ASC"
   ).bind(uid).all();
   return json({ events: rows.results || [] });
+}
+
+// Minimal per-user metadata. Currently just `power_user` so the dashboard
+// can decide whether to expose the "view another uid" form to its viewer.
+// Returns 0 (not a power user) for unknown uids — no auth required, no PII
+// leaked: the flag is unguessable trivia about an unguessable UUID.
+async function handleGetUser(req, env, url) {
+  const uid = decodeURIComponent(url.pathname.split("/")[3]);
+  const row = await env.mimi_stats.prepare(
+    "SELECT power_user FROM users WHERE uid = ?"
+  ).bind(uid).first();
+  return json({ power_user: row ? row.power_user : 0 });
 }
 
 async function handleUser(req, env) {
