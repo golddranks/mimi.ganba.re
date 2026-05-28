@@ -133,18 +133,26 @@ function renderDaily(daily, uids) {
   const max = Math.max(1, ...days.map((d) => d.n));
   const w = 960, h = 200;
   const innerH = h - 40;
-  const bw = (w - 40) / Math.max(1, days.length);
+  // Each day gets a fixed bin (up to 18 units, shrinking on long histories
+  // so we still fit). The newest day sits flush against the right edge
+  // — short date ranges leave empty space on the left rather than smearing
+  // thinly across the chart. Matches the main app's #topbar where today
+  // is at the right end.
+  const idealBin = (w - 40) / Math.max(1, days.length);
+  const binW = Math.min(idealBin, 18);
+  const barW = Math.min(binW * 0.8, 14);
+  const xRightmost = w - 20 - barW;
   let bars = "", labels = "";
   let lastMonth = "";
   for (let i = 0; i < days.length; i++) {
     const d = days[i];
-    const x = 20 + i * bw;
+    const x = xRightmost - (days.length - 1 - i) * binW;
     const totH = d.n / max * innerH;
     const cH = d.n ? d.correct / d.n * totH : 0;
     const tip = `${d.k}  ${d.correct}/${d.n}`;
     if (d.n) {
-      bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
-      bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - cH}" width="${bw * 0.8}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+      bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - totH}" width="${barW}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
+      bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
     }
     const month = d.k.slice(0, 7);
     if (month !== lastMonth) {

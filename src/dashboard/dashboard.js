@@ -184,18 +184,25 @@ function renderDaily(events) {
   // regardless of how many days the user has. Bars scale to fit.
   const w = 960, h = 200;
   const innerH = h - 40;
-  const bw = (w - 40) / Math.max(1, days.length);
+  // Cap bin width at 18 viewBox units and right-anchor the bars so the
+  // newest day sits flush against the right edge — short date ranges
+  // leave empty space on the left rather than smearing thinly across the
+  // chart. Matches the main app's #topbar where today is at the right.
+  const idealBin = (w - 40) / Math.max(1, days.length);
+  const binW = Math.min(idealBin, 18);
+  const barW = Math.min(binW * 0.8, 14);
+  const xRightmost = w - 20 - barW;
   let bars = "", labels = "";
   let lastMonth = "";
   for (let i = 0; i < days.length; i++) {
     const d = days[i];
-    const x = 20 + i * bw;
+    const x = xRightmost - (days.length - 1 - i) * binW;
     const totH = d.total / max * innerH;
     const cH = d.total ? d.correct / d.total * totH : 0;
     const tip = `${d.k}  ${d.correct}/${d.total}`;
     if (d.total) {
-      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
-      bars += `<rect x="${x}" y="${h - 20 - cH}" width="${bw * 0.8}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${barW}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
+      bars += `<rect x="${x}" y="${h - 20 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
     }
     const month = d.k.slice(0, 7);
     if (month !== lastMonth) {
@@ -403,15 +410,20 @@ function renderStreak(events) {
   const max = Math.max(1, ...days.map((d) => d.run));
   const w = 960, h = 160;
   const innerH = h - 40;
-  const bw = (w - 40) / Math.max(1, days.length);
+  // Same bin/bar capping + right-anchor as renderDaily — short date ranges
+  // pack against the right edge rather than spread thinly across the chart.
+  const idealBin = (w - 40) / Math.max(1, days.length);
+  const binW = Math.min(idealBin, 18);
+  const barW = Math.min(binW * 0.8, 14);
+  const xRightmost = w - 20 - barW;
   let bars = "", labels = "";
   let lastMonth = "";
   for (let i = 0; i < days.length; i++) {
     const d = days[i];
-    const x = 20 + i * bw;
+    const x = xRightmost - (days.length - 1 - i) * binW;
     const bh = d.run / max * innerH;
     if (d.run > 0) {
-      bars += `<rect x="${x}" y="${h - 20 - bh}" width="${bw * 0.8}" height="${bh}" fill="var(--accent)"><title>${d.k}  peak streak ${d.run}</title></rect>`;
+      bars += `<rect x="${x}" y="${h - 20 - bh}" width="${barW}" height="${bh}" fill="var(--accent)"><title>${d.k}  peak streak ${d.run}</title></rect>`;
     }
     const month = d.k.slice(0, 7);
     if (month !== lastMonth) {
