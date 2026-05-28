@@ -221,11 +221,14 @@ body {
 
 /* ---- overview ---- */
 #overview .uid {
-    font-family: ui-monospace, Menlo, monospace;
     font-size: .8rem;
     color: var(--muted);
     word-break: break-all;
     margin-bottom: .8rem;
+}
+
+#overview .uid .uid-value {
+    font-family: ui-monospace, Menlo, monospace;
 }
 
 .stats {

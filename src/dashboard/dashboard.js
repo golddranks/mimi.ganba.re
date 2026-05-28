@@ -101,7 +101,7 @@ function renderOverview(uid, events) {
   const days = new Set(ag.map((e) => dayKey(e.ts))).size;
   const relisten = events.filter((e) => e.ev === "r").length;
 
-  overview.querySelector(".uid").textContent = uid;
+  overview.querySelector(".uid .uid-value").textContent = uid;
   setStat("answers", ag.length);
   setStat("correct", correct);
   setStat("accuracy", (acc * 100).toFixed(1) + "%");

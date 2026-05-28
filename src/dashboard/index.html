@@ -24,8 +24,8 @@
 
     <main id="dash">
         <section id="overview" class="card span2">
-            <div class="uid"></div>
-            <script>document.currentScript.previousElementSibling.textContent=new URLSearchParams(location.search).get("uid")||localStorage.getItem("uid")||"";</script>
+            <div class="uid">Device ID: <span class="uid-value"></span></div>
+            <script>document.currentScript.previousElementSibling.querySelector(".uid-value").textContent=new URLSearchParams(location.search).get("uid")||localStorage.getItem("uid")||"";</script>
             <div class="stats">
                 <div class="stat"><div class="n" data-stat="answers">0</div><div class="l">answers</div></div>
                 <div class="stat"><div class="n" data-stat="correct">0</div><div class="l">correct</div></div>
