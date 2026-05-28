@@ -72,7 +72,7 @@ async function load(uid) {
     renderLevelHist(data.level_hist, data.level_hist_uids);
     renderDaysHist(data.days_hist, data.days_hist_uids);
     renderActivityHist(data.activity_hist, data.activity_hist_uids);
-    renderDaily(data.daily);
+    renderDaily(data.daily, data.daily_uids);
     renderHourly(data.hourly);
     renderMora(data.by_mora);
     renderVoice(data.by_voice, data.by_voice_played);
@@ -103,7 +103,9 @@ function renderOverview(data) {
 }
 
 // ---------- daily ----------
-function renderDaily(daily) {
+// Bars carry data-date so clicking either the bad (wrong) or good (correct)
+// stack reveals the contributing uids — same pattern as the histograms.
+function renderDaily(daily, uids) {
   if (!daily || daily.length === 0) { dailychart.textContent = "(no data)"; return; }
   // Fill in any missing days between first and last so the x-axis is calendar-uniform.
   const first = new Date(daily[0].d + "T00:00:00Z");
@@ -128,8 +130,8 @@ function renderDaily(daily) {
     const cH = d.n ? d.correct / d.n * totH : 0;
     const tip = `${d.k}  ${d.correct}/${d.n}`;
     if (d.n) {
-      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
-      bars += `<rect x="${x}" y="${h - 20 - cH}" width="${bw * 0.8}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+      bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
+      bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - cH}" width="${bw * 0.8}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
     }
     const month = d.k.slice(0, 7);
     if (month !== lastMonth) {
@@ -144,6 +146,12 @@ function renderDaily(daily) {
     axis += `<line x1="20" x2="${w}" y1="${y}" y2="${y}" stroke="var(--panel-2)" stroke-width=".5"/>`;
   }
   dailychart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${axis}${bars}${labels}</svg>`;
+  dailychart.onclick = (e) => {
+    const r = e.target.closest("rect[data-date]");
+    if (!r) return;
+    const d = r.dataset.date;
+    showUidPopup(d, (uids || {})[d] || []);
+  };
 }
 
 // ---------- user-level histograms per vowel ----------

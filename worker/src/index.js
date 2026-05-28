@@ -177,7 +177,7 @@ async function handleAdminStats(req, env, url) {
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
-  const [totals, active, daily, hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, skillStream, nicks] = await Promise.all([
+  const [totals, active, daily, hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, skillStream, nicks, dailyUidRows] = await Promise.all([
     db.prepare(
       `SELECT
          COUNT(*)                                                              AS events,
@@ -261,6 +261,14 @@ async function handleAdminStats(req, env, url) {
     db.prepare(
       `SELECT uid, nickname FROM users
        WHERE nickname IS NOT NULL AND nickname != '' AND ${EXCLUDE_TEST}`
+    ).all(),
+    // (date, uid) pairs for the daily-activity bar drill-down. One row per
+    // user who answered something that day — JS folds it into a {date: [uid]}
+    // map for the popup.
+    db.prepare(
+      `SELECT date(ts/1000, 'unixepoch') AS d, uid
+       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
+       GROUP BY d, uid`
     ).all(),
   ]);
 
@@ -351,5 +359,9 @@ async function handleAdminStats(req, env, url) {
     days_hist,
     days_hist_uids,
     nicknames: Object.fromEntries((nicks.results || []).map((r) => [r.uid, r.nickname])),
+    daily_uids: (dailyUidRows.results || []).reduce((m, r) => {
+      (m[r.d] = m[r.d] || []).push(r.uid);
+      return m;
+    }, {}),
   });
 }

@@ -609,15 +609,17 @@ body {
     background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-/* Histogram bars are now interactive — give them a hover affordance. */
+/* Bars are interactive (drill down to uids) — give them a hover affordance. */
 #levelhist rect[data-bin],
 #activityhist rect[data-bin],
-#dayshist rect[data-bin] {
+#dayshist rect[data-bin],
+#dailychart rect[data-date] {
     cursor: pointer;
 }
 
 #levelhist rect[data-bin]:hover,
 #activityhist rect[data-bin]:hover,
-#dayshist rect[data-bin]:hover {
+#dayshist rect[data-bin]:hover,
+#dailychart rect[data-date]:hover {
     opacity: .82;
 }
