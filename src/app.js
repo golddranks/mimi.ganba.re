@@ -32,6 +32,7 @@ let run = 0;                   // running streak of correct answers
 let skill = {};                // {vowel: count} — persistent per-vowel level counter
 let current = null;            // {target, voice}
 let locked = false;            // true while reviewing a wrong answer
+let relistenArmed = false;     // re-listen confirm balloon shown, awaiting a 2nd tap
 
 // ---------- persistence ----------
 function load() {
@@ -186,12 +187,30 @@ const doneToday = () => {
   return null;
 };
 
+// Consecutive recent days where the session was completed (dayTier non-empty).
+// Today is special: if it's not "done" yet, it doesn't break the streak —
+// the user still has time to finish. Capped at DAYS because stats only
+// retains the last DAYS days locally.
+function daysStreak() {
+  let n = 0;
+  for (let i = 0; i < DAYS; i++) {
+    const s = stats[key(i)];
+    if (s && dayTier(s)) n++;
+    else if (i > 0) break;
+  }
+  return n;
+}
+
 // ---------- rendering ----------
 function render() {
   const s = today();
-  score.textContent = `${s.correct} correct out of ${s.total}`;
+  score.textContent = `${s.correct} correct out of ${s.total}`
+    + (s.total ? ` (${Math.round(acc(s) * 100)}%)` : "");
   streak.hidden = run < 2;
   streak.textContent = `streak: ${run}`;
+  const ds = daysStreak();
+  daystreak.hidden = ds < 2;
+  daystreak.textContent = `days streak: ${ds}`;
 
   let cls = "", text = "Let's train some more today!";
   if (mastered()) {
@@ -268,6 +287,7 @@ function play(src) {
 
 function newQuestion() {
   locked = false;
+  disarmRelisten();
   const target = pick(ALL);
   // Stay strictly within the target's vowel group (last char of kunrei).
   // The cap is a maximum; small groups (e.g. i has only si/zi/ti) give fewer.
@@ -330,6 +350,7 @@ choices.onclick = (e) => {
 };
 
 function guess(btn) {
+  disarmRelisten();
   const picked = btn.dataset.mora;
   const { target, idx, cap, startTs } = current;
   if (picked !== target) { submit(picked, btn, true); return; }
@@ -357,6 +378,7 @@ function replay(m, btn, random = false) {
 }
 
 function submit(picked, btn, wasGuess = false) {
+  disarmRelisten();
   const { target, idx, cap, startTs } = current;
   const correct = picked === target;
   const ms = Date.now() - startTs;
@@ -378,11 +400,38 @@ function submit(picked, btn, wasGuess = false) {
   }
 }
 
-// Re-listen replays the current question but drops the vowel's skill to
-// the current level's start and breaks the streak — leaning on it costs.
+// Hide and disarm the re-listen confirm balloon. Called whenever we leave the
+// awaiting-answer state — a new question starts or the current one is answered
+// — so the balloon never lingers into answer review.
+function disarmRelisten() {
+  relistenArmed = false;
+  relistenwarn.hidden = true;
+}
+
+// Re-listen replays the current question. At cap=2 (lowest level) it's free
+// — no skill / streak penalty and not even recorded. From cap=3 up it costs
+// the vowel's in-level skill and breaks the streak, so the first tap shows
+// a warning balloon and only a second tap actually re-listens. The balloon
+// only warns about the streak, so when there's no streak to lose (run === 0)
+// it's skipped and the first tap re-listens straight away.
 function relistenCurrent() {
   if (!current) return;
   const { target, idx, cap, startTs } = current;
+
+  if (cap <= 2) {
+    // Free re-listen — beginner-friendly at the lowest level. Skip the
+    // event entirely so the server doesn't replay a phantom penalty.
+    play(current.voice);
+    return;
+  }
+
+  if (run > 0 && !relistenArmed) {
+    relistenArmed = true;
+    relistenwarn.hidden = false;
+    return;
+  }
+  disarmRelisten();
+
   const v = target.slice(-1);
   const c = skill[v] || 0;
   const i = LEVELS.findLastIndex((t) => c >= t);
