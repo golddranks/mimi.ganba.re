@@ -242,9 +242,18 @@ function renderHourly(events) {
   hourlychart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${bars}${labels}</svg>`;
 }
 
+// ---------- display mode (shared) ----------
+// Per-sound and confusion both honour the same count/per-sound-% toggle. Each section
+// has its own .modeswitch in the h2 — clicking either updates the shared
+// `displayMode` and re-runs both renderers (the toggles stay in sync).
+let displayMode = "count";
+
 // ---------- per-mora ----------
 // Updates the 19 static .mrow elements in dashboard.html; each carries its
 // own data-mora attribute, so we only set widths and the text readout.
+let moraCounts = null;
+let moraMaxN = 1;
+
 function renderMora(events) {
   const counts = {};
   for (const e of events) {
@@ -253,15 +262,31 @@ function renderMora(events) {
     c.total++;
     if (e.picked === e.target) c.correct++;
   }
-  const maxN = Math.max(1, ...Object.values(counts).map((c) => c.total));
+  moraCounts = counts;
+  moraMaxN = Math.max(1, ...Object.values(counts).map((c) => c.total));
+  drawMora();
+}
+
+function drawMora() {
+  if (!moraCounts) return;
   for (const mrow of morachart.querySelectorAll(".mrow")) {
-    const c = counts[mrow.dataset.mora] || { correct: 0, total: 0 };
+    const c = moraCounts[mrow.dataset.mora] || { correct: 0, total: 0 };
     const accPct = c.total ? c.correct / c.total : 0;
-    mrow.querySelector(".mbar-total").style.width = (c.total / maxN * 100) + "%";
-    mrow.querySelector(".mbar-correct").style.width = (accPct * 100) + "%";
-    mrow.querySelector(".mtxt").textContent = c.total
-      ? `${c.correct}/${c.total} · ${(accPct * 100).toFixed(0)}%`
-      : "0/0";
+    const total = mrow.querySelector(".mbar-total");
+    const correct = mrow.querySelector(".mbar-correct");
+    const txt = mrow.querySelector(".mtxt");
+    if (displayMode === "pct") {
+      // Equal-width bars so accuracy is comparable across rows regardless of volume.
+      total.style.width = c.total ? "100%" : "0%";
+      correct.style.width = (accPct * 100) + "%";
+      txt.textContent = c.total ? String(Math.round(accPct * 100)) : "—";
+    } else {
+      total.style.width = (c.total / moraMaxN * 100) + "%";
+      correct.style.width = (accPct * 100) + "%";
+      txt.textContent = c.total
+        ? `${c.correct}/${c.total} · ${(accPct * 100).toFixed(0)}%`
+        : "0/0";
+    }
   }
 }
 
@@ -269,35 +294,83 @@ function renderMora(events) {
 // Walks the static td[data-t][data-p] cells across all four vowel-group tables.
 // Color intensity is per-category (diag vs off-diag) so off-diagonal errors
 // don't get drowned out by big correct counts.
+let confusionCounts = null;
+let confusionRowTotals = null;
+
 function renderConfusion(events) {
   const counts = {};
+  const rowTotals = {};
   for (const e of events) {
     if (e.ev !== "a" && e.ev !== "g") continue;
-    const k = `${e.target}/${e.picked}`;
-    counts[k] = (counts[k] || 0) + 1;
+    counts[`${e.target}/${e.picked}`] = (counts[`${e.target}/${e.picked}`] || 0) + 1;
+    rowTotals[e.target] = (rowTotals[e.target] || 0) + 1;
   }
+  confusionCounts = counts;
+  confusionRowTotals = rowTotals;
+  drawConfusion();
+}
+
+function drawConfusion() {
+  if (!confusionCounts) return;
   const cells = confchart.querySelectorAll("td[data-t]");
+  // value{display, mag, raw} — mag drives colour, display is the textContent.
+  const valueFor = (t, p) => {
+    const n = confusionCounts[`${t}/${p}`] || 0;
+    if (displayMode === "pct") {
+      const rt = confusionRowTotals[t] || 0;
+      const pct = rt > 0 ? n / rt * 100 : 0;
+      let display = "";
+      if (n > 0) {
+        const r = Math.round(pct);
+        display = r === 0 ? "<1" : String(r);
+      }
+      return { display, mag: pct, raw: n };
+    }
+    return { display: n ? String(n) : "", mag: n, raw: n };
+  };
+
   let maxOn = 0, maxOff = 0;
   for (const td of cells) {
-    const n = counts[`${td.dataset.t}/${td.dataset.p}`] || 0;
-    if (td.dataset.t === td.dataset.p) maxOn = Math.max(maxOn, n);
-    else maxOff = Math.max(maxOff, n);
+    const v = valueFor(td.dataset.t, td.dataset.p);
+    if (td.dataset.t === td.dataset.p) maxOn = Math.max(maxOn, v.mag);
+    else maxOff = Math.max(maxOff, v.mag);
   }
   for (const td of cells) {
-    const n = counts[`${td.dataset.t}/${td.dataset.p}`] || 0;
+    const v = valueFor(td.dataset.t, td.dataset.p);
     const diag = td.dataset.t === td.dataset.p;
     let bg = "transparent";
-    if (n > 0) {
-      const a = diag ? (maxOn ? n / maxOn : 0) : (maxOff ? n / maxOff : 0);
+    if (v.mag > 0) {
+      const a = diag ? (maxOn ? v.mag / maxOn : 0) : (maxOff ? v.mag / maxOff : 0);
       const base = diag ? "var(--good)" : "var(--bad)";
       const pct = Math.round((diag ? 15 : 20) + a * (diag ? 55 : 60));
       bg = `color-mix(in srgb, ${base} ${pct}%, transparent)`;
     }
     td.style.background = bg;
-    td.textContent = n || "";
-    td.classList.toggle("empty", n === 0);
+    td.textContent = v.display;
+    td.classList.toggle("empty", v.raw === 0);
   }
 }
+
+// Hook up every .modeswitch once at module load. Clicking any of them flips
+// the shared displayMode, syncs the active-button state across all switches,
+// and re-renders the sections that honour the mode.
+(() => {
+  const switches = document.querySelectorAll(".modeswitch");
+  for (const sw of switches) {
+    sw.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-mode]");
+      if (!btn) return;
+      displayMode = btn.dataset.mode;
+      for (const s of switches) {
+        for (const b of s.querySelectorAll("button[data-mode]")) {
+          b.classList.toggle("active", b.dataset.mode === displayMode);
+        }
+      }
+      drawConfusion();
+      drawMora();
+    });
+  }
+})();
 
 // ---------- streak ----------
 // Per-day *peak* streak as a bar chart with a calendar-uniform x-axis. The

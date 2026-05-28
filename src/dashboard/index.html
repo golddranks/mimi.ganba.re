@@ -87,32 +87,42 @@
         </section>
 
         <section class="card">
-            <h2>Per-mora accuracy</h2>
+            <h2>Per-sound accuracy
+                <span class="modeswitch" id="moramode">
+                    <button type="button" data-mode="count" class="active">counts</button>
+                    <button type="button" data-mode="pct">per-sound %</button>
+                </span>
+            </h2>
             <div id="morachart">
-                <div class="mrow" data-mora="sa"><div class="mname">さ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="za"><div class="mname">ざ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="sya"><div class="mname">しゃ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zya"><div class="mname">じゃ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="tya"><div class="mname">ちゃ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="si"><div class="mname">し</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zi"><div class="mname">じ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="ti"><div class="mname">ち</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="su"><div class="mname">す</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zu"><div class="mname">ず</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="tu"><div class="mname">つ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="syu"><div class="mname">しゅ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zyu"><div class="mname">じゅ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="tyu"><div class="mname">ちゅ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="so"><div class="mname">そ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zo"><div class="mname">ぞ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="syo"><div class="mname">しょ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zyo"><div class="mname">じょ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="tyo"><div class="mname">ちょ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="sa"><div class="mname">サ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="za"><div class="mname">ザ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="sya"><div class="mname">シャ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="zya"><div class="mname">ジャ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="tya"><div class="mname">チャ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="si"><div class="mname">シ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="zi"><div class="mname">ジ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="ti"><div class="mname">チ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="su"><div class="mname">ス</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="zu"><div class="mname">ズ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="tu"><div class="mname">ツ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="syu"><div class="mname">シュ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="zyu"><div class="mname">ジュ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="tyu"><div class="mname">チュ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="so"><div class="mname">ソ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="zo"><div class="mname">ゾ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="syo"><div class="mname">ショ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="zyo"><div class="mname">ジョ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
+                <div class="mrow" data-mora="tyo"><div class="mname">チョ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
             </div>
         </section>
 
         <section class="card span2">
-            <h2>Confusion matrix</h2>
+            <h2>Confusion matrix
+                <span class="modeswitch" id="confmode">
+                    <button type="button" data-mode="count" class="active">counts</button>
+                    <button type="button" data-mode="pct">per-sound %</button>
+                </span>
+            </h2>
             <div id="confchart">
                 <div class="confgroup">
                     <h3>あ行</h3>
@@ -121,11 +131,11 @@
                             <tr><th></th><th>さ</th><th>ざ</th><th>しゃ</th><th>じゃ</th><th>ちゃ</th></tr>
                         </thead>
                         <tbody>
-                            <tr><th>さ</th><td data-t="sa" data-p="sa" class="diag"></td><td data-t="sa" data-p="za"></td><td data-t="sa" data-p="sya"></td><td data-t="sa" data-p="zya"></td><td data-t="sa" data-p="tya"></td></tr>
-                            <tr><th>ざ</th><td data-t="za" data-p="sa"></td><td data-t="za" data-p="za" class="diag"></td><td data-t="za" data-p="sya"></td><td data-t="za" data-p="zya"></td><td data-t="za" data-p="tya"></td></tr>
-                            <tr><th>しゃ</th><td data-t="sya" data-p="sa"></td><td data-t="sya" data-p="za"></td><td data-t="sya" data-p="sya" class="diag"></td><td data-t="sya" data-p="zya"></td><td data-t="sya" data-p="tya"></td></tr>
-                            <tr><th>じゃ</th><td data-t="zya" data-p="sa"></td><td data-t="zya" data-p="za"></td><td data-t="zya" data-p="sya"></td><td data-t="zya" data-p="zya" class="diag"></td><td data-t="zya" data-p="tya"></td></tr>
-                            <tr><th>ちゃ</th><td data-t="tya" data-p="sa"></td><td data-t="tya" data-p="za"></td><td data-t="tya" data-p="sya"></td><td data-t="tya" data-p="zya"></td><td data-t="tya" data-p="tya" class="diag"></td></tr>
+                            <tr><th>サ</th><td data-t="sa" data-p="sa" class="diag"></td><td data-t="sa" data-p="za"></td><td data-t="sa" data-p="sya"></td><td data-t="sa" data-p="zya"></td><td data-t="sa" data-p="tya"></td></tr>
+                            <tr><th>ザ</th><td data-t="za" data-p="sa"></td><td data-t="za" data-p="za" class="diag"></td><td data-t="za" data-p="sya"></td><td data-t="za" data-p="zya"></td><td data-t="za" data-p="tya"></td></tr>
+                            <tr><th>シャ</th><td data-t="sya" data-p="sa"></td><td data-t="sya" data-p="za"></td><td data-t="sya" data-p="sya" class="diag"></td><td data-t="sya" data-p="zya"></td><td data-t="sya" data-p="tya"></td></tr>
+                            <tr><th>ジャ</th><td data-t="zya" data-p="sa"></td><td data-t="zya" data-p="za"></td><td data-t="zya" data-p="sya"></td><td data-t="zya" data-p="zya" class="diag"></td><td data-t="zya" data-p="tya"></td></tr>
+                            <tr><th>チャ</th><td data-t="tya" data-p="sa"></td><td data-t="tya" data-p="za"></td><td data-t="tya" data-p="sya"></td><td data-t="tya" data-p="zya"></td><td data-t="tya" data-p="tya" class="diag"></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -137,9 +147,9 @@
                             <tr><th></th><th>し</th><th>じ</th><th>ち</th></tr>
                         </thead>
                         <tbody>
-                            <tr><th>し</th><td data-t="si" data-p="si" class="diag"></td><td data-t="si" data-p="zi"></td><td data-t="si" data-p="ti"></td></tr>
-                            <tr><th>じ</th><td data-t="zi" data-p="si"></td><td data-t="zi" data-p="zi" class="diag"></td><td data-t="zi" data-p="ti"></td></tr>
-                            <tr><th>ち</th><td data-t="ti" data-p="si"></td><td data-t="ti" data-p="zi"></td><td data-t="ti" data-p="ti" class="diag"></td></tr>
+                            <tr><th>シ</th><td data-t="si" data-p="si" class="diag"></td><td data-t="si" data-p="zi"></td><td data-t="si" data-p="ti"></td></tr>
+                            <tr><th>ジ</th><td data-t="zi" data-p="si"></td><td data-t="zi" data-p="zi" class="diag"></td><td data-t="zi" data-p="ti"></td></tr>
+                            <tr><th>チ</th><td data-t="ti" data-p="si"></td><td data-t="ti" data-p="zi"></td><td data-t="ti" data-p="ti" class="diag"></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -151,12 +161,12 @@
                             <tr><th></th><th>す</th><th>ず</th><th>つ</th><th>しゅ</th><th>じゅ</th><th>ちゅ</th></tr>
                         </thead>
                         <tbody>
-                            <tr><th>す</th><td data-t="su" data-p="su" class="diag"></td><td data-t="su" data-p="zu"></td><td data-t="su" data-p="tu"></td><td data-t="su" data-p="syu"></td><td data-t="su" data-p="zyu"></td><td data-t="su" data-p="tyu"></td></tr>
-                            <tr><th>ず</th><td data-t="zu" data-p="su"></td><td data-t="zu" data-p="zu" class="diag"></td><td data-t="zu" data-p="tu"></td><td data-t="zu" data-p="syu"></td><td data-t="zu" data-p="zyu"></td><td data-t="zu" data-p="tyu"></td></tr>
-                            <tr><th>つ</th><td data-t="tu" data-p="su"></td><td data-t="tu" data-p="zu"></td><td data-t="tu" data-p="tu" class="diag"></td><td data-t="tu" data-p="syu"></td><td data-t="tu" data-p="zyu"></td><td data-t="tu" data-p="tyu"></td></tr>
-                            <tr><th>しゅ</th><td data-t="syu" data-p="su"></td><td data-t="syu" data-p="zu"></td><td data-t="syu" data-p="tu"></td><td data-t="syu" data-p="syu" class="diag"></td><td data-t="syu" data-p="zyu"></td><td data-t="syu" data-p="tyu"></td></tr>
-                            <tr><th>じゅ</th><td data-t="zyu" data-p="su"></td><td data-t="zyu" data-p="zu"></td><td data-t="zyu" data-p="tu"></td><td data-t="zyu" data-p="syu"></td><td data-t="zyu" data-p="zyu" class="diag"></td><td data-t="zyu" data-p="tyu"></td></tr>
-                            <tr><th>ちゅ</th><td data-t="tyu" data-p="su"></td><td data-t="tyu" data-p="zu"></td><td data-t="tyu" data-p="tu"></td><td data-t="tyu" data-p="syu"></td><td data-t="tyu" data-p="zyu"></td><td data-t="tyu" data-p="tyu" class="diag"></td></tr>
+                            <tr><th>ス</th><td data-t="su" data-p="su" class="diag"></td><td data-t="su" data-p="zu"></td><td data-t="su" data-p="tu"></td><td data-t="su" data-p="syu"></td><td data-t="su" data-p="zyu"></td><td data-t="su" data-p="tyu"></td></tr>
+                            <tr><th>ズ</th><td data-t="zu" data-p="su"></td><td data-t="zu" data-p="zu" class="diag"></td><td data-t="zu" data-p="tu"></td><td data-t="zu" data-p="syu"></td><td data-t="zu" data-p="zyu"></td><td data-t="zu" data-p="tyu"></td></tr>
+                            <tr><th>ツ</th><td data-t="tu" data-p="su"></td><td data-t="tu" data-p="zu"></td><td data-t="tu" data-p="tu" class="diag"></td><td data-t="tu" data-p="syu"></td><td data-t="tu" data-p="zyu"></td><td data-t="tu" data-p="tyu"></td></tr>
+                            <tr><th>シュ</th><td data-t="syu" data-p="su"></td><td data-t="syu" data-p="zu"></td><td data-t="syu" data-p="tu"></td><td data-t="syu" data-p="syu" class="diag"></td><td data-t="syu" data-p="zyu"></td><td data-t="syu" data-p="tyu"></td></tr>
+                            <tr><th>ジュ</th><td data-t="zyu" data-p="su"></td><td data-t="zyu" data-p="zu"></td><td data-t="zyu" data-p="tu"></td><td data-t="zyu" data-p="syu"></td><td data-t="zyu" data-p="zyu" class="diag"></td><td data-t="zyu" data-p="tyu"></td></tr>
+                            <tr><th>チュ</th><td data-t="tyu" data-p="su"></td><td data-t="tyu" data-p="zu"></td><td data-t="tyu" data-p="tu"></td><td data-t="tyu" data-p="syu"></td><td data-t="tyu" data-p="zyu"></td><td data-t="tyu" data-p="tyu" class="diag"></td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -168,16 +178,16 @@
                             <tr><th></th><th>そ</th><th>ぞ</th><th>しょ</th><th>じょ</th><th>ちょ</th></tr>
                         </thead>
                         <tbody>
-                            <tr><th>そ</th><td data-t="so" data-p="so" class="diag"></td><td data-t="so" data-p="zo"></td><td data-t="so" data-p="syo"></td><td data-t="so" data-p="zyo"></td><td data-t="so" data-p="tyo"></td></tr>
-                            <tr><th>ぞ</th><td data-t="zo" data-p="so"></td><td data-t="zo" data-p="zo" class="diag"></td><td data-t="zo" data-p="syo"></td><td data-t="zo" data-p="zyo"></td><td data-t="zo" data-p="tyo"></td></tr>
-                            <tr><th>しょ</th><td data-t="syo" data-p="so"></td><td data-t="syo" data-p="zo"></td><td data-t="syo" data-p="syo" class="diag"></td><td data-t="syo" data-p="zyo"></td><td data-t="syo" data-p="tyo"></td></tr>
-                            <tr><th>じょ</th><td data-t="zyo" data-p="so"></td><td data-t="zyo" data-p="zo"></td><td data-t="zyo" data-p="syo"></td><td data-t="zyo" data-p="zyo" class="diag"></td><td data-t="zyo" data-p="tyo"></td></tr>
-                            <tr><th>ちょ</th><td data-t="tyo" data-p="so"></td><td data-t="tyo" data-p="zo"></td><td data-t="tyo" data-p="syo"></td><td data-t="tyo" data-p="zyo"></td><td data-t="tyo" data-p="tyo" class="diag"></td></tr>
+                            <tr><th>ソ</th><td data-t="so" data-p="so" class="diag"></td><td data-t="so" data-p="zo"></td><td data-t="so" data-p="syo"></td><td data-t="so" data-p="zyo"></td><td data-t="so" data-p="tyo"></td></tr>
+                            <tr><th>ゾ</th><td data-t="zo" data-p="so"></td><td data-t="zo" data-p="zo" class="diag"></td><td data-t="zo" data-p="syo"></td><td data-t="zo" data-p="zyo"></td><td data-t="zo" data-p="tyo"></td></tr>
+                            <tr><th>ショ</th><td data-t="syo" data-p="so"></td><td data-t="syo" data-p="zo"></td><td data-t="syo" data-p="syo" class="diag"></td><td data-t="syo" data-p="zyo"></td><td data-t="syo" data-p="tyo"></td></tr>
+                            <tr><th>ジョ</th><td data-t="zyo" data-p="so"></td><td data-t="zyo" data-p="zo"></td><td data-t="zyo" data-p="syo"></td><td data-t="zyo" data-p="zyo" class="diag"></td><td data-t="zyo" data-p="tyo"></td></tr>
+                            <tr><th>チョ</th><td data-t="tyo" data-p="so"></td><td data-t="tyo" data-p="zo"></td><td data-t="tyo" data-p="syo"></td><td data-t="tyo" data-p="zyo"></td><td data-t="tyo" data-p="tyo" class="diag"></td></tr>
                         </tbody>
                     </table>
                 </div>
 
-                <div class="legend conflegend">rows = mora heard · columns = mora picked · diagonal = correct</div>
+                <div class="legend conflegend">rows = sound heard · columns = kana picked · diagonal = correct</div>
             </div>
         </section>
 
