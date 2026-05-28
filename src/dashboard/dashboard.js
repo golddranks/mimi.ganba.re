@@ -122,17 +122,17 @@ function renderLevels(events) {
     const row = document.querySelector(`#levels [data-vowel="${v}"]`);
     if (!row) continue;
     const c = skill[v];
-    const lvl = lastLevelIdx(c) + 1;        // 0..4
-    const cap = 2 + lvl;                     // 2..6
-    const next = LEVELS[lvl];                // threshold to next level (undefined at max)
+    // "level" = number of choice buttons shown for this vowel = 2..6.
+    const idx = lastLevelIdx(c);             // -1..3
+    const cap = 3 + idx;                     // 2..6
+    const next = LEVELS[idx + 1];            // threshold to next level (undefined at max)
     row.querySelector(".lvl-count").textContent = seen[v] ? c : "—";
-    row.querySelector(".lvl-level").textContent = seen[v] ? `level ${lvl}` : "—";
-    row.querySelector(".lvl-cap").textContent = seen[v] ? `cap ${cap}` : "—";
+    row.querySelector(".lvl-level").textContent = seen[v] ? `level ${cap}` : "—";
     row.querySelector(".lvl-next").textContent = next != null && seen[v]
-      ? `${next - c} to lvl ${lvl + 1}`
+      ? `${next - c} to lvl ${cap + 1}`
       : (seen[v] ? "max" : "");
     // Progress bar inside current level
-    const start = lvl === 0 ? 0 : LEVELS[lvl - 1];
+    const start = idx < 0 ? 0 : LEVELS[idx];
     const end = next != null ? next : c;
     const pct = end > start ? Math.max(0, Math.min(1, (c - start) / (end - start))) : 1;
     row.querySelector(".lvl-fill").style.width = (pct * 100) + "%";

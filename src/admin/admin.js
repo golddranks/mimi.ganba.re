@@ -122,7 +122,7 @@ function renderLevelHist(hist) {
       const rect = col.querySelector(`rect[data-bin="${i}"]`);
       rect.setAttribute("height", bh);
       rect.setAttribute("y", baseY - bh);
-      rect.querySelector("title").textContent = `cap ${i + 2}: ${bins[i]} users`;
+      rect.querySelector("title").textContent = `level ${i + 2}: ${bins[i]} users`;
       const text = col.querySelector(`text.bincount[data-bin="${i}"]`);
       text.setAttribute("y", baseY - bh - 2);
       text.textContent = bins[i] || "";
