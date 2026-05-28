@@ -455,3 +455,108 @@ body {
     vertical-align: middle;
     margin-right: .3rem;
 }
+
+/* ---- uid drill-down popup ---- */
+#uidpopup {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Same specificity trick as #uidform — explicit [hidden] override beats
+   the #-selector display rule above. */
+#uidpopup[hidden] {
+    display: none;
+}
+
+.uidpopup-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, .55);
+}
+
+.uidpopup-box {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--panel-2);
+    border-radius: 12px;
+    padding: 1rem 1.2rem 1.2rem;
+    min-width: 24rem;
+    max-width: min(90vw, 36rem);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .4);
+}
+
+.uidpopup-close {
+    position: absolute;
+    top: .4rem;
+    right: .5rem;
+    background: transparent;
+    border: 0;
+    color: var(--muted);
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: .2rem .5rem;
+}
+
+.uidpopup-close:hover {
+    color: var(--fg);
+}
+
+.uidpopup-title {
+    margin: 0 1.5rem .6rem 0;
+    font-size: .85rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+}
+
+.uidpopup-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1 1 auto;
+}
+
+.uidpopup-list li {
+    border-top: 1px solid var(--panel-2);
+}
+
+.uidpopup-list li:first-child {
+    border-top: 0;
+}
+
+.uidpopup-list a {
+    display: block;
+    padding: .5rem .2rem;
+    color: var(--accent);
+    text-decoration: none;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: .85rem;
+    word-break: break-all;
+}
+
+.uidpopup-list a:hover {
+    color: var(--fg);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* Histogram bars are now interactive — give them a hover affordance. */
+#levelhist rect[data-bin],
+#activityhist rect[data-bin],
+#dayshist rect[data-bin] {
+    cursor: pointer;
+}
+
+#levelhist rect[data-bin]:hover,
+#activityhist rect[data-bin]:hover,
+#dayshist rect[data-bin]:hover {
+    opacity: .82;
+}

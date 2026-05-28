@@ -290,29 +290,41 @@ async function handleAdminStats(req, env, url) {
 
   // Bucket each user's per-vowel skill into level bins (0..4). Users who
   // never trained a given vowel don't contribute to that vowel's histogram.
+  // For each histogram we also emit a parallel array of per-bucket uid
+  // lists so the admin frontend can pop up the contributing devices on
+  // bar click. Cheap at current scale: ~36 B/uid per bucket they land in.
+  const mkBuckets = (n) => Array.from({ length: n }, () => []);
   const level_hist = { a: [0, 0, 0, 0, 0], i: [0, 0, 0, 0, 0], u: [0, 0, 0, 0, 0], o: [0, 0, 0, 0, 0] };
+  const level_hist_uids = { a: mkBuckets(5), i: mkBuckets(5), u: mkBuckets(5), o: mkBuckets(5) };
   for (const uid in perUser) {
     for (const v of ["a", "i", "u", "o"]) {
       if (perUser[uid][v] === undefined) continue;
-      level_hist[v][lastIdx(perUser[uid][v]) + 1]++;
+      const bin = lastIdx(perUser[uid][v]) + 1;
+      level_hist[v][bin]++;
+      level_hist_uids[v][bin].push(uid);
     }
   }
 
   // 8 ~3×-stepped buckets for total answers — wider than log2, finer than
   // log10. Max bucket covers anyone above ~3000 answers (practical ceiling).
   const activity_hist = new Array(8).fill(0);
+  const activity_hist_uids = mkBuckets(8);
   for (const uid in userAnswers) {
     const a = userAnswers[uid];
     const b = a < 4 ? 0 : a < 10 ? 1 : a < 30 ? 2 : a < 100 ? 3 : a < 300 ? 4 : a < 1000 ? 5 : a < 3000 ? 6 : 7;
     activity_hist[b]++;
+    activity_hist_uids[b].push(uid);
   }
 
   // One bucket per day-count from 1..30 plus a "30+" overflow bucket.
   const days_hist = new Array(31).fill(0);
+  const days_hist_uids = mkBuckets(31);
   for (const uid in userDays) {
     const d = userDays[uid].size;
     if (d <= 0) continue;
-    days_hist[Math.min(30, d - 1)]++;
+    const bin = Math.min(30, d - 1);
+    days_hist[bin]++;
+    days_hist_uids[bin].push(uid);
   }
 
   return json({
@@ -326,7 +338,10 @@ async function handleAdminStats(req, env, url) {
     by_voice_confusion: byVoiceConf.results   || [],
     by_voice_played:    byVoicePlayed.results || [],
     level_hist,
+    level_hist_uids,
     activity_hist,
+    activity_hist_uids,
     days_hist,
+    days_hist_uids,
   });
 }

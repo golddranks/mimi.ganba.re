@@ -29,9 +29,9 @@ async function load(uid) {
     if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
     const data = await res.json();
     renderOverview(data);
-    renderLevelHist(data.level_hist);
-    renderDaysHist(data.days_hist);
-    renderActivityHist(data.activity_hist);
+    renderLevelHist(data.level_hist, data.level_hist_uids);
+    renderDaysHist(data.days_hist, data.days_hist_uids);
+    renderActivityHist(data.activity_hist, data.activity_hist_uids);
     renderDaily(data.daily);
     renderHourly(data.hourly);
     renderMora(data.by_mora);
@@ -112,11 +112,13 @@ function renderDaily(daily) {
 // static skeleton for the 4 charts lives in admin/index.html; this only
 // updates bar heights, count labels, and tooltips, so the layout is fixed
 // from first paint and the section doesn't flash blank.
-function renderLevelHist(hist) {
+function renderLevelHist(hist, uids) {
   const data = hist || { a: [0, 0, 0, 0, 0], i: [0, 0, 0, 0, 0], u: [0, 0, 0, 0, 0], o: [0, 0, 0, 0, 0] };
   const baseY = 118, innerH = 104; // must match the static SVG geometry
+  const VOWEL_GYO = { a: "あ行", i: "い行", u: "う行", o: "お行" };
   for (const v of ["a", "i", "u", "o"]) {
     const bins = data[v] || [0, 0, 0, 0, 0];
+    const bucketUids = (uids && uids[v]) || [[], [], [], [], []];
     const total = bins.reduce((a, b) => a + b, 0);
     const max = Math.max(1, ...bins);
     const col = levelhist.querySelector(`.lvlcol[data-vowel="${v}"]`);
@@ -130,6 +132,7 @@ function renderLevelHist(hist) {
       const text = col.querySelector(`text.bincount[data-bin="${i}"]`);
       text.setAttribute("y", baseY - bh - 2);
       text.textContent = bins[i] || "";
+      rect.onclick = () => showUidPopup(`${VOWEL_GYO[v]} · level ${i + 2}`, bucketUids[i]);
     }
   }
 }
@@ -139,7 +142,12 @@ function renderLevelHist(hist) {
 // viewBox) lives statically in admin/index.html so the section reserves
 // its layout; this function fills in the bars + axis labels on data load.
 // `labels[i]` is shown under bar i (use "" to suppress for crowded x-axes).
-function paintHist(svgEl, bins, labels, tooltipFn) {
+// `tooltipFn(i, n)` builds the SVG <title> (hover text incl. count).
+// If `uids` + `titleFn(i)` are provided, every bar gets a click handler
+// that pops up the contributing device IDs as links to the per-user
+// dashboard. `titleFn` returns the bucket name *without* a count — the
+// popup appends it.
+function paintHist(svgEl, bins, labels, tooltipFn, uids, titleFn) {
   const vb = svgEl.getAttribute("viewBox").split(" ").map(Number);
   const vbw = vb[2], vbh = vb[3];
   const padL = 14, padR = 14;
@@ -152,7 +160,7 @@ function paintHist(svgEl, bins, labels, tooltipFn) {
   for (let i = 0; i < n; i++) {
     const cx = padL + (i + 0.5) * bw;
     const bh = bins[i] / max * innerH;
-    html += `<rect x="${cx - barW / 2}" y="${baseY - bh}" width="${barW}" height="${bh}" fill="var(--accent)"><title>${tooltipFn(i, bins[i])}</title></rect>`;
+    html += `<rect data-bin="${i}" x="${cx - barW / 2}" y="${baseY - bh}" width="${barW}" height="${bh}" fill="var(--accent)"><title>${tooltipFn(i, bins[i])}</title></rect>`;
     if (bins[i] > 0) {
       html += `<text x="${cx}" y="${baseY - bh - 4}" fill="var(--muted)" font-size="11" text-anchor="middle">${bins[i]}</text>`;
     }
@@ -161,15 +169,28 @@ function paintHist(svgEl, bins, labels, tooltipFn) {
     }
   }
   svgEl.innerHTML = html;
+  if (uids && titleFn) {
+    // Delegate one click handler on the SVG. Each bar carries data-bin so
+    // we look up its uid list by index. Re-renders replace the children;
+    // we set the handler each time on the still-stable svg element.
+    svgEl.onclick = (e) => {
+      const r = e.target.closest("rect[data-bin]");
+      if (!r) return;
+      const i = +r.dataset.bin;
+      showUidPopup(titleFn(i), uids[i] || []);
+    };
+  }
 }
 
 const ACTIVITY_LABELS = ["1-3", "4-9", "10-29", "30-99", "100-299", "300-999", "1000-2999", "3000+"];
-function renderActivityHist(bins) {
+function renderActivityHist(bins, uids) {
   paintHist(
     activityhist.querySelector("svg"),
     bins || new Array(8).fill(0),
     ACTIVITY_LABELS,
     (i, n) => `${ACTIVITY_LABELS[i]} answers: ${n} users`,
+    uids,
+    (i) => `${ACTIVITY_LABELS[i]} answers`,
   );
 }
 
@@ -180,14 +201,47 @@ const DAYS_LABELS = (() => {
   a[30] = "30+";
   return a;
 })();
-function renderDaysHist(bins) {
+const daysLabelFor = (i) => i === 30 ? "31+ days" : `${i + 1} day${i === 0 ? "" : "s"}`;
+function renderDaysHist(bins, uids) {
   paintHist(
     dayshist.querySelector("svg"),
     bins || new Array(31).fill(0),
     DAYS_LABELS,
-    (i, n) => (i === 30 ? "31+ days" : `${i + 1} day${i === 0 ? "" : "s"}`) + `: ${n} users`,
+    (i, n) => `${daysLabelFor(i)}: ${n} users`,
+    uids,
+    daysLabelFor,
   );
 }
+
+// ---------- uid drill-down popup ----------
+// Renders a list of device IDs as links to the per-user dashboard. Closed
+// via the × button, backdrop click, or Esc. No-op for empty buckets so a
+// click on a zero-height bar produces nothing rather than an empty modal.
+// `title` describes the bucket only (e.g. "あ行 level 5"); the count is
+// appended here so callers don't need to track it.
+function showUidPopup(title, uidList) {
+  if (!uidList || uidList.length === 0) return;
+  const popup = document.getElementById("uidpopup");
+  const n = uidList.length;
+  popup.querySelector(".uidpopup-title").textContent = `${title} — ${n} user${n === 1 ? "" : "s"}`;
+  popup.querySelector(".uidpopup-list").innerHTML = uidList
+    .map((u) => `<li><a href="../dashboard/?uid=${encodeURIComponent(u)}" target="_blank" rel="noopener">${u}</a></li>`)
+    .join("");
+  popup.hidden = false;
+}
+
+function hideUidPopup() {
+  document.getElementById("uidpopup").hidden = true;
+}
+
+(() => {
+  const popup = document.getElementById("uidpopup");
+  popup.querySelector(".uidpopup-close").onclick = hideUidPopup;
+  popup.querySelector(".uidpopup-backdrop").onclick = hideUidPopup;
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !popup.hidden) hideUidPopup();
+  });
+})();
 
 // ---------- hourly (UTC) ----------
 function renderHourly(hourly) {
