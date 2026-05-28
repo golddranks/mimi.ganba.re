@@ -149,7 +149,7 @@ function renderLevels(events) {
     const cap = 3 + idx;                     // 2..6
     const next = LEVELS[idx + 1];            // count needed to unlock one more button
     row.querySelector(".lvl-count").textContent = seen[v] ? `streak of ${c}` : "—";
-    row.querySelector(".lvl-level").textContent = seen[v] ? `${cap} buttons` : "—";
+    row.querySelector(".lvl-level").textContent = seen[v] ? `(showing ${cap} buttons)` : "—";
     row.querySelector(".lvl-next").textContent = next != null && seen[v]
       ? `${next - c} correct answers to ${cap + 1} buttons`
       : (seen[v] ? "max" : "");
