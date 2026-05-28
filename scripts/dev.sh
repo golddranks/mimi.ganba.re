@@ -27,14 +27,12 @@ for arg in "$@"; do
   esac
 done
 
-# Build static site. --no-audio skips ffmpeg transcoding when the .opus
-# files already exist (i.e. every run after the first).
-if [ -d dist/audio ]; then
-  python3 scripts/build.py --no-audio
-else
-  echo "First run: transcoding audio with ffmpeg (this may take a minute)…"
-  python3 scripts/build.py
-fi
+# Build static site in four independent steps. Audio transcoding is the
+# slow one (ffmpeg) and idempotent — it skips files that already exist.
+python3 scripts/voicemap.py
+python3 scripts/transcode_audio.py
+python3 scripts/minify.py
+python3 scripts/build.py
 
 # In --local mode, seed the miniflare D1 with the schema (idempotent —
 # schema.sql uses CREATE TABLE IF NOT EXISTS). In --remote mode the schema

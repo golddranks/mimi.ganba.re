@@ -1,4 +1,6 @@
 __pycache__/
+build/
 dist/
+worker/src/voicemap.js
 .DS_Store
 .wrangler
