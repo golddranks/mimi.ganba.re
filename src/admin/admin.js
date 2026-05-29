@@ -1,3 +1,5 @@
+import { pad2 } from "../dates.js";
+
 // Power-user-only app-wide aggregate dashboard. Fans two endpoints into the
 // static skeleton declared in admin/index.html. Auth is the requester's own
 // uid (URL ?uid= or localStorage.uid); the worker checks users.power_user.
@@ -13,8 +15,6 @@ const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
   ? `http://${location.hostname}:8787`
   : "https://mimi-stats.golddranks.workers.dev";
 
-const pad2 = (x) => ("0" + x).slice(-2);
-
 // uid → nickname, populated on load. Used by showUidPopup to annotate the
 // drill-down list. Empty object until the first /v1/admin/stats response.
 let nicknames = {};
@@ -26,7 +26,7 @@ let displayMode = "count";
 
 // Hiragana for the kana the user picks (button-side); katakana for the
 // sound the user heard (row-side). Same convention as the user dashboard.
-const DISPLAY = {
+const HIRAGANA = {
   sa: "さ", za: "ざ", sya: "しゃ", zya: "じゃ", tya: "ちゃ",
   si: "し", zi: "じ", ti: "ち",
   su: "す", zu: "ず", tu: "つ", syu: "しゅ", zyu: "じゅ", tyu: "ちゅ",
@@ -302,24 +302,16 @@ function showUidPopup(title, uidList) {
     .map((u) => {
       const nick = nicknames[u];
       const nickHtml = nick ? `<span class="nick">${escapeHtml(nick)}</span>` : "";
-      return `<li><a href="../dashboard/?uid=${encodeURIComponent(u)}" target="_blank" rel="noopener"><span>${u}</span>${nickHtml}</a></li>`;
+      return `<li><a href="../dashboard/?uid=${encodeURIComponent(u)}" target="_blank" rel="noopener"><span>${escapeHtml(u)}</span>${nickHtml}</a></li>`;
     })
     .join("");
   popup.hidden = false;
 }
 
-// Nicknames are user-set free-form strings — escape before interpolating.
-// Uses replaceAll (string args) rather than one regex literal because the
-// minifier's tokenizer treats `"` / `'` inside a regex literal as a string
-// opener and runs amok eating subsequent code.
-function escapeHtml(s) {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
+// Escape before interpolating any client-supplied string (uids, nicknames)
+// into innerHTML — both are arbitrary text the worker stored verbatim.
+const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ESC[c]);
 
 function hideUidPopup() {
   document.getElementById("uidpopup").hidden = true;
@@ -593,7 +585,7 @@ function drawVoiceConfusion() {
     }
 
     let header = `<tr><th></th><th></th>`;
-    for (const p of morae) header += `<th>${DISPLAY[p]}</th>`;
+    for (const p of morae) header += `<th>${HIRAGANA[p]}</th>`;
     header += `</tr>`;
 
     let body = "";

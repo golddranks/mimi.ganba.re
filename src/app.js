@@ -1,34 +1,30 @@
+import { capFor, onCorrect, onWrong, onRelisten } from "./skill.js";
+import { dateKey, daysAgo } from "./dates.js";
+import { TIPS } from "./tips.js";
+import { scheduleReminders } from "./reminders.js";
+import { render } from "./render.js";
+
 // Mora identifiers are kunrei-shiki (ASCII) so audio URLs stay plain ASCII;
-// the vowel is just the last letter (sa→a, sya→a, ti→i). DISPLAY maps each
-// id to its hiragana for the buttons. The build injects window.VOICE_COUNTS
-// = {mora: n}; audio lives at audio/<vowel>/<mora>/<i>.opus.
-const ALL = [
-  "sa", "za", "sya", "zya", "tya",
-  "si", "zi", "ti",
-  "su", "zu", "tu", "syu", "zyu", "tyu",
-  "so", "zo", "syo", "zyo", "tyo",
-];
-const DISPLAY = {
+// the vowel is just the last letter (sa→a, sya→a, ti→i). HIRAGANA maps each
+// id to its hiragana for the buttons; ALL is just its key list. The build
+// injects window.VOICE_COUNTS = {mora: n}; audio lives at audio/<vowel>/<mora>/<i>.opus.
+const HIRAGANA = {
   sa: "さ", za: "ざ", sya: "しゃ", zya: "じゃ", tya: "ちゃ",
   si: "し", zi: "じ", ti: "ち",
   su: "す", zu: "ず", tu: "つ", syu: "しゅ", zyu: "じゅ", tyu: "ちゅ",
   so: "そ", zo: "ぞ", syo: "しょ", zyo: "じょ", tyo: "ちょ",
 };
+const ALL = Object.keys(HIRAGANA);
 const COUNTS = window.VOICE_COUNTS;
 
-const DAYS = 30;
-const BAR_MAX = 50;            // a day with 50+ answers fills the bar to the top
-const LOG_MAX = 2000;          // localStorage.mora_log, newline-separated
-// Per-vowel level thresholds: correct count in a vowel group unlocks more
-// distractors. Wrong answers drop the count to the previous level's start.
-const LEVELS = [10, 15, 20, 25]; // cap = 2 + (thresholds crossed) → 2/3/4/5/6
-const Z = () => ({ correct: 0, total: 0, maxRun: 0 });
-const pad2 = (x) => ("0" + x).slice(-2);
+export const DAYS = 30;
+export const BAR_MAX = 50;     // a day with 50+ answers fills the bar to the top
+export const emptyDay = () => ({ correct: 0, total: 0, maxRun: 0 });
 
 // Elements with id attributes are auto-exposed on window (primary, choices,
 // message, score, streak, audio, topbar).
-let stats = {};                // {YYYY-MM-DD: {correct,total}}
-let run = 0;                   // running streak of correct answers
+export let stats = {};         // {YYYY-MM-DD: {correct,total}}
+export let run = 0;            // running streak of correct answers
 let skill = {};                // {vowel: count} — persistent per-vowel level counter
 let current = null;            // {target, voice}
 let locked = false;            // true while reviewing a wrong answer
@@ -43,7 +39,7 @@ function load() {
     // saved streak before it gets restored into `run`.
     if (t.s && t.k) {
       const lastDay = Object.keys(t.s).sort().pop();
-      if (lastDay && lastDay !== key(0)) t.k = 0;
+      if (lastDay && lastDay !== daysAgo(0)) t.k = 0;
     }
     return t;
   } catch { return {}; }
@@ -53,23 +49,6 @@ const save = () => {
   localStorage.mora = JSON.stringify({ s: stats, k: run, x: skill });
 };
 
-// Compact answer log persisted across sessions; capped at LOG_MAX entries.
-// Format per line:
-//   <YYYY-MM-DD HH:MM:SS> <target>/<voiceIdx>           (correct)
-//   <YYYY-MM-DD HH:MM:SS> <target>/<voiceIdx> <picked>  (wrong)
-// Exposed as window.log for inspection from DevTools.
-const log = (localStorage.mora_log || "").split("\n").filter(Boolean);
-window.log = log;
-if (log.length) console.log(log.join("\n"));    // dump history on page load
-function appendLog(target, idx, picked, ms) {
-  const entry = `${nowStamp()} ${target}/${idx}`
-    + (picked === target ? "" : ` ${picked}`)
-    + ` ${ms}ms`;
-  log.push(entry);
-  if (log.length > LOG_MAX) log.splice(0, log.length - LOG_MAX);
-  if (!viewMode) localStorage.mora_log = log.join("\n");
-  console.log(entry);
-}
 
 // ---------- server-side stats ----------
 // When served from localhost (via scripts/dev.sh), talk to the local wrangler
@@ -85,7 +64,7 @@ const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
 // state pulled from the server, and nothing is persisted to localStorage or
 // sent back. Refresh without the param to return to your own state.
 const spoofedUid = new URLSearchParams(location.search).get("uid");
-const viewMode = !!spoofedUid;
+export const viewMode = !!spoofedUid;
 const uid = spoofedUid || (localStorage.uid ||= crypto.randomUUID());
 let evQueue = [];
 try { evQueue = JSON.parse(localStorage.ev_queue || "[]"); } catch { }
@@ -119,148 +98,42 @@ async function flushEvents() {
   }
 }
 
-// ---------- dates: YYYY-MM-DD for n days ago ----------
-function key(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-function nowStamp() {
-  const d = new Date();
-  return `${key(0)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-}
-
 // ---------- stats ----------
-const today = () => stats[key(0)] || Z();
-const acc = (s) => s.total ? s.correct / s.total : 0;
+export const today = () => stats[daysAgo(0)] || emptyDay();
+export const acc = (s) => s.total ? s.correct / s.total : 0;
+
+// Fold one event into the global (stats[day], skill[vowel], run) state. Shared
+// by live play (record / relistenCurrent) and by the view-as replay
+// (loadAsUser); the day-boundary streak reset is the caller's concern.
+function applyAnswer(day, vowel, correct) {
+  const s = (stats[day] ||= emptyDay());
+  s.total++;
+  if (correct) {
+    s.correct++;
+    skill[vowel] = onCorrect(skill[vowel] || 0);
+    run++;
+    if (run > (s.maxRun || 0)) s.maxRun = run;
+  } else {
+    skill[vowel] = onWrong(skill[vowel] || 0);
+    run = 0;
+  }
+}
+function applyRelisten(vowel) {
+  skill[vowel] = onRelisten(skill[vowel] || 0);
+  run = 0;
+}
 
 function record(correct, vowel) {
   // Midnight rollover: if today's bucket doesn't exist yet but other days
   // do, the streak from the most recent day is stale — same reset rule as
   // load() applies, just from a long-open session crossing midnight.
-  const today = key(0);
-  if (!stats[today] && Object.keys(stats).length > 0) run = 0;
-  const s = (stats[today] ||= Z());
-  s.total++;
-  if (correct) {
-    s.correct++;
-    skill[vowel] = (skill[vowel] || 0) + 1;
-    run++;
-    if (run > (s.maxRun || 0)) s.maxRun = run;
-  } else {
-    const c = skill[vowel] || 0;
-    const i = LEVELS.findLastIndex((t) => c >= t);
-    // Drop to the start of the previous level so one correct doesn't
-    // immediately bump you back over the threshold.
-    skill[vowel] = i <= 0 ? 0 : LEVELS[i - 1];
-    run = 0;
-  }
-  const cutoff = key(DAYS - 1);
+  const todayKey = daysAgo(0);
+  if (!stats[todayKey] && Object.keys(stats).length > 0) run = 0;
+  applyAnswer(todayKey, vowel, correct);
+  const cutoff = daysAgo(DAYS - 1);
   for (const x of Object.keys(stats)) if (x < cutoff) delete stats[x];
   save();
   render();
-}
-
-function mastered() {
-  const days = Object.keys(stats).filter((k) => stats[k].total).sort();
-  if (!days.length) return false;
-  // Tier 1: first ever day, completed at 100%.
-  if (days.length === 1) {
-    const s = stats[days[0]];
-    return s.correct === s.total && doneToday();
-  }
-  // Tier 2: first 5 trained days all >=95%.
-  if (days.length >= 5 && days.slice(0, 5).every((k) => acc(stats[k]) >= .95)) return true;
-  // Tier 3: last 30 days, >=22 trained, every trained day >=90%, last 5 >=95%.
-  // w is most-recent-first since key(0)=today, key(1)=yesterday, etc.
-  const w = Array.from({ length: DAYS }, (_, i) => stats[key(i)]).filter((s) => s?.total);
-  return w.length >= 22
-    && w.every((s) => acc(s) >= .90)
-    && w.slice(0, 5).every((s) => acc(s) >= .95);
-}
-
-// Returns "ace" (high accuracy / streak), "grind" (sheer volume), or null.
-const doneToday = () => {
-  const s = today();
-  if (s.total >= 50 && acc(s) >= .95 || run >= 30) return "ace";
-  if (s.total >= 100) return "grind";
-  return null;
-};
-
-// Consecutive recent days where the session was completed (dayTier non-empty).
-// Today is special: if it's not "done" yet, it doesn't break the streak —
-// the user still has time to finish. Capped at DAYS because stats only
-// retains the last DAYS days locally.
-function daysStreak() {
-  let n = 0;
-  for (let i = 0; i < DAYS; i++) {
-    const s = stats[key(i)];
-    if (s && dayTier(s)) n++;
-    else if (i > 0) break;
-  }
-  return n;
-}
-
-// ---------- rendering ----------
-function render() {
-  const s = today();
-  score.textContent = `${s.correct} correct out of ${s.total}`
-    + (s.total ? ` (${Math.round(acc(s) * 100)}%)` : "");
-  streak.hidden = run < 2;
-  streak.textContent = `streak: ${run}`;
-  const ds = daysStreak();
-  daystreak.hidden = ds < 2;
-  daystreak.textContent = `days streak: ${ds}`;
-
-  let cls = "", text = "Let's train some more today!";
-  if (mastered()) {
-    cls = "mastered";
-    text = "You mastered this. Maybe try learning something else?";
-  } else {
-    const mode = doneToday();
-    if (mode === "ace") {
-      cls = "done";
-      text = "You are doing good! That's enough for today! Come again tomorrow!";
-    } else if (mode === "grind") {
-      cls = "done";
-      text = "Putting the work in! That's enough for today! Come again tomorrow!";
-    }
-  }
-  message.className = cls;
-  message.textContent = text;
-
-  renderBar();
-}
-
-// Done-day quality tier: "" / done / done90 / done95.
-// "done" means 50+@95% or 100+ answers; the 90/95 suffixes mark accuracy.
-function dayTier(s) {
-  if (!s.total) return "";
-  const a = s.correct / s.total;
-  const done = s.total >= 100 || (s.total >= 50 && a >= .95) || (s.maxRun >= 30);
-  if (!done) return "";
-  if (a >= .95) return " done95";
-  if (a >= .90) return " done90";
-  return " done";
-}
-
-function renderBar() {
-  const t = key(0);
-  let html = "";
-  for (let i = DAYS - 1; i >= 0; i--) {
-    const k = key(i);
-    const s = stats[k] || Z();
-    const isT = k === t;
-    const cls = "bar-bin" + (isT ? " today" : "") + (isT && !s.total ? " empty" : "");
-    const stack = "bar-stack" + dayTier(s);
-    // Negative animation-delay desyncs each bar's pulse via inline --delay.
-    const inner = s.total
-      ? `<div class="${stack}" style="height:${Math.min(100, s.total / BAR_MAX * 100)}%;--delay:${-i * 0.37}s">`
-      + `<div class="bar-correct" style="height:${s.correct / s.total * 100}%"></div></div>`
-      : "";
-    html += `<div class="${cls}" title="${k}  ${s.correct} correct out of ${s.total}">${inner}</div>`;
-  }
-  topbar.innerHTML = html;
 }
 
 // ---------- audio / question flow ----------
@@ -288,25 +161,23 @@ function play(src) {
 function newQuestion() {
   locked = false;
   disarmRelisten();
-  const target = pick(ALL);
   // Stay strictly within the target's vowel group (last char of kunrei).
   // The cap is a maximum; small groups (e.g. i has only si/zi/ti) give fewer.
   // Level is tracked per vowel group: each group ramps up independently.
+  const target = pick(ALL);
   const v = target.slice(-1);
-  const c = skill[v] || 0;
-  const cap = 2 + LEVELS.filter((t) => c >= t).length;
+  const cap = capFor(skill[v] || 0);
   const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
   const opts = shuffle([target, ...shuffle(sibs).slice(0, cap - 1)]);
   const idx = rand(target);
   current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now() };
   primary.hidden = true;
-  choices.dataset.n = opts.length;
   // Each button gets a fixed sample index — tapping a button during review
   // always replays the same audio. Long-press during review plays a random one.
   choices.innerHTML = opts
     .map((m) => {
       const i = m === target ? idx : rand(m);
-      return `<button class="choice" data-mora="${m}" data-idx="${i}">${DISPLAY[m]}</button>`;
+      return `<button class="choice" data-mora="${m}" data-idx="${i}">${HIRAGANA[m]}</button>`;
     })
     .join("");
   choices.hidden = false;
@@ -356,7 +227,6 @@ function guess(btn) {
   if (picked !== target) { submit(picked, btn, true); return; }
   const ms = Date.now() - startTs;
   record(true, target.slice(-1));
-  appendLog(target, idx, picked, ms);
   pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: "g" });
   btn.classList.add("correct");
   locked = true;
@@ -383,7 +253,6 @@ function submit(picked, btn, wasGuess = false) {
   const correct = picked === target;
   const ms = Date.now() - startTs;
   record(correct, target.slice(-1));
-  appendLog(target, idx, picked, ms);
   pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: wasGuess ? "g" : "a" });
   if (correct) {
     btn.classList.add("correct");
@@ -432,11 +301,7 @@ function relistenCurrent() {
   }
   disarmRelisten();
 
-  const v = target.slice(-1);
-  const c = skill[v] || 0;
-  const i = LEVELS.findLastIndex((t) => c >= t);
-  skill[v] = i < 0 ? 0 : LEVELS[i];
-  run = 0;
+  applyRelisten(target.slice(-1));
   save();
   render();
   pushEvent({ ts: Date.now(), target, idx, picked: "", cap, ms: Date.now() - startTs, ev: "r" });
@@ -458,23 +323,6 @@ onkeydown = (e) => {
   }
 };
 
-const TIPS = [
-  "Tip: Pressing long counts as a guess answer, and let's you listen again.",
-  "Tip: After answering wrong, try pressing the buttons to listen again.",
-  "Tip: Once you get good, there will be more buttons to choose from!",
-  "Tip: Try achieving long streaks!",
-  "Tip: Flawless streak, and your day is over in 30 answers!",
-  "Tip: Doing well enough, and your day is over in 50 answers!",
-  "Tip: Missing a bunch? Put the work in, and you are still done in 100 answers.",
-  "Tip: True masters aren't made in a day. But 30 days of effort will show!",
-  "Tip: Close your eyes — let your ears do the work.",
-  "Tip: Voiced sounds (ず, じゅ) make your vocal cords buzz.",
-  "Tip: つ bursts; す hisses. Listen for the start.",
-  "Tip: Hear the friction! Hear the bursts! Hear the voicing!",
-  "Tip: A few minutes, multiple times a day beats one marathon session.",
-  "Tip: Listen again with the button bottom right, but try not to resort to it too often!",
-];
-
 // Replay another user's event history into local state (view-as mode).
 // Stats are bucketed by the event's local date in the *viewer's* timezone,
 // which may drift slightly from the original user's bucketing — close enough
@@ -487,36 +335,13 @@ async function loadAsUser(targetUid) {
   stats = {}; skill = {}; run = 0;
   let lastDay = null;
   for (const e of events) {
-    if (e.ev === "a" || e.ev === "g") {
-      const d = new Date(e.ts);
-      const k = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-      if (lastDay !== null && k !== lastDay) run = 0;   // day boundary resets streak
-      lastDay = k;
-      const s = (stats[k] ||= Z());
-      s.total++;
-      const v = e.target.slice(-1);
-      if (e.picked === e.target) {
-        s.correct++;
-        skill[v] = (skill[v] || 0) + 1;
-        run++;
-        if (run > (s.maxRun || 0)) s.maxRun = run;
-      } else {
-        const c = skill[v] || 0;
-        const i = LEVELS.findLastIndex((t) => c >= t);
-        skill[v] = i <= 0 ? 0 : LEVELS[i - 1];
-        run = 0;
-      }
-    } else if (e.ev === "r") {
-      const d = new Date(e.ts);
-      const k = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-      if (lastDay !== null && k !== lastDay) run = 0;
-      lastDay = k;
-      const v = e.target.slice(-1);
-      const c = skill[v] || 0;
-      const i = LEVELS.findLastIndex((t) => c >= t);
-      skill[v] = i < 0 ? 0 : LEVELS[i];
-      run = 0;
-    }
+    if (e.ev !== "a" && e.ev !== "g" && e.ev !== "r") continue;
+    const k = dateKey(new Date(e.ts));
+    if (lastDay !== null && k !== lastDay) run = 0;   // day boundary resets streak
+    lastDay = k;
+    const v = e.target.slice(-1);
+    if (e.ev === "r") applyRelisten(v);
+    else applyAnswer(k, v, e.picked === e.target);
   }
   render();
 }
@@ -534,70 +359,6 @@ if (!viewMode && STATS_URL && nickParam !== null) {
       body: JSON.stringify({ uid, nickname: nick }),
     }).catch(() => { });
   }
-}
-
-// ---------- daily-reminder notifications ----------
-// When a returning user (one who has skipped a day at least once) opens the
-// page and today's session isn't done yet, schedule two in-tab nudges:
-//   19:00 local — if they still haven't answered a single question today
-//   22:00 local — if today still isn't a "done" day (per dayTier rules)
-// setTimeout from the page only fires while a tab is open. That's the cost of
-// not wiring a service worker; the page-as-reminder still helps anyone who
-// keeps a tab around in the background.
-function hasMissedDay() {
-  const days = Object.keys(stats).filter((k) => stats[k].total > 0).sort();
-  if (days.length === 0) return false;
-  if (days[days.length - 1] < key(1)) return true;     // last training older than yesterday
-  for (let i = 1; i < days.length; i++) {              // any gap between trained days
-    const a = new Date(days[i - 1]), b = new Date(days[i]);
-    if ((b - a) / 86400000 > 1) return true;
-  }
-  return false;
-}
-
-function scheduleReminders() {
-  if (viewMode) return;
-  if (typeof Notification === "undefined") return;
-  if (!hasMissedDay()) return;
-  if (dayTier(today())) return;
-  if (Notification.permission === "granted") { armReminders(); return; }
-  if (Notification.permission !== "default") return;   // denied — can't ask again
-  if (localStorage.remind_optout) return;              // dismissed the pre-prompt before
-  showRemindPrompt();
-}
-
-// In-app opt-in shown before the browser's permission dialog (which can't be
-// previewed or carry a message of our own). Only on "Enable" do we call
-// requestPermission, so users who'd reflexively block aren't asked and the
-// one-shot grant isn't spent; dismissing remembers the choice so we don't nag.
-function showRemindPrompt() {
-  remindprompt.hidden = false;
-  remindyes.onclick = async () => {
-    remindprompt.hidden = true;
-    try { if (await Notification.requestPermission() === "granted") armReminders(); }
-    catch { }
-  };
-  remindno.onclick = () => {
-    remindprompt.hidden = true;
-    localStorage.remind_optout = "1";
-  };
-}
-
-// Wall-clock timers for the two in-tab nudges. Assumes permission is granted.
-function armReminders() {
-  const at = (hour, condition, body) => {
-    const t = new Date(); t.setHours(hour, 0, 0, 0);
-    const ms = t - Date.now();
-    if (ms <= 0) return;
-    setTimeout(() => {
-      if (!condition()) return;
-      try { new Notification("mimi.ganba.re", { body, tag: `mimi-${hour}` }); } catch { }
-    }, ms);
-  };
-  at(19, () => today().total === 0,
-    "Time to train! You haven't started today yet.");
-  at(22, () => !dayTier(today()),
-    "The day's almost over and you aren't done yet – don't break your streak!");
 }
 
 // ---------- boot ----------

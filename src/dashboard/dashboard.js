@@ -1,3 +1,6 @@
+import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../skill.js";
+import { pad2, dateKey, dayKey } from "../dates.js";
+
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
 // a handful of visualizations. No localStorage writes, no event posts.
 //
@@ -12,11 +15,10 @@ const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
   ? `http://${location.hostname}:8787`
   : "https://mimi-stats.golddranks.workers.dev";
 
-const pad2 = (x) => ("0" + x).slice(-2);
-const dayKey = (ts) => {
-  const d = new Date(ts);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-};
+// Event-kind predicates: 'a'/'g' are answers; 'r' is a re-listen; 'p' is an
+// after-play replay (never counted here).
+const isAnswer = (e) => e.ev === "a" || e.ev === "g";
+const isAnswerOrRelisten = (e) => isAnswer(e) || e.ev === "r";
 
 // Two roles:
 //   viewer  — whose browser this is (localStorage.uid set by the main app)
@@ -90,23 +92,30 @@ async function load(uid) {
 // ---------- overview ----------
 const setStat = (k, v) => overview.querySelector(`[data-stat="${k}"]`).textContent = v;
 
-function renderOverview(uid, events) {
-  const ag = events.filter((e) => e.ev === "a" || e.ev === "g");
-  const correct = ag.filter((e) => e.picked === e.target).length;
-  const acc = ag.length ? correct / ag.length : 0;
-  // Day-boundary resets match the live app's streak rules — see app.js load()
-  // and record(). Without this, topStreak could span multiple days and would
-  // never match what the user actually saw in #streak.
-  let topStreak = 0, run = 0, lastDay = null;
+// Per-day peak correct-streak. run resets on a wrong answer, a re-listen, or a
+// day boundary — the live app's rules (see app.js record()), so the all-time
+// top streak (max of the peaks) matches what the user saw in #streak.
+function dailyPeakStreaks(events) {
+  const peaks = new Map();          // YYYY-MM-DD → max run that day
+  let run = 0, lastDay = null;
   for (const e of events) {
-    if (e.ev !== "a" && e.ev !== "g" && e.ev !== "r") continue;
+    if (!isAnswerOrRelisten(e)) continue;
     const d = dayKey(e.ts);
     if (lastDay !== null && d !== lastDay) run = 0;
     lastDay = d;
     if (e.ev === "r") run = 0;
-    else if (e.picked === e.target) { run++; if (run > topStreak) topStreak = run; }
+    else if (e.picked === e.target) run++;
     else run = 0;
+    if (run > (peaks.get(d) || 0)) peaks.set(d, run);
   }
+  return peaks;
+}
+
+function renderOverview(uid, events) {
+  const ag = events.filter(isAnswer);
+  const correct = ag.filter((e) => e.picked === e.target).length;
+  const acc = ag.length ? correct / ag.length : 0;
+  const topStreak = Math.max(0, ...dailyPeakStreaks(events).values());
   const days = new Set(ag.map((e) => dayKey(e.ts))).size;
   const relisten = events.filter((e) => e.ev === "r").length;
 
@@ -122,44 +131,32 @@ function renderOverview(uid, events) {
 }
 
 // ---------- skill levels per vowel ----------
-// Replays the same state machine the live app uses (LEVELS = [10,15,20,25])
-// to derive the user's current per-vowel skill and cap. See src/app.js record().
-const LEVELS = [10, 15, 20, 25];
+// Skill state machine is shared with the app + worker (see src/skill.js);
+// here we just replay it over the fetched events.
 const LEVEL_MAX = LEVELS[LEVELS.length - 1];
-const lastLevelIdx = (c) => {
-  let i = -1;
-  for (let k = 0; k < LEVELS.length; k++) if (c >= LEVELS[k]) i = k;
-  return i;
-};
 
 function renderLevels(events) {
   const skill = { a: 0, i: 0, u: 0, o: 0 };
   const seen = { a: false, i: false, u: false, o: false };
   for (const e of events) {
-    if (e.ev !== "a" && e.ev !== "g" && e.ev !== "r") continue;
+    if (!isAnswerOrRelisten(e)) continue;
     const v = e.target.slice(-1);
     if (!(v in skill)) continue;
     seen[v] = true;
-    if (e.ev === "r") {
-      const i = lastLevelIdx(skill[v]);
-      skill[v] = i < 0 ? 0 : LEVELS[i];
-    } else if (e.picked === e.target) {
-      skill[v]++;
-    } else {
-      const i = lastLevelIdx(skill[v]);
-      skill[v] = i <= 0 ? 0 : LEVELS[i - 1];
-    }
+    if (e.ev === "r") skill[v] = onRelisten(skill[v]);
+    else if (e.picked === e.target) skill[v] = onCorrect(skill[v]);
+    else skill[v] = onWrong(skill[v]);
   }
   for (const v of ["a", "i", "u", "o"]) {
     const row = document.querySelector(`#levels [data-vowel="${v}"]`);
     if (!row) continue;
     const c = skill[v];
     // Skill is reported as the number of choice buttons shown (2..6).
-    const idx = lastLevelIdx(c);             // -1..3
-    const cap = 3 + idx;                     // 2..6
+    const idx = levelIdx(c);                 // -1..3
+    const cap = capFor(c);                   // 2..6
     const next = LEVELS[idx + 1];            // count needed to unlock one more button
     row.querySelector(".lvl-count").textContent = seen[v] ? `streak of ${c}` : "—";
-    row.querySelector(".lvl-level").textContent = seen[v] ? `(showing ${cap} buttons)` : "—";
+    row.querySelector(".lvl-buttons").textContent = seen[v] ? `(showing ${cap} buttons)` : "—";
     row.querySelector(".lvl-next").textContent = next != null && seen[v]
       ? `${next - c} correct answers to ${cap + 1} buttons`
       : (seen[v] ? "max" : "");
@@ -171,49 +168,37 @@ function renderLevels(events) {
   }
 }
 
-// ---------- daily ----------
-function renderDaily(events) {
-  const ag = events.filter((e) => e.ev === "a" || e.ev === "g");
-  const map = new Map();
-  for (const e of ag) {
-    const k = dayKey(e.ts);
-    const v = map.get(k) || { correct: 0, wrong: 0 };
-    if (e.picked === e.target) v.correct++; else v.wrong++;
-    map.set(k, v);
-  }
+// ---------- day-bar charts (daily activity + peak streak) ----------
+// Calendar-uniform list of days from the first event to the last (inclusive),
+// each as { k, ...valueFor(k) }.
+function calendarDays(events, valueFor) {
   const first = new Date(events[0].ts); first.setHours(0, 0, 0, 0);
   const last = new Date(events[events.length - 1].ts); last.setHours(0, 0, 0, 0);
   const days = [];
   for (const d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
-    const k = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-    const v = map.get(k) || { correct: 0, wrong: 0 };
-    days.push({ k, ...v, total: v.correct + v.wrong });
+    const k = dateKey(d);
+    days.push({ k, ...valueFor(k) });
   }
-  const max = Math.max(1, ...days.map((d) => d.total));
-  // Fixed viewBox so the rendered height matches the container's aspect-ratio
-  // regardless of how many days the user has. Bars scale to fit.
-  const w = 960, h = 200;
-  const innerH = h - 40;
-  // Cap bin width at 18 viewBox units and right-anchor the bars so the
-  // newest day sits flush against the right edge — short date ranges
-  // leave empty space on the left rather than smearing thinly across the
-  // chart. Matches the main app's #topbar where today is at the right.
-  const idealBin = (w - 40) / Math.max(1, days.length);
-  const binW = Math.min(idealBin, 18);
+  return days;
+}
+
+// Day-bar chart into `el` (fixed 960×h viewBox; bottom 20 units are the label
+// gutter). Bins cap at 18 viewBox units and right-anchor — newest day flush
+// right, short ranges leave the left empty rather than smearing thinly, like
+// the app's #topbar. `mag(d)` is the bar magnitude (drives the y-axis scale);
+// `bar(d, x, barW, bh, y0)` returns the SVG for one day's bar(s); optional
+// `annotate(max)` adds a corner label.
+function dayBarChart(el, days, h, mag, bar, annotate = () => "") {
+  const w = 960, innerH = h - 40, y0 = h - 20;
+  const max = Math.max(1, ...days.map(mag));
+  const binW = Math.min((w - 40) / Math.max(1, days.length), 18);
   const barW = Math.min(binW * 0.8, 14);
   const xRightmost = w - 20 - barW;
-  let bars = "", labels = "";
-  let lastMonth = "";
+  let bars = "", labels = "", lastMonth = "";
   for (let i = 0; i < days.length; i++) {
     const d = days[i];
     const x = xRightmost - (days.length - 1 - i) * binW;
-    const totH = d.total / max * innerH;
-    const cH = d.total ? d.correct / d.total * totH : 0;
-    const tip = `${d.k}  ${d.correct}/${d.total}`;
-    if (d.total) {
-      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${barW}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
-      bars += `<rect x="${x}" y="${h - 20 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
-    }
+    if (mag(d) > 0) bars += bar(d, x, barW, mag(d) / max * innerH, y0);
     const month = d.k.slice(0, 7);
     if (month !== lastMonth) {
       lastMonth = month;
@@ -222,16 +207,37 @@ function renderDaily(events) {
   }
   let axis = "";
   for (const t of niceTicks(max)) {
-    const y = h - 20 - t / max * innerH;
+    const y = y0 - t / max * innerH;
     axis += `<text x="0" y="${y + 3}" fill="var(--muted)" font-size="10">${t}</text>`;
     axis += `<line x1="20" x2="${w}" y1="${y}" y2="${y}" stroke="var(--panel-2)" stroke-width=".5"/>`;
   }
-  dailychart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${axis}${bars}${labels}</svg>`;
+  el.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${axis}${bars}${labels}${annotate(max)}</svg>`;
+}
+
+function renderDaily(events) {
+  const map = new Map();
+  for (const e of events) {
+    if (!isAnswer(e)) continue;
+    const k = dayKey(e.ts);
+    const v = map.get(k) || { correct: 0, wrong: 0 };
+    if (e.picked === e.target) v.correct++; else v.wrong++;
+    map.set(k, v);
+  }
+  const days = calendarDays(events, (k) => {
+    const v = map.get(k) || { correct: 0, wrong: 0 };
+    return { ...v, total: v.correct + v.wrong };
+  });
+  dayBarChart(dailychart, days, 200, (d) => d.total, (d, x, barW, bh, y0) => {
+    const cH = d.correct / d.total * bh;
+    const tip = `${d.k}  ${d.correct}/${d.total}`;
+    return `<rect x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--bad)"><title>${tip}</title></rect>`
+      + `<rect x="${x}" y="${y0 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+  });
 }
 
 // ---------- hourly ----------
 function renderHourly(events) {
-  const ag = events.filter((e) => e.ev === "a" || e.ev === "g");
+  const ag = events.filter(isAnswer);
   const hrs = Array.from({ length: 24 }, () => ({ correct: 0, wrong: 0 }));
   for (const e of ag) {
     const hour = new Date(e.ts).getHours();
@@ -274,7 +280,7 @@ let moraMaxN = 1;
 function renderMora(events) {
   const counts = {};
   for (const e of events) {
-    if (e.ev !== "a" && e.ev !== "g") continue;
+    if (!isAnswer(e)) continue;
     const c = counts[e.target] || (counts[e.target] = { correct: 0, total: 0 });
     c.total++;
     if (e.picked === e.target) c.correct++;
@@ -318,7 +324,7 @@ function renderConfusion(events) {
   const counts = {};
   const rowTotals = {};
   for (const e of events) {
-    if (e.ev !== "a" && e.ev !== "g") continue;
+    if (!isAnswer(e)) continue;
     counts[`${e.target}/${e.picked}`] = (counts[`${e.target}/${e.picked}`] || 0) + 1;
     rowTotals[e.target] = (rowTotals[e.target] || 0) + 1;
   }
@@ -395,60 +401,13 @@ function drawConfusion() {
 // diagonal across days with no activity. Daily peaks read cleanly and align
 // with the daily-activity chart's x-axis.
 function renderStreak(events) {
-  const peaks = new Map();          // YYYY-MM-DD → max run that day
-  let run = 0;
-  let lastDay = null;
-  for (const e of events) {
-    if (e.ev !== "a" && e.ev !== "g" && e.ev !== "r") continue;
-    const d = dayKey(e.ts);
-    if (lastDay !== null && d !== lastDay) run = 0;
-    lastDay = d;
-    if (e.ev === "r") run = 0;
-    else if (e.picked === e.target) run++;
-    else run = 0;
-    if (run > (peaks.get(d) || 0)) peaks.set(d, run);
-  }
+  const peaks = dailyPeakStreaks(events);
   if (peaks.size === 0) { streakchart.textContent = "(no answers)"; return; }
-
-  const first = new Date(events[0].ts); first.setHours(0, 0, 0, 0);
-  const last = new Date(events[events.length - 1].ts); last.setHours(0, 0, 0, 0);
-  const days = [];
-  for (const dt = new Date(first); dt <= last; dt.setDate(dt.getDate() + 1)) {
-    const k = `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
-    days.push({ k, run: peaks.get(k) || 0 });
-  }
-  const max = Math.max(1, ...days.map((d) => d.run));
-  const w = 960, h = 160;
-  const innerH = h - 40;
-  // Same bin/bar capping + right-anchor as renderDaily — short date ranges
-  // pack against the right edge rather than spread thinly across the chart.
-  const idealBin = (w - 40) / Math.max(1, days.length);
-  const binW = Math.min(idealBin, 18);
-  const barW = Math.min(binW * 0.8, 14);
-  const xRightmost = w - 20 - barW;
-  let bars = "", labels = "";
-  let lastMonth = "";
-  for (let i = 0; i < days.length; i++) {
-    const d = days[i];
-    const x = xRightmost - (days.length - 1 - i) * binW;
-    const bh = d.run / max * innerH;
-    if (d.run > 0) {
-      bars += `<rect x="${x}" y="${h - 20 - bh}" width="${barW}" height="${bh}" fill="var(--accent)"><title>${d.k}  peak streak ${d.run}</title></rect>`;
-    }
-    const month = d.k.slice(0, 7);
-    if (month !== lastMonth) {
-      lastMonth = month;
-      labels += `<text x="${x}" y="${h - 4}" fill="var(--muted)" font-size="10">${month}</text>`;
-    }
-  }
-  let axis = "";
-  for (const t of niceTicks(max)) {
-    const y = h - 20 - t / max * innerH;
-    axis += `<text x="0" y="${y + 3}" fill="var(--muted)" font-size="10">${t}</text>`;
-    axis += `<line x1="20" x2="${w}" y1="${y}" y2="${y}" stroke="var(--panel-2)" stroke-width=".5"/>`;
-  }
-  streakchart.innerHTML =
-    `<svg viewBox="0 0 ${w} ${h}">${axis}${bars}${labels}<text x="${w - 20}" y="14" fill="var(--muted)" font-size="11" text-anchor="end">peak: ${max}</text></svg>`;
+  const days = calendarDays(events, (k) => ({ run: peaks.get(k) || 0 }));
+  dayBarChart(streakchart, days, 160, (d) => d.run,
+    (d, x, barW, bh, y0) =>
+      `<rect x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--accent)"><title>${d.k}  peak streak ${d.run}</title></rect>`,
+    (max) => `<text x="940" y="14" fill="var(--muted)" font-size="11" text-anchor="end">peak: ${max}</text>`);
 }
 
 // ---------- reaction time ----------

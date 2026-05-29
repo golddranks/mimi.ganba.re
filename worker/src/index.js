@@ -13,6 +13,7 @@
 // uid drill-downs / nicknames. The two admin endpoints map 1:1 onto the tiers.
 
 import { nameOf } from "./voicemap.js";
+import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/skill.js";
 
 // Exclude users tagged as test fixtures so seeded data (worker/seed.sql)
 // doesn't pollute global stats. The seed user is INSERTed with this nickname;
@@ -310,13 +311,7 @@ async function handleAdminUserStats(req, env, url) {
   ]);
 
   // Replay the skill-state machine per user to derive each user's current
-  // per-vowel skill. Same rules as app.js / dashboard view-as replay.
-  const LEVELS = [10, 15, 20, 25];
-  const lastIdx = (c) => {
-    let i = -1;
-    for (let k = 0; k < LEVELS.length; k++) if (c >= LEVELS[k]) i = k;
-    return i;
-  };
+  // per-vowel skill. Rules live in src/skill.js, shared with the app + dashboard.
   const perUser = {};
   const userAnswers = {};   // per-user count of 'a'/'g' events
   const userDays = {};      // per-user set of YYYY-MM-DD strings (UTC) seen
@@ -328,15 +323,9 @@ async function handleAdminUserStats(req, env, url) {
       userAnswers[e.uid] = (userAnswers[e.uid] || 0) + 1;
       const day = new Date(e.ts).toISOString().slice(0, 10);
       (userDays[e.uid] = userDays[e.uid] || new Set()).add(day);
-      if (e.picked === e.target) cur[v] = c + 1;
-      else {
-        const i = lastIdx(c);
-        cur[v] = i <= 0 ? 0 : LEVELS[i - 1];
-      }
+      cur[v] = e.picked === e.target ? onCorrect(c) : onWrong(c);
     } else {
-      // 'r' — drop to the start of the current level
-      const i = lastIdx(c);
-      cur[v] = i < 0 ? 0 : LEVELS[i];
+      cur[v] = onRelisten(c);   // 'r' — drop to the start of the current level
     }
   }
 
@@ -351,7 +340,7 @@ async function handleAdminUserStats(req, env, url) {
   for (const uid in perUser) {
     for (const v of ["a", "i", "u", "o"]) {
       if (perUser[uid][v] === undefined) continue;
-      const bin = lastIdx(perUser[uid][v]) + 1;
+      const bin = levelIdx(perUser[uid][v]) + 1;
       level_hist[v][bin]++;
       level_hist_uids[v][bin].push(uid);
     }
