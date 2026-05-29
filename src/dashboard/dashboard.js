@@ -116,6 +116,7 @@ function renderOverview(uid, events) {
 // Replays the same state machine the live app uses (LEVELS = [10,15,20,25])
 // to derive the user's current per-vowel skill and cap. See src/app.js record().
 const LEVELS = [10, 15, 20, 25];
+const LEVEL_MAX = LEVELS[LEVELS.length - 1];
 const lastLevelIdx = (c) => {
   let i = -1;
   for (let k = 0; k < LEVELS.length; k++) if (c >= LEVELS[k]) i = k;
@@ -153,10 +154,10 @@ function renderLevels(events) {
     row.querySelector(".lvl-next").textContent = next != null && seen[v]
       ? `${next - c} correct answers to ${cap + 1} buttons`
       : (seen[v] ? "max" : "");
-    // Progress bar inside current level
-    const start = idx < 0 ? 0 : LEVELS[idx];
-    const end = next != null ? next : c;
-    const pct = end > start ? Math.max(0, Math.min(1, (c - start) / (end - start))) : 1;
+    // Meter spans the whole 0..LEVEL_MAX point scale (level boundaries drawn
+    // as ticks via CSS); fill = the globally accumulated count, not just
+    // progress within the current level.
+    const pct = Math.max(0, Math.min(1, c / LEVEL_MAX));
     row.querySelector(".lvl-fill").style.width = (pct * 100) + "%";
   }
 }
