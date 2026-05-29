@@ -103,8 +103,8 @@ async function handleEvents(req, env) {
   }
 
   const insertEvent = env.mimi_stats.prepare(
-    "INSERT INTO events (uid, ts, target, idx, picked, cap, ms, ev, voice) " +
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO events (uid, ts, target, idx, picked, cap, ms, ev, voice, opts, skill) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
   const inserts = body.events.map((e) => {
     const ev = ["a", "g", "r", "p"].includes(e.ev) ? e.ev : "a";
@@ -116,6 +116,13 @@ async function handleEvents(req, env) {
     // (mora-of-played, idx) → canonical voice name from the build-time map
     // so the row preserves voice identity across voice-set changes.
     const moraOfPlayed = ev === "p" ? picked : target;
+    // opts = the choice morae shown for this answer (comma-joined), so we can
+    // later compute true pairwise confusion (picked when offered). Present on
+    // 'a'/'g'; null otherwise.
+    const opts = Array.isArray(e.opts) ? e.opts.join(",") : null;
+    // skill = the target vowel's level at question time, frozen so changing the
+    // level rules can't rewrite history. Present on 'a'/'g'; null otherwise.
+    const skill = Number.isInteger(e.skill) ? e.skill : null;
     return insertEvent.bind(
       body.uid,
       +e.ts,            // full epoch ms; |0 truncates past 32 bits
@@ -126,6 +133,8 @@ async function handleEvents(req, env) {
       e.ms != null ? (e.ms | 0) : null,
       ev,
       nameOf(moraOfPlayed, idx),
+      opts,
+      skill,
     );
   });
   const now = Date.now();

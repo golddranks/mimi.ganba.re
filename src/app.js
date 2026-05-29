@@ -170,7 +170,9 @@ function newQuestion() {
   const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
   const opts = shuffle([target, ...shuffle(sibs).slice(0, cap - 1)]);
   const idx = rand(target);
-  current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now() };
+  // skill = the target vowel's level (correct-count) at question time — frozen
+  // into the event so changing the level rules can't rewrite history.
+  current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now(), opts, skill: skill[v] || 0 };
   primary.hidden = true;
   // Each button gets a fixed sample index — tapping a button during review
   // always replays the same audio. Long-press during review plays a random one.
@@ -223,11 +225,11 @@ choices.onclick = (e) => {
 function guess(btn) {
   disarmRelisten();
   const picked = btn.dataset.mora;
-  const { target, idx, cap, startTs } = current;
+  const { target, idx, cap, startTs, opts, skill: level } = current;
   if (picked !== target) { submit(picked, btn, true); return; }
   const ms = Date.now() - startTs;
   record(true, target.slice(-1));
-  pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: "g" });
+  pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: "g", opts, skill: level });
   btn.classList.add("correct");
   locked = true;
   primary.textContent = "Next";
@@ -249,11 +251,11 @@ function replay(m, btn, random = false) {
 
 function submit(picked, btn, wasGuess = false) {
   disarmRelisten();
-  const { target, idx, cap, startTs } = current;
+  const { target, idx, cap, startTs, opts, skill: level } = current;
   const correct = picked === target;
   const ms = Date.now() - startTs;
   record(correct, target.slice(-1));
-  pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: wasGuess ? "g" : "a" });
+  pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: wasGuess ? "g" : "a", opts, skill: level });
   if (correct) {
     btn.classList.add("correct");
     current = null;                          // lock out further clicks

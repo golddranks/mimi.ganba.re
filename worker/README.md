@@ -134,9 +134,21 @@ npx wrangler d1 execute mimi-stats --remote \
 # the latest data/.../good/ layout.
 cd .. && python3 scripts/build.py --no-audio && cd worker
 npx wrangler d1 execute mimi-stats --remote --file=migrate-voices.sql
+
+# events.opts — comma-joined choice morae shown for each 'a'/'g' answer, so we
+# can measure pairwise confusion as picked-when-offered. Can't be backfilled
+# (older rows never recorded the option set); they stay opts=NULL.
+npx wrangler d1 execute mimi-stats --remote \
+  --command="ALTER TABLE events ADD COLUMN opts TEXT"
+
+# events.skill — target vowel's level at question time, frozen so changing the
+# level rules can't rewrite history (the level is otherwise reconstructed by
+# replay). Can't be backfilled; older rows stay skill=NULL.
+npx wrangler d1 execute mimi-stats --remote \
+  --command="ALTER TABLE events ADD COLUMN skill INTEGER"
 ```
 
-Fresh setups via `schema.sql` already include both columns.
+Fresh setups via `schema.sql` already include these columns.
 
 ## Voice map
 

@@ -55,7 +55,19 @@ CREATE TABLE IF NOT EXISTS events (
   -- was played. The worker resolves it from (mora-of-played, idx) using a
   -- build-time voice map on INSERT, so old rows keep their identity even
   -- if voices are added / removed / reordered later.
-  voice  TEXT
+  voice  TEXT,
+  -- `opts` is the comma-joined set of choice morae offered for this question
+  -- (e.g. 'sa,za,tya'), set on 'a'/'g' events. Lets us measure true pairwise
+  -- confusion — how often a confuser is picked *when it's offered* — rather
+  -- than diluting by attempts where it wasn't on screen. NULL on older rows
+  -- and on 'r'/'p' events.
+  opts   TEXT,
+  -- `skill` is the target vowel's level (correct-count) the question was asked
+  -- at, set on 'a'/'g' events. Frozen here so changing the level rules (LEVELS
+  -- thresholds or the on-correct/on-wrong/on-relisten transitions) can't
+  -- retroactively rewrite historical levels — which are otherwise reconstructed
+  -- by replaying the event stream. NULL on older rows and on 'r'/'p' events.
+  skill  INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_uid    ON events(uid);
