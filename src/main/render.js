@@ -3,6 +3,7 @@
 // colour. Read-only over the session state owned by app.js.
 import { stats, run, today, acc, emptyDay, DAYS, BAR_MAX } from "./app.js";
 import { daysAgo } from "../shared/dates.js";
+import { getGrind } from "./grind.js";
 
 // A day counts as "done" (gold bar + "enough for today" message) when any of
 // these hold: sheer volume, enough answers at high accuracy, or — once that
@@ -71,6 +72,8 @@ export function render() {
     } else if (mode === "volume") {
       cls = "done";
       text = "Putting the work in! That's enough for today! Come again tomorrow!";
+    } else if (getGrind()) {
+      text = "We are doing some focused training!";
     }
   }
   message.className = cls;

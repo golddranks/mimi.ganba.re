@@ -1,6 +1,7 @@
 import { capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { dateKey, daysAgo } from "../shared/dates.js";
 import { TIPS } from "./tips.js";
+import { getGrind, tallyAnswer, initGrind, recordGrindAnswer } from "./grind.js";
 import { scheduleReminders } from "./reminders.js";
 import { render } from "./render.js";
 
@@ -132,6 +133,7 @@ function record(correct, vowel) {
   applyAnswer(todayKey, vowel, correct);
   const cutoff = daysAgo(DAYS - 1);
   for (const x of Object.keys(stats)) if (x < cutoff) delete stats[x];
+  recordGrindAnswer();
   save();
   render();
 }
@@ -161,18 +163,29 @@ function play(src) {
 function newQuestion() {
   locked = false;
   disarmRelisten();
-  // Stay strictly within the target's vowel group (last char of kunrei).
-  // The cap is a maximum; small groups (e.g. i has only si/zi/ti) give fewer.
-  // Level is tracked per vowel group: each group ramps up independently.
-  const target = pick(ALL);
-  const v = target.slice(-1);
-  const cap = capFor(skill[v] || 0);
-  const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
-  const opts = shuffle([target, ...shuffle(sibs).slice(0, cap - 1)]);
+  let target, opts;
+  const g = getGrind();
+  if (g) {
+    // Two-button drill on the detected confuser pair. In practice the pair is
+    // always same-vowel because the normal-mode generator only ever offers
+    // same-vowel buttons, so a confuser can't have a different vowel than its
+    // target.
+    target = Math.random() < 0.5 ? g.target : g.confuser;
+    opts = shuffle([g.target, g.confuser]);
+  } else {
+    // Stay strictly within the target's vowel group (last char of kunrei).
+    // The cap is a maximum; small groups (e.g. i has only si/zi/ti) give fewer.
+    // Level is tracked per vowel group: each group ramps up independently.
+    target = pick(ALL);
+    const v = target.slice(-1);
+    const cap = capFor(skill[v] || 0);
+    const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
+    opts = shuffle([target, ...shuffle(sibs).slice(0, cap - 1)]);
+  }
   const idx = rand(target);
   // skill = the target vowel's level (correct-count) at question time — frozen
   // into the event so changing the level rules can't rewrite history.
-  current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now(), opts, skill: skill[v] || 0 };
+  current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now(), opts, skill: skill[target.slice(-1)] || 0 };
   primary.hidden = true;
   // Each button gets a fixed sample index — tapping a button during review
   // always replays the same audio. Long-press during review plays a random one.
@@ -229,6 +242,7 @@ function guess(btn) {
   if (picked !== target) { submit(picked, btn, true); return; }
   const ms = Date.now() - startTs;
   record(true, target.slice(-1));
+  tallyAnswer(target, picked, opts);
   pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: "g", opts, skill: level });
   btn.classList.add("correct");
   locked = true;
@@ -255,6 +269,7 @@ function submit(picked, btn, wasGuess = false) {
   const correct = picked === target;
   const ms = Date.now() - startTs;
   record(correct, target.slice(-1));
+  tallyAnswer(target, picked, opts);
   pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: wasGuess ? "g" : "a", opts, skill: level });
   if (correct) {
     btn.classList.add("correct");
@@ -375,6 +390,7 @@ if (viewMode) {
   run = t.k || 0;
   skill = t.x || {};
   tip.textContent = pick(TIPS);
+  initGrind();
   render();
   flushEvents();
   scheduleReminders();
