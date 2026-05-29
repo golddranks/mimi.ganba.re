@@ -286,9 +286,9 @@
             </h2>
             <div class="voicefilter">
                 min attempts:
-                <input id="vcmin" type="number" min="1" value="10" inputmode="numeric">
-                <span id="vcwrong-label">min count wrong:</span>
-                <input id="vcwrong" type="number" min="0" value="2" inputmode="numeric" title="row's worst off-diagonal cell must hit this value — raw count in counts mode, percentage in per-sound-% mode (the value resets when you toggle)">
+                <input id="vcmin" type="number" min="0" value="10" inputmode="numeric">
+                min % wrong:
+                <input id="vcwrong" type="number" min="0" value="5" inputmode="numeric" title="row's worst off-diagonal cell must hit at least this percentage of the row's attempts — independent of the counts/per-sound-% display toggle">
             </div>
             <div id="voiceconf"></div>
         </section>

@@ -20,19 +20,6 @@ let nicknames = {};
 // every switch and re-renders all three sections.
 let displayMode = "count";
 
-// The sound-file confusion's "min wrong" threshold means different things in
-// the two modes (raw count vs row percentage), so we remember a value per
-// mode and swap the input + its label when the toggle flips. Defaults: 2
-// (count) and 5 (%) — both surface clearly problematic confusers without
-// hiding too many borderline rows.
-const vcwrongValues = { count: 2, pct: 5 };
-
-function syncVcwrong() {
-  vcwrong.value = vcwrongValues[displayMode];
-  document.getElementById("vcwrong-label").textContent =
-    displayMode === "pct" ? "min % wrong:" : "min count wrong:";
-}
-
 // Hiragana for the kana the user picks (button-side); katakana for the
 // sound the user heard (row-side). Same convention as the user dashboard.
 const DISPLAY = {
@@ -342,7 +329,6 @@ function hideUidPopup() {
           b.classList.toggle("active", b.dataset.mode === displayMode);
         }
       }
-      syncVcwrong();
       drawMora();
       drawConfusion();
       drawVoiceConfusion();
@@ -478,11 +464,7 @@ const listenCount = (r) => (r.relisten || 0) + (r.afterplay || 0);
 function renderVoiceConfusion(rows) {
   voiceConfData = rows || [];
   vcmin.oninput = drawVoiceConfusion;
-  vcwrong.oninput = () => {
-    vcwrongValues[displayMode] = Math.max(0, parseInt(vcwrong.value, 10) || 0);
-    drawVoiceConfusion();
-  };
-  syncVcwrong();
+  vcwrong.oninput = drawVoiceConfusion;
   drawVoiceConfusion();
 }
 
@@ -526,7 +508,7 @@ function drawVoiceTable() {
 // still have history in the DB silently disappear (acceptable for an admin
 // view of current files).
 function drawVoiceConfusion() {
-  const minA = Math.max(1, parseInt(vcmin.value, 10) || 1);
+  const minA = Math.max(0, parseInt(vcmin.value, 10) || 0);
   const minW = Math.max(0, parseInt(vcwrong.value, 10) || 0);
   const map = window.VOICE_MAP || {};
   const counts = {};
@@ -536,18 +518,18 @@ function drawVoiceConfusion() {
     totals[`${r.t}/${r.v}`] = (totals[`${r.t}/${r.v}`] || 0) + r.n;
   }
 
-  // Worst off-diagonal cell in a row, expressed in the current display unit
-  // (raw count in "count" mode, row-percentage in "pct"). Drives the
-  // min-wrong filter so the threshold stays meaningful in both modes.
-  const rowMaxOff = (m, voice) => {
+  // Worst off-diagonal cell in a row, as a percentage of the row total.
+  // The filter is always pct-based (count thresholds whip wildly with row
+  // popularity); the display-mode toggle only affects how cells are rendered.
+  const rowMaxOffPct = (m, voice) => {
     const sib = VOWEL_GROUPS[m.slice(-1)] || [];
     const rt = totals[`${m}/${voice}`] || 0;
+    if (rt === 0) return 0;
     let max = 0;
     for (const p of sib) {
       if (p === m) continue;
-      const n = counts[`${m}/${voice}/${p}`] || 0;
-      const val = displayMode === "pct" ? (rt > 0 ? n / rt * 100 : 0) : n;
-      if (val > max) max = val;
+      const pct = (counts[`${m}/${voice}/${p}`] || 0) / rt * 100;
+      if (pct > max) max = pct;
     }
     return max;
   };
@@ -562,7 +544,7 @@ function drawVoiceConfusion() {
         const key = `${m}/${voice}`;
         const attempts = totals[key] || 0;
         if (attempts < minA) continue;
-        if (minW > 0 && rowMaxOff(m, voice) < minW) continue;
+        if (minW > 0 && rowMaxOffPct(m, voice) < minW) continue;
         rowsInGroup.push({ m, voice });
       }
     }
