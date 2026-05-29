@@ -13,6 +13,12 @@
 import { viewMode, stats, today, acc } from "./app.js";
 import { daysAgo } from "../shared/dates.js";
 
+// Master switch for the drill. While false the tally still accumulates (and the
+// server records opts/skill), but no user is ever pulled into a focused drill —
+// we're collecting data to validate the trigger before release. Flip to true to
+// ship grind mode.
+const GRIND_ENABLED = false;
+
 const GRIND_MIN_ATTEMPTS = 20;
 // Interim trigger ("share of mistakes") until enough `offered` data accumulates
 // to switch to the true picked/offered rate: the worst confuser must be at
@@ -116,6 +122,7 @@ function grindShouldExit() {
 // grind mode mid-session.
 export function initGrind() {
   migrateLog();
+  if (!GRIND_ENABLED) return;   // drill off; tally keeps accumulating above
   grind = loadGrind();
   if (!grind && !stats[daysAgo(0)]) {
     const cand = detectGrindCandidate();
