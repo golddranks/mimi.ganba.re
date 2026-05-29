@@ -29,6 +29,13 @@ const params = new URLSearchParams(location.search);
 const viewerUid = localStorage.getItem("uid") || "";
 const uid = params.get("uid") || viewerUid;
 
+// Carry an explicit ?uid= back to the app so "back" stays in view-as mode for
+// that user. Without one (you're looking at your own dashboard), back goes to
+// the app's own localStorage-backed state.
+if (params.get("uid")) {
+  document.querySelector(".back").href = "../?uid=" + encodeURIComponent(params.get("uid"));
+}
+
 uidform.onsubmit = (e) => {
   e.preventDefault();
   const v = uidinput.value.trim();
