@@ -2,7 +2,7 @@
 // bar, plus the done-day + mastery assessments that drive their text and
 // colour. Read-only over the session state owned by app.js.
 import { stats, run, today, acc, emptyDay, DAYS, BAR_MAX } from "./app.js";
-import { daysAgo } from "./dates.js";
+import { daysAgo } from "../shared/dates.js";
 
 // A day counts as "done" (gold bar + "enough for today" message) when any of
 // these hold: sheer volume, enough answers at high accuracy, or — once that

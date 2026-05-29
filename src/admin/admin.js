@@ -1,4 +1,4 @@
-import { pad2 } from "../main/dates.js";
+import { pad2 } from "../shared/dates.js";
 
 // Power-user-only app-wide aggregate dashboard. Fans two endpoints into the
 // static skeleton declared in admin/index.html. Auth is the requester's own

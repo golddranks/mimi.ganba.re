@@ -1,5 +1,5 @@
-import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../main/skill.js";
-import { pad2, dateKey, dayKey } from "../main/dates.js";
+import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
+import { pad2, dateKey, dayKey } from "../shared/dates.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
 // a handful of visualizations. No localStorage writes, no event posts.
@@ -131,7 +131,7 @@ function renderOverview(uid, events) {
 }
 
 // ---------- skill levels per vowel ----------
-// Skill state machine is shared with the app + worker (see src/main/skill.js);
+// Skill state machine is shared with the app + worker (see src/shared/skill.js);
 // here we just replay it over the fetched events.
 const LEVEL_MAX = LEVELS[LEVELS.length - 1];
 

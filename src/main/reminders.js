@@ -7,7 +7,7 @@
 // not wiring a service worker; the page-as-reminder still helps anyone who
 // keeps a tab around in the background.
 import { viewMode, stats, today } from "./app.js";
-import { daysAgo } from "./dates.js";
+import { daysAgo } from "../shared/dates.js";
 import { dayTier } from "./render.js";
 
 function hasMissedDay() {

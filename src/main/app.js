@@ -1,5 +1,5 @@
-import { capFor, onCorrect, onWrong, onRelisten } from "./skill.js";
-import { dateKey, daysAgo } from "./dates.js";
+import { capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
+import { dateKey, daysAgo } from "../shared/dates.js";
 import { TIPS } from "./tips.js";
 import { scheduleReminders } from "./reminders.js";
 import { render } from "./render.js";
