@@ -41,13 +41,15 @@ if (uid) {
   load(uid);
 }
 
-// Reveal the load-form only if the viewer has power_user=1 on the server.
-// Failure (no network, no row, 4xx) silently keeps the form hidden — the
-// dashboard still renders the viewed user's data.
+// Reveal the load-form only for level-2 power users (viewing arbitrary uids
+// is per-user data, the same tier the admin uid-drilldowns sit behind). Level
+// 1 sees only the aggregate admin sections, not individual users. Failure
+// (no network, no row, 4xx) silently keeps the form hidden — the dashboard
+// still renders the viewed user's data.
 if (viewerUid) {
   fetch(STATS_URL + "/v1/user/" + encodeURIComponent(viewerUid))
     .then((r) => r.ok ? r.json() : null)
-    .then((info) => { if (info && info.power_user) uidform.hidden = false; })
+    .then((info) => { if (info && info.power_user >= 2) uidform.hidden = false; })
     .catch(() => { });
 }
 

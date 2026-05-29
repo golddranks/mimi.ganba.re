@@ -3,13 +3,13 @@
 
 -- A user is identified by a random UUID generated client-side (no PII).
 -- nickname is opt-in; not used yet but the column exists for future use.
--- power_user gates access to /v1/admin/stats — set manually via SQL.
+-- power_user gates the /v1/admin/stats* endpoints — set manually via SQL.
 CREATE TABLE IF NOT EXISTS users (
   uid        TEXT PRIMARY KEY,                  -- crypto.randomUUID() from the client
   nickname   TEXT,                              -- self-chosen, may contain PII when set
   first_seen INTEGER NOT NULL,                  -- unix ms of first event POST
   last_seen  INTEGER NOT NULL,                  -- unix ms of most recent event POST
-  power_user INTEGER NOT NULL DEFAULT 0         -- 1 = may view aggregated app-wide stats
+  power_user INTEGER NOT NULL DEFAULT 0         -- 0 = none; 1 = aggregate admin sections; 2 = + per-user/uid drilldowns
 );
 
 -- One row per user action within a question. Action kinds (`ev`):

@@ -19,7 +19,7 @@
     <div id="msg"></div>
 
     <main id="dash">
-        <section id="overview" class="card span2">
+        <section id="overview" class="card span2 l2only" hidden>
             <div class="stats">
                 <div class="stat"><div class="n" data-stat="events">0</div><div class="l">total events</div></div>
                 <div class="stat"><div class="n" data-stat="users">0</div><div class="l">users</div></div>
@@ -32,7 +32,7 @@
             </div>
         </section>
 
-        <section class="card span2">
+        <section class="card span2 l2only" hidden>
             <h2>Users by button count per vowel <span class="sub">— how many users currently see this many choice buttons (2..6)</span></h2>
             <div id="levelhist">
                 <div class="lvlcol" data-vowel="a">
@@ -118,17 +118,17 @@
             </div>
         </section>
 
-        <section class="card span2">
+        <section class="card span2 l2only" hidden>
             <h2>Days trained <span class="sub">— users by number of distinct days with answers (last bucket = 31+)</span></h2>
             <div id="dayshist"><svg viewBox="0 0 800 200"></svg></div>
         </section>
 
-        <section class="card span2">
+        <section class="card span2 l2only" hidden>
             <h2>Activity distribution <span class="sub">— users by total answers</span></h2>
             <div id="activityhist"><svg viewBox="0 0 600 200"></svg></div>
         </section>
 
-        <section class="card span2">
+        <section class="card span2 l2only" hidden>
             <h2>Daily activity</h2>
             <div id="dailychart"></div>
             <div class="legend">

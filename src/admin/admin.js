@@ -1,7 +1,11 @@
-// Power-user-only app-wide aggregate dashboard. Pulls /v1/admin/stats and
-// fans the result out into the static skeleton declared in admin/index.html.
-// Auth is the requester's own uid (URL ?uid= or localStorage.uid); the worker
-// checks users.power_user. No PII leaves the worker — only aggregates.
+// Power-user-only app-wide aggregate dashboard. Fans two endpoints into the
+// static skeleton declared in admin/index.html. Auth is the requester's own
+// uid (URL ?uid= or localStorage.uid); the worker checks users.power_user.
+//   /v1/admin/stats        (power_user >= 1) — sound / aggregate sections only
+//   /v1/admin/stats/users  (power_user >= 2) — overview, per-user histograms,
+//                                              daily activity, uid drilldowns
+// A level-1 user gets the aggregate sections; the .l2only sections stay hidden
+// because the second fetch 403s for them.
 
 // When served from localhost (via scripts/dev.sh) hit the local wrangler dev
 // worker so the admin panel reflects local-DB events rather than production.
@@ -67,20 +71,34 @@ async function load(uid) {
     }
     if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
     const data = await res.json();
+    // Aggregate sections — available to every power user (level 1+).
+    renderHourly(data.hourly);
+    renderMora(data.by_mora);
+    renderVoice(data.by_voice, data.by_voice_played);
+    renderVoiceConfusion(data.by_voice_confusion);
+    renderConfusion(data.confusion);
+    // Per-user / uid-drilldown sections — only if level-2 authorizes them.
+    loadUserStats(uid);
+  } catch (e) {
+    msg.textContent = "Error: " + (e && e.message);
+  }
+}
+
+// Second-tier fetch. 403 (level-1 user) or any failure silently leaves the
+// .l2only sections hidden — the page still shows the aggregate sections.
+async function loadUserStats(uid) {
+  try {
+    const res = await fetch(STATS_URL + "/v1/admin/stats/users?uid=" + encodeURIComponent(uid));
+    if (!res.ok) return;
+    const data = await res.json();
     nicknames = data.nicknames || {};
     renderOverview(data);
     renderLevelHist(data.level_hist, data.level_hist_uids);
     renderDaysHist(data.days_hist, data.days_hist_uids);
     renderActivityHist(data.activity_hist, data.activity_hist_uids);
     renderDaily(data.daily, data.daily_uids);
-    renderHourly(data.hourly);
-    renderMora(data.by_mora);
-    renderVoice(data.by_voice, data.by_voice_played);
-    renderVoiceConfusion(data.by_voice_confusion);
-    renderConfusion(data.confusion);
-  } catch (e) {
-    msg.textContent = "Error: " + (e && e.message);
-  }
+    for (const s of document.querySelectorAll(".l2only")) s.hidden = false;
+  } catch (e) { /* keep the l2only sections hidden */ }
 }
 
 // ---------- overview ----------

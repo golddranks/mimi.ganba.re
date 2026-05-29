@@ -94,18 +94,27 @@ npx wrangler deploy
 - `POST /v1/events`              — body `{uid, events: [{ts, target, idx, picked, cap}, ...]}`
 - `POST /v1/user`                — body `{uid, nickname}`
 - `GET  /v1/user/:uid/events`    — all events for a single user (no auth; uid is unguessable)
-- `GET  /v1/admin/stats?uid=…`   — app-wide aggregates; 403 unless `users.power_user = 1`
+- `GET  /v1/admin/stats?uid=…`   — sound/aggregate sections; 403 unless `users.power_user >= 1`
+- `GET  /v1/admin/stats/users?uid=…` — overview, per-user histograms, daily activity, uid drilldowns; 403 unless `users.power_user >= 2`
 
 CORS is locked to `https://mimi.ganba.re` plus `localhost`/`127.0.0.1` (any port).
 
 ## Power users
 
-`/v1/admin/stats` (and the `/admin/` dashboard) require `users.power_user = 1`.
-Grant manually via SQL:
+Two tiers gate the `/admin/` dashboard:
+
+- `power_user = 1` — the aggregate sections only (hour of day, per-sound &
+  sound-file difficulty, both confusion matrices). These carry no device
+  identifiers. Served by `/v1/admin/stats`.
+- `power_user = 2` — everything: overview totals, per-user histograms, daily
+  activity, and the uid drill-downs / nicknames. Adds `/v1/admin/stats/users`,
+  and unlocks the dashboard's "view another uid" form.
+
+Grant manually via SQL (2 implies 1 — the endpoints check `>=`):
 
 ```sh
 npx wrangler d1 execute mimi-stats --remote \
-  --command="UPDATE users SET power_user = 1 WHERE uid = '<uid>'"
+  --command="UPDATE users SET power_user = 2 WHERE uid = '<uid>'"
 ```
 
 To migrate an existing DB that predates these columns:

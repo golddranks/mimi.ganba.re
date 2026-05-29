@@ -2,11 +2,31 @@
 // Endpoints:
 //   POST /v1/events                 body: { uid, events: [{ts, target, idx, picked, cap}, ...] }
 //   POST /v1/user                   body: { uid, nickname }
-//   GET  /v1/user/:uid               { power_user: 0|1 } — used by the dashboard to decide whether to show the uid-load form
+//   GET  /v1/user/:uid               { power_user: 0|1|2 } — used by the dashboard to decide whether to show the uid-load form
 //   GET  /v1/user/:uid/events       all events for a single user
-//   GET  /v1/admin/stats?uid=…      app-wide aggregates; requires users.power_user = 1
+//   GET  /v1/admin/stats?uid=…      sound/aggregate stats with no device identifiers; requires power_user >= 1
+//   GET  /v1/admin/stats/users?uid=…  per-user / uid-drilldown stats; requires power_user >= 2
+//
+// power_user tiers: 0 = none, 1 = may see the aggregate-only admin sections
+// (hour-of-day, per-sound + sound-file difficulty, both confusion matrices),
+// 2 = may also see overview, the per-user histograms, daily activity, and the
+// uid drill-downs / nicknames. The two admin endpoints map 1:1 onto the tiers.
 
 import { nameOf } from "./voicemap.js";
+
+// Exclude users tagged as test fixtures so seeded data (worker/seed.sql)
+// doesn't pollute global stats. The seed user is INSERTed with this nickname;
+// add more nicknames here if other synthetic users get tagged. SQL-injection
+// note: this fragment is hard-coded, never user-input.
+const EXCLUDE_TEST = "uid NOT IN (SELECT uid FROM users WHERE nickname = 'TestUser')";
+
+// users.power_user for a uid, 0 if unknown. The admin endpoints gate on this.
+async function powerLevel(env, uid) {
+  const row = await env.mimi_stats.prepare(
+    "SELECT power_user FROM users WHERE uid = ?"
+  ).bind(uid).first();
+  return row ? row.power_user : 0;
+}
 
 const ALLOWED_ORIGINS = [
   "https://mimi.ganba.re",
@@ -57,6 +77,8 @@ export default {
         res = await handleGetUser(req, env, url);
       } else if (req.method === "GET" && url.pathname === "/v1/admin/stats") {
         res = await handleAdminStats(req, env, url);
+      } else if (req.method === "GET" && url.pathname === "/v1/admin/stats/users") {
+        res = await handleAdminUserStats(req, env, url);
       } else {
         res = new Response("not found", { status: 404 });
       }
@@ -123,16 +145,14 @@ async function handleGetEvents(req, env, url) {
   return json({ events: rows.results || [] });
 }
 
-// Minimal per-user metadata. Currently just `power_user` so the dashboard
-// can decide whether to expose the "view another uid" form to its viewer.
-// Returns 0 (not a power user) for unknown uids — no auth required, no PII
-// leaked: the flag is unguessable trivia about an unguessable UUID.
+// Minimal per-user metadata. Currently just `power_user` (0/1/2) so the
+// dashboard can decide whether to expose the "view another uid" form to its
+// viewer (it does so only at level 2 — per-user data). Returns 0 for unknown
+// uids — no auth required, no PII leaked: the flag is unguessable trivia
+// about an unguessable UUID.
 async function handleGetUser(req, env, url) {
   const uid = decodeURIComponent(url.pathname.split("/")[3]);
-  const row = await env.mimi_stats.prepare(
-    "SELECT power_user FROM users WHERE uid = ?"
-  ).bind(uid).first();
-  return json({ power_user: row ? row.power_user : 0 });
+  return json({ power_user: await powerLevel(env, uid) });
 }
 
 async function handleUser(req, env) {
@@ -149,57 +169,23 @@ async function handleUser(req, env) {
   return json({ ok: true });
 }
 
-// App-wide aggregates for power users. Auth is "you-know-the-uid" — the
-// requester passes their own uid via ?uid=… and we check users.power_user.
-// Random UUIDs are unguessable in practice, and the payload is aggregated
-// across all users with no PII, so this matches the rest of the worker's
-// soft-auth model.
+// Sound / aggregate stats — the level-1 admin tier. Auth is "you-know-the-uid":
+// the requester passes their own uid via ?uid=… and we check power_user >= 1.
+// Everything here is aggregated across all users with no device identifiers,
+// so it's the safe-to-share-wider tier. Random UUIDs are unguessable in
+// practice, matching the rest of the worker's soft-auth model.
 async function handleAdminStats(req, env, url) {
   const uid = url.searchParams.get("uid") || "";
-  const row = await env.mimi_stats.prepare(
-    "SELECT power_user FROM users WHERE uid = ?"
-  ).bind(uid).first();
-  if (!row || row.power_user !== 1) {
+  if (await powerLevel(env, uid) < 1) {
     return new Response("forbidden", { status: 403 });
   }
 
   const db = env.mimi_stats;
-  const now = Date.now();
-  const d7 = now - 7 * 86400000;
-  const d30 = now - 30 * 86400000;
-
-  // Exclude users tagged as test fixtures so seeded data (worker/seed.sql)
-  // doesn't pollute global stats. The seed user is INSERTed with this
-  // nickname; add more nicknames here if other synthetic users get tagged.
-  // SQL-injection note: this fragment is hard-coded, never user-input.
-  const EXCLUDE_TEST = "uid NOT IN (SELECT uid FROM users WHERE nickname = 'TestUser')";
 
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
-  const [totals, active, daily, hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, skillStream, nicks, dailyUidRows] = await Promise.all([
-    db.prepare(
-      `SELECT
-         COUNT(*)                                                              AS events,
-         COUNT(DISTINCT uid)                                                   AS users,
-         SUM(CASE WHEN ev IN ('a','g') THEN 1 ELSE 0 END)                      AS answers,
-         SUM(CASE WHEN ev IN ('a','g') AND picked = target THEN 1 ELSE 0 END)  AS correct,
-         SUM(CASE WHEN ev = 'r' THEN 1 ELSE 0 END)                             AS relisten
-       FROM events
-       WHERE ${EXCLUDE_TEST}`
-    ).first(),
-    db.prepare(
-      `SELECT
-         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d7,
-         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d30`
-    ).bind(d7, d30).first(),
-    db.prepare(
-      `SELECT date(ts/1000, 'unixepoch') AS d,
-              COUNT(*) AS n,
-              SUM(CASE WHEN picked = target THEN 1 ELSE 0 END) AS correct
-       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
-       GROUP BY d ORDER BY d`
-    ).all(),
+  const [hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed] = await Promise.all([
     db.prepare(
       `SELECT CAST(strftime('%H', ts/1000, 'unixepoch') AS INTEGER) AS h,
               COUNT(*) AS n,
@@ -246,6 +232,57 @@ async function handleAdminStats(req, env, url) {
        FROM events
        WHERE ev = 'p' AND voice IS NOT NULL AND ${EXCLUDE_TEST}
        GROUP BY picked, voice`
+    ).all(),
+  ]);
+
+  return json({
+    hourly:    hourly.results     || [],
+    by_mora:   byMora.results     || [],
+    by_voice:  byVoice.results    || [],
+    confusion: confusion.results  || [],
+    by_voice_confusion: byVoiceConf.results   || [],
+    by_voice_played:    byVoicePlayed.results || [],
+  });
+}
+
+// Per-user / uid-drilldown stats — the level-2 admin tier. Same soft-auth as
+// above but gated at power_user >= 2, because everything here carries device
+// identifiers (per-bucket uid lists, the daily-activity uid map, nicknames)
+// or app-wide business numbers (overview totals). A level-1 power user gets
+// 403 here even though they can read /v1/admin/stats — that's the access split.
+async function handleAdminUserStats(req, env, url) {
+  const uid = url.searchParams.get("uid") || "";
+  if (await powerLevel(env, uid) < 2) {
+    return new Response("forbidden", { status: 403 });
+  }
+
+  const db = env.mimi_stats;
+  const now = Date.now();
+  const d7 = now - 7 * 86400000;
+  const d30 = now - 30 * 86400000;
+
+  const [totals, active, daily, skillStream, nicks, dailyUidRows] = await Promise.all([
+    db.prepare(
+      `SELECT
+         COUNT(*)                                                              AS events,
+         COUNT(DISTINCT uid)                                                   AS users,
+         SUM(CASE WHEN ev IN ('a','g') THEN 1 ELSE 0 END)                      AS answers,
+         SUM(CASE WHEN ev IN ('a','g') AND picked = target THEN 1 ELSE 0 END)  AS correct,
+         SUM(CASE WHEN ev = 'r' THEN 1 ELSE 0 END)                             AS relisten
+       FROM events
+       WHERE ${EXCLUDE_TEST}`
+    ).first(),
+    db.prepare(
+      `SELECT
+         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d7,
+         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d30`
+    ).bind(d7, d30).first(),
+    db.prepare(
+      `SELECT date(ts/1000, 'unixepoch') AS d,
+              COUNT(*) AS n,
+              SUM(CASE WHEN picked = target THEN 1 ELSE 0 END) AS correct
+       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
+       GROUP BY d ORDER BY d`
     ).all(),
     // Raw event stream for per-user skill replay. Cheaper than expressing
     // the streak/decay rules in pure SQL. ORDER BY uid keeps each user's
@@ -345,13 +382,7 @@ async function handleAdminStats(req, env, url) {
   return json({
     totals,
     active,
-    daily:     daily.results      || [],
-    hourly:    hourly.results     || [],
-    by_mora:   byMora.results     || [],
-    by_voice:  byVoice.results    || [],
-    confusion: confusion.results  || [],
-    by_voice_confusion: byVoiceConf.results   || [],
-    by_voice_played:    byVoicePlayed.results || [],
+    daily: daily.results || [],
     level_hist,
     level_hist_uids,
     activity_hist,
