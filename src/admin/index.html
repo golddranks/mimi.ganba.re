@@ -174,50 +174,6 @@
         </section>
 
         <section class="card span2">
-            <h2>Sound-file difficulty <span class="sub">— hardest individual recordings</span></h2>
-            <div class="voicefilter">
-                min attempts:
-                <input id="vmin" type="number" min="1" value="10" inputmode="numeric">
-                or min listens:
-                <input id="vlisten" type="number" min="0" value="3" inputmode="numeric" title="re-listens + after-plays for this recording — surfaces unclear/wrong recordings even at low attempt counts">
-                show top:
-                <input id="vtop" type="number" min="1" value="20" inputmode="numeric">
-                <span id="vcount" class="sub"></span>
-            </div>
-            <table id="voicetable">
-                <thead>
-                    <tr>
-                        <th>sound</th>
-                        <th>voice</th>
-                        <th>attempts</th>
-                        <th>correct</th>
-                        <th>accuracy</th>
-                        <th title="re-listens triggered while this recording was the question">re-listen</th>
-                        <th title="this recording was played as an after-play (any question)">after-play</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </section>
-
-        <section class="card span2">
-            <h2>Sound-file confusion matrix
-                <span class="modeswitch" id="voiceconfmode">
-                    <button type="button" data-mode="count" class="active">counts</button>
-                    <button type="button" data-mode="pct">per-sound %</button>
-                </span>
-                <span class="sub">— per recording; soundfiles grouped by sound within each vowel group</span>
-            </h2>
-            <div class="voicefilter">
-                min attempts:
-                <input id="vcmin" type="number" min="1" value="10" inputmode="numeric">
-                <span id="vcwrong-label">min count wrong:</span>
-                <input id="vcwrong" type="number" min="0" value="2" inputmode="numeric" title="row's worst off-diagonal cell must hit this value — raw count in counts mode, percentage in per-sound-% mode (the value resets when you toggle)">
-            </div>
-            <div id="voiceconf"></div>
-        </section>
-
-        <section class="card span2">
             <h2>Confusion matrix
                 <span class="modeswitch" id="confmode">
                     <button type="button" data-mode="count" class="active">counts</button>
@@ -291,6 +247,50 @@
 
                 <div class="legend conflegend">rows = sound heard · columns = kana picked · diagonal = correct</div>
             </div>
+        </section>
+
+        <section class="card span2">
+            <h2>Sound-file difficulty <span class="sub">— hardest individual recordings</span></h2>
+            <div class="voicefilter">
+                min attempts:
+                <input id="vmin" type="number" min="1" value="10" inputmode="numeric">
+                or min listens:
+                <input id="vlisten" type="number" min="0" value="3" inputmode="numeric" title="re-listens + after-plays for this recording — surfaces unclear/wrong recordings even at low attempt counts">
+                show top:
+                <input id="vtop" type="number" min="1" value="20" inputmode="numeric">
+                <span id="vcount" class="sub"></span>
+            </div>
+            <table id="voicetable">
+                <thead>
+                    <tr>
+                        <th>sound</th>
+                        <th>voice</th>
+                        <th>attempts</th>
+                        <th>correct</th>
+                        <th>accuracy</th>
+                        <th title="re-listens triggered while this recording was the question">re-listen</th>
+                        <th title="this recording was played as an after-play (any question)">after-play</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+
+        <section class="card span2">
+            <h2>Sound-file confusion matrix
+                <span class="modeswitch" id="voiceconfmode">
+                    <button type="button" data-mode="count" class="active">counts</button>
+                    <button type="button" data-mode="pct">per-sound %</button>
+                </span>
+                <span class="sub">— per recording; soundfiles grouped by sound within each vowel group</span>
+            </h2>
+            <div class="voicefilter">
+                min attempts:
+                <input id="vcmin" type="number" min="1" value="10" inputmode="numeric">
+                <span id="vcwrong-label">min count wrong:</span>
+                <input id="vcwrong" type="number" min="0" value="2" inputmode="numeric" title="row's worst off-diagonal cell must hit this value — raw count in counts mode, percentage in per-sound-% mode (the value resets when you toggle)">
+            </div>
+            <div id="voiceconf"></div>
         </section>
     </main>
 
