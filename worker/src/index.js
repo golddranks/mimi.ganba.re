@@ -13,7 +13,7 @@
 // uid drill-downs / nicknames. The two admin endpoints map 1:1 onto the tiers.
 
 import { nameOf } from "./voicemap.js";
-import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/skill.js";
+import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/main/skill.js";
 
 // Exclude users tagged as test fixtures so seeded data (worker/seed.sql)
 // doesn't pollute global stats. The seed user is INSERTed with this nickname;
@@ -320,7 +320,7 @@ async function handleAdminUserStats(req, env, url) {
   ]);
 
   // Replay the skill-state machine per user to derive each user's current
-  // per-vowel skill. Rules live in src/skill.js, shared with the app + dashboard.
+  // per-vowel skill. Rules live in src/main/skill.js, shared with app + dashboard.
   const perUser = {};
   const userAnswers = {};   // per-user count of 'a'/'g' events
   const userDays = {};      // per-user set of YYYY-MM-DD strings (UTC) seen

@@ -14,7 +14,7 @@ npx wrangler d1 execute mimi-stats --remote --file=schema.sql
 npx wrangler deploy                                         # prints the *.workers.dev URL
 ```
 
-Paste the deployed URL into `STATS_URL` near the top of `src/app.js`.
+Paste the deployed URL into `STATS_URL` near the top of `src/main/app.js`.
 
 ## Local dev
 

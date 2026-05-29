@@ -43,7 +43,7 @@ jobs:
               - '.github/workflows/deploy.yml'
             worker:
               - 'worker/**'
-              - 'src/skill.js'                # bundled into the worker via import
+              - 'src/main/skill.js'           # bundled into the worker via import
               - 'data/phonetic_training/morae/good/**'
               - 'scripts/voicemap.py'
               - '.github/workflows/deploy.yml'

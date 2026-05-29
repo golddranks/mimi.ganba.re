@@ -95,9 +95,10 @@ def inline(html: str, src_dir: Path, css_name: str | None,
 
 
 def bundle_index(voice_counts: dict[str, int]) -> None:
-    html = (SRC / "index.html").read_text(encoding="utf-8")
+    src = SRC / "main"
+    html = (src / "index.html").read_text(encoding="utf-8")
     counts_js = json.dumps(voice_counts, ensure_ascii=False, separators=(",", ":"))
-    html = inline(html, SRC, "app.css", "app.js",
+    html = inline(html, src, "app.css", "app.js",
                   js_prelude=f"window.VOICE_COUNTS={counts_js};")
     DIST.mkdir(parents=True, exist_ok=True)
     (DIST / "index.html").write_text(html, encoding="utf-8")
