@@ -4,3 +4,4 @@ dist/
 worker/src/voicemap.js
 .DS_Store
 .wrangler
+/esbuild

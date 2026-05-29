@@ -49,7 +49,15 @@ EOF
 fi
 
 python3 scripts/transcode_audio.py
-python3 scripts/minify.py
+
+# build.py minifies via esbuild (a single standalone binary). Fetch the pinned
+# version into the repo root once if it isn't already there / on PATH. Keep
+# this version in sync with scripts/build.py + .github/workflows/deploy.yml.
+if [ ! -x ./esbuild ] && ! command -v esbuild >/dev/null 2>&1; then
+  echo "Fetching esbuild 0.28.0…"
+  curl -fsSL https://esbuild.github.io/dl/v0.28.0 | sh
+fi
+
 python3 scripts/build.py
 
 # In --local mode, seed the miniflare D1 with the schema (idempotent —

@@ -38,12 +38,12 @@ jobs:
               - 'data/phonetic_training/morae/good/**'
               - 'scripts/voicemap.py'
               - 'scripts/transcode_audio.py'
-              - 'scripts/minify.py'
               - 'scripts/build.py'
               - 'shell.nix'
               - '.github/workflows/deploy.yml'
             worker:
               - 'worker/**'
+              - 'src/skill.js'                # bundled into the worker via import
               - 'data/phonetic_training/morae/good/**'
               - 'scripts/voicemap.py'
               - '.github/workflows/deploy.yml'
@@ -99,15 +99,11 @@ jobs:
         with:
           python-version: '3.14.0'
       - run: python scripts/voicemap.py
-      - run: python scripts/minify.py
+      # build.py minifies via esbuild (standalone binary, no node_modules).
+      # Pinned; the dl script drops ./esbuild in the repo root where build.py
+      # looks for it. Keep this version in sync with scripts/build.py + dev.sh.
+      - run: curl -fsSL https://esbuild.github.io/dl/v0.28.0 | sh
       - run: python scripts/build.py
-      # node --check is the inspectable-bundle audit step: catches minifier
-      # breakage (e.g. a quote char inside a regex literal shifting downstream
-      # boundaries) before anything gets uploaded.
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
-        with:
-          node-version: '22.22.3'
-      - run: for f in build/*.js; do node --check "$f"; done
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: html
