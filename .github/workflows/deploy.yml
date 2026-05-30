@@ -152,8 +152,24 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: '22.22.3'
+      - run: npm ci
+        working-directory: worker
+      # Pre-deploy gate: boot the worker on a local miniflare D1 and smoke it.
+      # Runs on a schema.sql baseline (no prod snapshot — that would need a
+      # D1-read token), so it catches code regressions; the post-deploy smoke
+      # below covers schema drift against the real DB. A failure here stops the
+      # job before the deploy step runs.
+      - name: Local smoke (pre-deploy gate)
+        run: bash smoke.sh
+        working-directory: worker
       - uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0  # v4.0.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: worker
           wranglerVersion: '4.93.0'
+      # Post-deploy check against the live worker: a non-empty /v1/events INSERT
+      # round-trip, which is exactly what a schema/code mismatch 500s on. The
+      # first request also forces migrations to run on the fresh deployment.
+      - name: Production smoke (post-deploy)
+        run: node smoke.mjs https://mimi-stats.golddranks.workers.dev
+        working-directory: worker

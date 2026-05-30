@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Smoke-test the worker before a push that changes it can reach CI/prod.
+# Installed automatically by scripts/dev.sh (it sets core.hooksPath=.githooks).
+# Bypass with `git push --no-verify`.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+z=0000000000000000000000000000000000000000
+
+# Only smoke when the worker (or the shared module it bundles) is in the push.
+# git feeds pre-push one "<localref> <localsha> <remoteref> <remotesha>" line
+# per ref on stdin.
+touched=false
+while read -r _lref lsha _rref rsha; do
+  [ "$lsha" = "$z" ] && continue                                   # ref deletion
+  if [ "$rsha" = "$z" ]; then                                      # new remote branch
+    base="$(git rev-parse --verify --quiet origin/main || true)"
+    [ -z "$base" ] && { touched=true; break; }
+    range="$base..$lsha"
+  else
+    range="$rsha..$lsha"
+  fi
+  files="$(git diff --name-only "$range" -- worker/ src/shared/skill.js 2>/dev/null || echo FORCE)"
+  [ -n "$files" ] && { touched=true; break; }
+done
+$touched || exit 0
+
+# Non-blocking if the local toolchain isn't set up — never wedge a push on it.
+if [ ! -d worker/node_modules ]; then
+  echo "pre-push: worker/node_modules missing; skipping smoke (run 'npm ci' in worker/ to enable). Push continues." >&2
+  exit 0
+fi
+
+echo "pre-push: smoking the worker (skip with --no-verify)…"
+# Port 8799 so it can't clash with a dev.sh already on 8787.
+PORT=8799 bash worker/smoke.sh

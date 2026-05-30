@@ -5,3 +5,6 @@ node_modules/
 # One-shot scripts (regenerated/handwritten as needed; no need to commit).
 migrate-voices.sql
 fix-voices.sql
+
+# Prod D1 dumps from snapshot.sh — real user data, never commit.
+*snapshot*.sql

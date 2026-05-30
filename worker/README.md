@@ -22,31 +22,21 @@ For the combined site + worker stack — frontend on `:8080`, worker on `:8787`
 — use the dev script from the repo root:
 
 ```sh
-./scripts/dev.sh            # default: --remote (worker hits production D1)
-./scripts/dev.sh --local    # isolated local miniflare D1
+./scripts/dev.sh
 ```
 
-In `--remote` mode the worker code is hot-reloaded from local files but runs
-on Cloudflare's preview environment with the real D1 binding, so the
-dashboards show real data. Events you generate while practicing in dev are
-written to prod D1 — fine for personal dev; if that's a concern, use
-`--local` (no auth needed, no risk of polluting prod, but you start with an
-empty DB).
+The worker runs on an isolated local miniflare D1 and never touches prod. It
+starts empty (seeded from `schema.sql`); to work with real data, run
+`worker/snapshot.sh` first to load a copy of prod into the local DB. The
+frontend auto-detects `localhost` and talks to the local worker.
 
-The frontend auto-detects `localhost` and talks to the local worker; no
-source changes needed to switch between local and production targets.
-
-Worker-only:
-
-```sh
-npx wrangler dev --remote   # production D1
-npx wrangler dev            # local miniflare D1
-npx wrangler d1 execute mimi-stats --local --file=schema.sql   # one-time seed for local
-```
+The rare case of running against the live prod DB isn't a blessed workflow —
+do it by hand with `npx wrangler dev --remote` from `worker/`, and mind that it
+writes to prod and migrates it on first request.
 
 ## Deploy
 
-The worker auto-deploys via `.github/workflows/deploy-worker.yml` on push to
+The worker auto-deploys via `.github/workflows/deploy.yml` on push to
 `main` when anything under `worker/`, `data/phonetic_training/morae/good/`,
 or `scripts/build.py` changes. The workflow regenerates `src/voicemap.js`
 from the current voice set before deploying, so the deployed map always
@@ -86,13 +76,70 @@ under Repo Settings → Environments → New environment → `worker`, then:
 token is only loaded by jobs that explicitly declare `environment: worker`,
 and never reachable from a stray PR-triggered workflow.)
 
+The deploy job is gated and verified by smoke tests (see below): it runs the
+local smoke first and aborts if it fails, deploys, then runs the production
+smoke against the live worker.
+
 Manual deploy is still possible:
 
 ```sh
 python3 scripts/build.py --voicemap-only   # refresh voicemap
 cd worker
+bash snapshot.sh && bash smoke.sh          # pre-deploy check against a prod snapshot
 npx wrangler deploy
+node smoke.mjs https://mimi-stats.golddranks.workers.dev   # post-deploy check
 ```
+
+## Smoke tests
+
+`smoke.mjs` is a dependency-free check (Node 18+ `fetch`) that hits a worker and
+asserts the paths a schema/code mismatch breaks — most importantly a *non-empty*
+`POST /v1/events` INSERT round-trip, the exact 500 the migration system exists to
+prevent. (An empty batch early-returns before the INSERT, so it can't surface
+that bug — the test posts real rows.) It writes under the `TestUser` sentinel uid,
+so the rows stay out of all aggregates.
+
+```sh
+node smoke.mjs http://127.0.0.1:8787                       # an already-running worker
+node smoke.mjs https://mimi-stats.golddranks.workers.dev   # production
+```
+
+`smoke.sh` wraps it: boots the worker on a local miniflare D1, waits, smokes it,
+tears down. No flags, never touches prod. Run `snapshot.sh` first to test against
+real prod state:
+
+```sh
+bash snapshot.sh    # pull prod D1 into the local miniflare DB
+bash smoke.sh       # test that local copy
+```
+
+You rarely run `smoke.sh` by hand: a **pre-push hook** (`.githooks/pre-push`,
+auto-installed by `scripts/dev.sh`) runs it whenever a push changes the worker, so
+the whole workflow is just **`./scripts/dev.sh` to develop, `git push` to ship** —
+the hook gates locally, then CI gates again and deploys. Bypass the hook with
+`git push --no-verify`; it skips itself if `worker/node_modules` isn't installed.
+
+Without a snapshot, the local DB is seeded from `schema.sql` (every column
+present), so `smoke.sh` catches code regressions but not a *forgotten* migration
+entry. A snapshot reproduces prod's actual schema, so the migration runs locally
+exactly as a deploy would apply it — that's how you catch drift before
+publishing, with zero prod risk and the option to `rollback` the local copy and
+retry.
+
+### Snapshotting prod
+
+`snapshot.sh` does `wrangler d1 export` of prod into a SQL dump, resets the local
+miniflare DB, and imports it — so `smoke.sh` (or `./scripts/dev.sh`) then runs
+against a real copy of prod. Needs `wrangler login`. The dump holds real user
+rows, is gitignored, and must not be committed or shared.
+
+The CI deploy runs the smoke twice: a **pre-deploy gate** (deploy aborts on
+failure; hermetic, no prod side effects) and a **post-deploy** run against
+production. CI's gate uses a bare `schema.sql` DB, not a snapshot (that would need
+a D1-read token), so it catches code regressions; the post-deploy run covers
+schema drift against the real DB. If it fails, roll back with `npx
+wrangler rollback` (or `npx wrangler deployments list` to pick a target) — fast,
+since the worker is on `*.workers.dev`.
 
 ## Endpoints
 
