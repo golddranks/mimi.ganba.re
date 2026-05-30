@@ -13,6 +13,7 @@
 // uid drill-downs / nicknames. The two admin endpoints map 1:1 onto the tiers.
 
 import { nameOf } from "./voicemap.js";
+import { MIGRATIONS } from "./migrations.js";
 import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/shared/skill.js";
 
 // Exclude users tagged as test fixtures so seeded data (worker/seed.sql)
@@ -56,6 +57,72 @@ const json = (data, init = {}) =>
     headers: { "content-type": "application/json", ...(init.headers || {}) },
   });
 
+// Run a statement, swallowing only SQLite's "duplicate column name". SQLite has
+// no `ADD COLUMN IF NOT EXISTS`, so this is how ADD COLUMN stays idempotent — a
+// fresh DB built from schema.sql (columns already present) or a concurrent
+// isolate that won the race both land here. Any other error propagates.
+async function runIgnoringDupColumn(stmt) {
+  try { await stmt.run(); }
+  catch (e) { if (!/duplicate column name/i.test((e && e.message) || "")) throw e; }
+}
+
+// Schema migrations run lazily on the first request each isolate handles, so a
+// code deploy that needs a new column self-heals the DB rather than 500ing
+// against the old schema. Cached per isolate; a failure clears the cache so
+// the next request retries instead of wedging on a stale rejection.
+let migration = null;
+function ensureMigrated(env) {
+  return (migration ||= runMigrations(env).catch((e) => { migration = null; throw e; }));
+}
+
+async function runMigrations(env) {
+  const db = env.mimi_stats;
+  // The ledger stores the up + down SQL of each applied migration, so the DB
+  // can be rolled back without the code that defined it (see rollback below).
+  await db.prepare(
+    "CREATE TABLE IF NOT EXISTS migrations (" +
+    "id INTEGER PRIMARY KEY, up_sql TEXT, down_sql TEXT, applied_at INTEGER NOT NULL)"
+  ).run();
+  // Self-heal an older 2-column ledger (id, applied_at) left by a previous
+  // version of this runner — same forward-deploy hazard, one level down.
+  await runIgnoringDupColumn(db.prepare("ALTER TABLE migrations ADD COLUMN up_sql TEXT"));
+  await runIgnoringDupColumn(db.prepare("ALTER TABLE migrations ADD COLUMN down_sql TEXT"));
+
+  const done = new Set(
+    ((await db.prepare("SELECT id FROM migrations").all()).results || []).map((r) => r.id)
+  );
+  for (const m of MIGRATIONS) {
+    if (done.has(m.id)) continue;
+    await runIgnoringDupColumn(db.prepare(m.up));
+    // Capture both directions verbatim so a rollback never depends on this list.
+    await db.prepare(
+      "INSERT OR IGNORE INTO migrations (id, up_sql, down_sql, applied_at) VALUES (?, ?, ?, ?)"
+    ).bind(m.id, m.up, m.down ?? null, Date.now()).run();
+  }
+}
+
+// Reverse every applied migration with id > toId, newest first, running the
+// `down_sql` stored in the ledger — NOT from MIGRATIONS — so a deploy that
+// predates a migration can still undo it. Refuses if any migration in range is
+// irreversible (down_sql IS NULL) rather than leaving the schema half-reverted.
+// Deliberately manual: never on the request path, because a routine rollback
+// deploy must not silently drop columns. Returns the ids reversed.
+export async function rollback(env, toId) {
+  const db = env.mimi_stats;
+  const rows = ((await db.prepare(
+    "SELECT id, down_sql FROM migrations WHERE id > ? ORDER BY id DESC"
+  ).bind(toId).all()).results) || [];
+  const irreversible = rows.filter((r) => r.down_sql == null).map((r) => r.id);
+  if (irreversible.length) {
+    throw new Error(`cannot roll back: migrations ${irreversible.join(", ")} are irreversible (down_sql is null)`);
+  }
+  for (const r of rows) {
+    await db.prepare(r.down_sql).run();
+    await db.prepare("DELETE FROM migrations WHERE id = ?").bind(r.id).run();
+  }
+  return rows.map((r) => r.id);
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -68,6 +135,7 @@ export default {
 
     let res;
     try {
+      await ensureMigrated(env);
       if (req.method === "POST" && url.pathname === "/v1/events") {
         res = await handleEvents(req, env);
       } else if (req.method === "POST" && url.pathname === "/v1/user") {

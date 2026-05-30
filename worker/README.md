@@ -62,9 +62,14 @@ a single permission:
 
 That's it. Wrangler 4 (which the workflow pins) skips the pre-deploy
 `/memberships` and D1-binding probes that wrangler 3 made, so the token
-needs neither *User Details: Read* nor *D1: Read*. D1 schema migrations
-are done manually with `wrangler d1 execute` from a logged-in shell, not
-from CI.
+needs neither *User Details: Read* nor *D1: Read*.
+
+Additive schema migrations are **applied automatically** by the worker: the
+ordered list in `src/migrations.js` runs on the first request each isolate
+handles after deploy (see *Schema migrations* below), so a code deploy needing
+a new column no longer races ahead of the DB. Baseline creation and destructive
+changes are still done by hand with `wrangler d1 execute` from a logged-in
+shell, not from CI.
 
 **Account Resources:** Include → *(your account only)*.
 **Zone Resources:** leave empty — the worker is on a `*.workers.dev` URL,
@@ -134,21 +139,79 @@ npx wrangler d1 execute mimi-stats --remote \
 # the latest data/.../good/ layout.
 cd .. && python3 scripts/build.py --no-audio && cd worker
 npx wrangler d1 execute mimi-stats --remote --file=migrate-voices.sql
-
-# events.opts — comma-joined choice morae shown for each 'a'/'g' answer, so we
-# can measure pairwise confusion as picked-when-offered. Can't be backfilled
-# (older rows never recorded the option set); they stay opts=NULL.
-npx wrangler d1 execute mimi-stats --remote \
-  --command="ALTER TABLE events ADD COLUMN opts TEXT"
-
-# events.skill — target vowel's level at question time, frozen so changing the
-# level rules can't rewrite history (the level is otherwise reconstructed by
-# replay). Can't be backfilled; older rows stay skill=NULL.
-npx wrangler d1 execute mimi-stats --remote \
-  --command="ALTER TABLE events ADD COLUMN skill INTEGER"
 ```
 
-Fresh setups via `schema.sql` already include these columns.
+`events.opts` and `events.skill` are no longer migrated by hand — they're the
+first entries in the auto-applied list (see *Schema migrations* below).
+
+Fresh setups via `schema.sql` already include every column.
+
+## Schema migrations
+
+Schema changes live in `src/migrations.js` as a flat ordered list, each entry
+carrying its forward (`up`) and reversal (`down`) SQL:
+
+```js
+export const MIGRATIONS = [
+  { id: 1,
+    up:   "ALTER TABLE events ADD COLUMN opts TEXT",
+    down: "ALTER TABLE events DROP COLUMN opts" },
+  { id: 2,
+    up:   "ALTER TABLE events ADD COLUMN skill INTEGER",
+    down: "ALTER TABLE events DROP COLUMN skill" },
+];
+```
+
+`runMigrations` (in `src/index.js`) runs on the first request each isolate
+serves: it ensures a `migrations` ledger table, then for every entry whose `id`
+isn't recorded yet it runs the `up` SQL and records `id` + `up_sql` + `down_sql`
++ `applied_at`. So a worker deploy needing a new column heals the schema on its
+own first hit — no separate `wrangler d1 execute` step, no window where
+`/v1/events` 500s against the old table.
+
+**Both directions are stored in the row, not just the code.** That's the point:
+the database is self-describing, so it can be rolled back even by a deploy that
+no longer contains the migration's definition. Forward is automatic; reversal is
+always deliberate.
+
+Adding one:
+
+- **Append only.** Never edit, reorder, or renumber a shipped migration — the
+  `id`s, and the `up`/`down` SQL captured under them, are the permanent record
+  of what each DB has had applied.
+- Prefer idempotent forward DDL (`CREATE TABLE/INDEX IF NOT EXISTS`). SQLite has
+  no `ADD COLUMN IF NOT EXISTS`, so the runner forgives a `duplicate column
+  name` error (treats it as already-applied — this is what lets a fresh
+  `schema.sql` DB, which already has the columns, stamp them cleanly). Any other
+  error propagates as a 500 and retries on the next request.
+- Give every migration a `down`. Use `null` only for a genuinely irreversible
+  change — `rollback` past it then refuses rather than half-reverting.
+- When you add a column here, add it to `schema.sql` too, so fresh DBs start
+  with the full shape.
+
+### Rolling back
+
+Reversal never runs on deploy. To undo migrations above id `N`, newest first,
+using the down SQL **stored in the DB** (so it works regardless of which code is
+deployed):
+
+```sh
+# See what would be reversed, and the exact down SQL recorded for each:
+npx wrangler d1 execute mimi-stats --remote \
+  --command="SELECT id, down_sql FROM migrations WHERE id > N ORDER BY id DESC"
+
+# Then, for each row newest-first, run its down_sql and drop the ledger entry:
+npx wrangler d1 execute mimi-stats --remote \
+  --command="<down_sql>; DELETE FROM migrations WHERE id = <id>"
+```
+
+The same logic is available programmatically as the exported `rollback(env,
+toId)` in `src/index.js` (it reads `down_sql` from the ledger and refuses if any
+migration in range has a NULL `down_sql`). It is intentionally not wired to any
+route — wire it behind a guarded admin trigger if you ever want it over HTTP.
+
+Destructive or backfilling migrations that can't be expressed as a simple
+idempotent `up` (like `events.voice` above) still run manually.
 
 ## Voice map
 

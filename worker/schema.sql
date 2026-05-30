@@ -73,3 +73,20 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_uid    ON events(uid);
 CREATE INDEX IF NOT EXISTS idx_events_ts     ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_target ON events(target);
+
+-- Applied-migration ledger. The worker creates this on boot and records each
+-- migration from src/migrations.js it runs (see runMigrations in src/index.js),
+-- so a code deploy that needs a new column self-heals the schema instead of
+-- 500ing against an un-migrated DB. A fresh DB created from this file already
+-- has the columns the shipped migrations add, so the runner's "duplicate
+-- column" tolerance simply stamps them as applied.
+--
+-- up_sql / down_sql hold each migration's forward and reversal SQL verbatim, so
+-- the database carries everything needed to roll itself back — no dependency on
+-- the deployed code still containing the migration's definition.
+CREATE TABLE IF NOT EXISTS migrations (
+  id         INTEGER PRIMARY KEY,
+  up_sql     TEXT,                              -- forward SQL, recorded at apply time
+  down_sql   TEXT,                              -- reversal SQL; NULL = irreversible
+  applied_at INTEGER NOT NULL
+);
