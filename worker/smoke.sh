@@ -9,6 +9,10 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 PORT="${PORT:-8787}"
 BASE="http://127.0.0.1:${PORT}"
 
+# The worker imports the build-generated src/voicemap.js (gitignored); generate
+# it before bundling, the same step the deploy workflow runs.
+python3 ../scripts/voicemap.py >/dev/null
+
 # Seed the baseline schema (idempotent; no-op on a snapshot-loaded DB).
 npx wrangler d1 execute mimi-stats --local --file=schema.sql >/dev/null
 
