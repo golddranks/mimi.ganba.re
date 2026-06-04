@@ -193,6 +193,9 @@ npx wrangler d1 execute mimi-stats --remote \
   --command="UPDATE users SET power_user = 2 WHERE uid = '<uid>'"
 ```
 
+(Grant it on **prod** — `dev.sh` resets local to a prod snapshot each launch, so a
+prod grant shows up locally too.)
+
 To migrate an existing DB that predates these columns:
 
 ```sh

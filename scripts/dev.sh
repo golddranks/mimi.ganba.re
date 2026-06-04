@@ -54,8 +54,9 @@ fi
 
 python3 scripts/build.py
 
-# Refresh the local D1 from a prod snapshot (cached — re-pulled only when >6h
-# old). The worker migrates this copy on first request, so local matches prod.
+# Reset the local D1 to a prod snapshot, so local mirrors prod on every launch.
+# The prod export is cached (re-pulled only when >6h old); the local re-import is
+# unconditional. The worker migrates this copy on first request.
 bash scripts/snapshot.sh
 
 # Kill the whole process group when this script exits so both children die.
