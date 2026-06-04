@@ -114,10 +114,12 @@ The suite lives in `worker/test/` and runs on `node:test`:
   only**: it writes non-sentinel rows and pokes the local D1, so it must not run
   against prod.
 - **`test/verify.test.mjs`** — the post-deploy check of the **live** system,
-  driven by `scripts/verify.sh`. Fetches the *deployed* dashboard from Pages and
-  runs it in happy-dom; served from `mimi.ganba.re`, the page's own STATS_URL
-  points at the live worker, so it's a true end-to-end test of what's serving.
-  Writes only under the `TestUser` sentinel, so it's safe against prod.
+  driven by `scripts/verify.sh`. Fetches the *deployed* pages from Pages and runs
+  them in happy-dom; served from `mimi.ganba.re`, their own STATS_URL points at
+  the live worker, so it's a true end-to-end test of what's serving. Two paths:
+  the deployed **app saves** answers to the live worker (the data-collection path
+  — read back to confirm they persist with `opts`), and the deployed **dashboard
+  renders** them. Pinned to the `TestUser` sentinel uid, so it's safe against prod.
 
 `scripts/smoke.sh` runs the pre-deploy gate; `scripts/verify.sh` the post-deploy:
 

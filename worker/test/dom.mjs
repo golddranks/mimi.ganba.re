@@ -20,8 +20,10 @@ export async function loadPage(file, opts) {
 // Run a page given its full HTML — local dist or HTML fetched from a deployed
 // site (the post-deploy verify). `workerBase` rewrites the pages' hardcoded
 // localhost:8787 worker origin; omit it for a deployed page, which already
-// targets the live worker via its own hostname-derived STATS_URL.
-export async function loadHtml(html, { url, workerBase } = {}) {
+// targets the live worker via its own hostname-derived STATS_URL. `setup(win)`
+// runs after the stubs but before the page boots — use it to seed localStorage
+// (e.g. pin the app's uid to the sentinel before it mints a random one).
+export async function loadHtml(html, { url, workerBase, setup } = {}) {
   const win = new Window({ url });
   const logs = [];
   win.console.log = (...a) => logs.push(a.join(" "));
@@ -43,6 +45,8 @@ export async function loadHtml(html, { url, workerBase } = {}) {
     if (workerBase && s.startsWith(pageWorker)) s = workerBase + s.slice(pageWorker.length);
     return globalThis.fetch(s, init);
   };
+
+  if (setup) setup(win);
 
   // document.write builds the DOM but does not run inline scripts in happy-dom,
   // so we eval each one ourselves in document order. document.currentScript is

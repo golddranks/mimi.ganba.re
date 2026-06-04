@@ -15,6 +15,45 @@ const SITE = (process.env.SITE || "https://mimi.ganba.re").replace(/\/$/, "");
 const BASE = (process.env.BASE || "https://mimi-stats.golddranks.workers.dev").replace(/\/$/, "");
 const SENTINEL = "00000000-0000-4000-8000-000000000000";
 
+const sentinelEvents = async () =>
+  (await (await fetch(`${BASE}/v1/user/${SENTINEL}/events`)).json()).events || [];
+
+test("verify: the deployed app saves answers to the live worker", async (t) => {
+  // The load-bearing data-collection path: the deployed app, talking to the live
+  // worker, must actually persist answers. Drive it in happy-dom pinned to the
+  // sentinel uid (so it runs in normal save mode — not ?uid= view-as — but writes
+  // only excluded rows), then read the events back off the live worker.
+  const start = Date.now();
+  const html = await (await fetch(`${SITE}/`)).text();
+  const { win, close } = await loadHtml(html, {
+    url: `${SITE}/`,
+    setup: (w) => w.localStorage.setItem("uid", SENTINEL),
+  });
+  t.after(close);
+  assert.equal(win.localStorage.getItem("uid"), SENTINEL, "app pinned to the sentinel uid");
+
+  // Answer a few questions; each queues an event the app flushes to the worker.
+  for (let i = 0; i < 3; i++) {
+    win.primary.click();
+    const btns = await waitFor(() => {
+      const b = win.choices.querySelectorAll("button.choice");
+      return b.length ? b : null;
+    });
+    btns[0].click();
+  }
+
+  // Read them back off the live worker — proves the write round-tripped and
+  // persisted, carrying the opts column data collection depends on.
+  const fresh = await waitFor(async () => {
+    const mine = (await sentinelEvents()).filter((e) => e.ts >= start && (e.ev === "a" || e.ev === "g"));
+    return mine.length ? mine : null;
+  }, { timeout: 15000 });
+  assert.ok(
+    fresh.some((e) => typeof e.opts === "string" && e.opts.includes(",")),
+    "a saved answer carries the opts column end-to-end",
+  );
+});
+
 test("verify: the deployed dashboard renders sentinel events from the live worker", async (t) => {
   // Seed a known confusion under the sentinel via the live worker (sa picked as
   // za once, correct once). The cell only grows across runs — >= tolerates it.
