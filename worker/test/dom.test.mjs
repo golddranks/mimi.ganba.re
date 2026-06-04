@@ -43,7 +43,7 @@ const saFixture = (base) => {
 };
 
 test("app: answering questions posts events (with opts) to the worker", async (t) => {
-  const { win, close } = await loadPage("index.html", { url: ORIGIN + "/" });
+  const { win, close } = await loadPage("index.html", { url: ORIGIN + "/", workerBase: BASE });
   t.after(close);
 
   const uid = win.localStorage.uid;
@@ -80,7 +80,7 @@ test("dashboard: confusion matrix renders asked vs shown denominators", async (t
   const uid = randomUUID();
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
 
-  const { win, close } = await loadPage("dashboard/index.html", { url: `${ORIGIN}/dashboard/?uid=${uid}` });
+  const { win, close } = await loadPage("dashboard/index.html", { url: `${ORIGIN}/dashboard/?uid=${uid}`, workerBase: BASE });
   t.after(close);
 
   const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
@@ -104,7 +104,7 @@ test("admin: confusion matrix uses server-aggregated asked vs shown counts", asy
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
   grantPowerUser(uid, 1);
 
-  const { win, close } = await loadPage("admin/index.html", { url: `${ORIGIN}/admin/?uid=${uid}` });
+  const { win, close } = await loadPage("admin/index.html", { url: `${ORIGIN}/admin/?uid=${uid}`, workerBase: BASE });
   t.after(close);
 
   const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);

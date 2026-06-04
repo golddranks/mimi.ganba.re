@@ -12,7 +12,7 @@ import { Window } from "happy-dom";
 const here = dirname(fileURLToPath(import.meta.url));
 export const DIST = resolve(here, "../../dist");
 
-export async function loadPage(file, { url }) {
+export async function loadPage(file, { url, workerBase }) {
   const html = readFileSync(resolve(DIST, file), "utf8");
   const win = new Window({ url });
   const logs = [];
@@ -26,8 +26,15 @@ export async function loadPage(file, { url }) {
   // reminders.js consults Notification; a denied stub makes it a no-op.
   if (!win.Notification) win.Notification = { permission: "denied", requestPermission: async () => "denied" };
   // Node's fetch reaches the local worker without happy-dom's same-origin/CORS
-  // layer (page is :8080, worker :8787). The pages build absolute STATS_URLs.
-  win.fetch = (u, init) => globalThis.fetch(u, init);
+  // layer (page is :8080, worker :8787). The pages hardcode their STATS_URL at
+  // :8787; rewrite that origin to wherever the harness actually booted the
+  // worker (the pre-push hook uses :8799), so the DOM tests are port-agnostic.
+  const pageWorker = `http://${win.location.hostname}:8787`;
+  win.fetch = (u, init) => {
+    let s = String(u);
+    if (workerBase && s.startsWith(pageWorker)) s = workerBase + s.slice(pageWorker.length);
+    return globalThis.fetch(s, init);
+  };
 
   // document.write builds the DOM but does not run inline scripts in happy-dom,
   // so we eval each one ourselves in document order. document.currentScript is
