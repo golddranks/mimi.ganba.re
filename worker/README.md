@@ -147,10 +147,13 @@ the hook gates locally, then CI gates again and deploys. Bypass the hook with
 
 `scripts/snapshot.sh` does `wrangler d1 export` of prod into a SQL dump, resets
 the local miniflare DB, and imports it. Both `dev.sh` and `smoke.sh` run it, but
-it's **cached**: the export only re-hits prod when the local copy is over 6h old
-(it never locks prod on every launch; `rm -rf worker/.wrangler/state` forces a
-pull). Needs `wrangler login` locally (or `CLOUDFLARE_API_TOKEN` with *D1: Read*
-in CI; CI containers are fresh, so they always pull). It verifies the
+the **prod export is cached for 6h**, keyed off the *dump file's* age (it lives in
+the temp dir, not `.wrangler/state`). So prod is hit at most every 6h regardless
+of the local DB — wiping `worker/.wrangler/state` just re-imports the cached dump,
+it does not re-hit prod. Force a fresh pull by deleting the dump
+(`$TMPDIR/mimi-stats-snapshot.sql`). Needs `wrangler login` locally (or
+`CLOUDFLARE_API_TOKEN` with *D1: Read* in CI; CI containers are fresh, so they
+always pull). It verifies the
 dump before wiping local, so a failed/empty export never leaves you with an empty
 DB. The dump holds real user rows, lives under the system temp dir, and must not
 be committed or shared.
