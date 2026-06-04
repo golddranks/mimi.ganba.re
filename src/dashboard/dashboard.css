@@ -477,6 +477,12 @@ body {
     opacity: .35;
 }
 
+/* Grind targets (confidently >20% wrong) get a fat red ring; the single probe
+   target (highest uncertain wrong-rate) a thin one. Inset box-shadow avoids the
+   layout shift a border-width change would cause. See shared/confusion.js. */
+.confgrid td.grind { box-shadow: inset 0 0 0 3px var(--bad); }
+.confgrid td.probe { box-shadow: inset 0 0 0 1px var(--bad); }
+
 /* ---- legend ---- */
 .legend {
     display: flex;

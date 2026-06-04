@@ -1,5 +1,6 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { pad2, dateKey, dayKey } from "../shared/dates.js";
+import { confusionTargets } from "../shared/confusion.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
 // a handful of visualizations. No localStorage writes, no event posts.
@@ -388,6 +389,10 @@ function drawConfusion() {
     return { display: n ? String(n) : "", mag: n, raw: n };
   };
 
+  // Grind/probe targets are a property of the pick-when-offered data, not the
+  // display mode, so they're marked in every mode (see shared/confusion.js).
+  const { grind, probe } = confusionTargets(confusionShown, confusionOffered);
+
   let maxOn = 0, maxOff = 0;
   for (const td of cells) {
     const v = valueFor(td.dataset.t, td.dataset.p);
@@ -407,6 +412,9 @@ function drawConfusion() {
     td.style.background = bg;
     td.textContent = v.display;
     td.classList.toggle("empty", v.raw === 0);
+    const key = `${td.dataset.t}/${td.dataset.p}`;
+    td.classList.toggle("grind", grind.has(key));
+    td.classList.toggle("probe", key === probe);
   }
   const legend = confchart.querySelector(".conflegend");
   if (legend) {

@@ -96,6 +96,30 @@ test("dashboard: confusion matrix renders asked vs shown denominators", async (t
   assert.equal(cell("sa", "sya").textContent, "1/1");
 });
 
+test("dashboard: confusion matrix marks grind and probe targets", async (t) => {
+  // sa->za: 10 wrong of 10 offered -> confidently >20% -> grind.
+  // sa->sya: 2 wrong of 3 offered -> uncertain, highest such rate -> probe.
+  const uid = randomUUID();
+  const t0 = Date.now();
+  const mk = (i, picked, opts) =>
+    ({ ts: t0 + i, target: "sa", idx: 0, picked, cap: opts.length, ms: 500, ev: "a", opts, skill: 0 });
+  const events = [];
+  for (let i = 0; i < 10; i++) events.push(mk(i, "za", ["sa", "za"]));
+  events.push(mk(10, "sya", ["sa", "sya"]), mk(11, "sya", ["sa", "sya"]), mk(12, "sa", ["sa", "sya"]));
+  assert.equal((await postEvents(uid, events)).status, 200);
+
+  const { win, close } = await loadPage("dashboard/index.html", { url: `${ORIGIN}/dashboard/?uid=${uid}`, workerBase: BASE });
+  t.after(close);
+  const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
+
+  await waitFor(() => cell("sa", "za")?.classList.contains("grind"));
+  assert.ok(!cell("sa", "za").classList.contains("probe"), "grind cell isn't also probe");
+  assert.ok(cell("sa", "sya").classList.contains("probe"), "sa/sya is the probe target");
+  assert.ok(!cell("sa", "sya").classList.contains("grind"), "probe cell isn't grind");
+  // The diagonal (correct) is never a target.
+  assert.ok(!cell("sa", "sa").classList.contains("grind") && !cell("sa", "sa").classList.contains("probe"));
+});
+
 test("admin: confusion matrix uses server-aggregated asked vs shown counts", async (t) => {
   // The admin matrix is global (all users), so we can't assert exact counts
   // against a prod snapshot — we add the sa fixture and assert robust shape:
