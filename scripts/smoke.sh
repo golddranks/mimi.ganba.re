@@ -1,30 +1,25 @@
 #!/usr/bin/env bash
-# End-to-end tests for mimi.ganba.re.
+# Pre-deploy e2e gate for mimi.ganba.re (local). For verifying the LIVE deployed
+# system after a deploy, see scripts/verify.sh.
 #
 #   ./scripts/smoke.sh           snapshot prod -> build site -> boot local worker
 #                                -> run the full e2e suite (API + happy-dom DOM)
-#   ./scripts/smoke.sh <url>     run the API gate against an already-running
-#                                worker (e.g. production, post-deploy)
+#   ./scripts/smoke.sh <url>     run the API migration gate against an
+#                                already-running worker (e.g. production)
 #
 # Local mode refreshes the local DB from a prod snapshot (snapshot.sh, cached 6h),
-# so the worker's migrations run against the real prod schema + data; never writes
-# prod. The
-# DOM suite drives the BUILT dist/ pages in happy-dom against the local worker:
-# the app posts real events through the worker into D1, the dashboard reads them
-# back. Tests live in worker/test/ (node:test; happy-dom for the DOM suite).
+# so the worker's migrations run against the real prod schema + data; it never
+# writes prod. The DOM suite drives the BUILT dist/ pages in happy-dom against the
+# local worker: the app posts real events through the worker into D1, the
+# dashboard and admin read them back. Tests live in worker/test/ (node:test).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Direct mode: run against an already-running worker (e.g. prod, post-deploy).
-# Build the site so the deployed DOM check can load the real dashboard, then run
-# the prod-safe suite: the API migration gate + a dashboard e2e scoped to the
-# excluded TestUser sentinel. (The app/admin DOM tests stay local-only — they'd
-# write non-sentinel rows or need the local D1.)
+# Direct mode: API migration gate against an already-running worker. No frontend
+# to drive against a remote worker here — that's the deployed verify (verify.sh).
 if [ "${1:-}" ]; then
-  python3 "$HERE/voicemap.py" >/dev/null
-  python3 "$HERE/build.py"
   cd "$HERE/../worker"
-  exec env BASE="${1%/}" node --test test/api.test.mjs test/deployed.test.mjs
+  exec env BASE="${1%/}" node --test test/api.test.mjs
 fi
 
 # Local mode: refresh prod snapshot (cached 6h), build the site, boot, run e2e.
@@ -55,4 +50,4 @@ if [ "${code:-000}" = "000" ]; then
   exit 1
 fi
 
-BASE="$BASE" node --test test/api.test.mjs test/dom.test.mjs test/deployed.test.mjs
+BASE="$BASE" node --test test/api.test.mjs test/dom.test.mjs

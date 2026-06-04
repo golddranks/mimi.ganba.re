@@ -83,8 +83,9 @@ and never reachable from a stray PR-triggered workflow.)
 Both deploys are gated by a shared **`e2e`** job (see below): it snapshots prod,
 builds the site, and runs the full suite, and runs whenever *either* the pages or
 the worker changed — so a frontend-only change is gated too. `deploy-pages` and
-`deploy-worker` run only if it passes; the worker deploy then runs a post-deploy
-e2e against the live worker.
+`deploy-worker` run only if it passes. After **both** deploys settle, a **`verify`**
+job (`scripts/verify.sh`) checks the LIVE deployed system — it fetches the
+deployed dashboard from Pages and drives it against the live worker.
 
 Manual deploy is still possible:
 
@@ -92,7 +93,7 @@ Manual deploy is still possible:
 python3 scripts/build.py --voicemap-only                       # refresh voicemap
 ./scripts/smoke.sh                                             # snapshot prod + e2e (pre-deploy)
 ( cd worker && npx wrangler deploy )
-./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # post-deploy e2e
+./scripts/verify.sh                                            # verify the live deployment
 ```
 
 ## End-to-end tests
@@ -112,16 +113,18 @@ The suite lives in `worker/test/` and runs on `node:test`:
   A break anywhere along app → worker → D1 → dashboard surfaces here. **Local
   only**: it writes non-sentinel rows and pokes the local D1, so it must not run
   against prod.
-- **`test/deployed.test.mjs`** — the **prod-safe** DOM check. Drives the real
-  dashboard bundle in happy-dom against whatever worker `BASE` points at, writing
-  only under the `TestUser` sentinel (excluded from aggregates), so it's safe to
-  run post-deploy against the live worker. Runs in both modes.
+- **`test/verify.test.mjs`** — the post-deploy check of the **live** system,
+  driven by `scripts/verify.sh`. Fetches the *deployed* dashboard from Pages and
+  runs it in happy-dom; served from `mimi.ganba.re`, the page's own STATS_URL
+  points at the live worker, so it's a true end-to-end test of what's serving.
+  Writes only under the `TestUser` sentinel, so it's safe against prod.
 
-`scripts/smoke.sh` is the entry point:
+`scripts/smoke.sh` runs the pre-deploy gate; `scripts/verify.sh` the post-deploy:
 
 ```sh
 ./scripts/smoke.sh                                             # snapshot prod -> build -> boot local -> full e2e
-./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # post-deploy e2e against a running worker (prod)
+./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # just the API migration gate, against a running worker
+./scripts/verify.sh                                            # the deployed dashboard against the live worker
 ```
 
 With no argument it refreshes the local DB from a prod snapshot (`scripts/snapshot.sh`, cached 6h), builds
@@ -129,8 +132,8 @@ the site (`scripts/build.py`, so the DOM suite can load the real pages), boots t
 worker on a local miniflare D1, runs the full suite, and tears down — so the
 code's migrations run against prod's *actual* schema, exactly as a deploy would
 apply them. That's how drift gets caught before publishing, with zero prod risk.
-Given a URL it builds the site and runs the prod-safe subset (API gate +
-`deployed.test.mjs`) against that worker — no snapshot, no local-only DOM tests.
+Given a URL it skips the snapshot/build/boot and runs just the API migration gate
+against that worker.
 
 You rarely run it by hand: a **pre-push hook** (`.githooks/pre-push`,
 auto-installed by `scripts/dev.sh`) runs it whenever a push changes the worker, so
@@ -150,12 +153,12 @@ dump before wiping local, so a failed/empty export never leaves you with an empt
 DB. The dump holds real user rows, lives under the system temp dir, and must not
 be committed or shared.
 
-The CI deploy gates twice: a **pre-deploy** run that snapshots prod and runs the
-full e2e against it (deploy aborts on failure) and a **post-deploy** e2e against
-the live worker (sentinel-scoped). Both use the same `CLOUDFLARE_API_TOKEN` — the gate's
-snapshot is why the token needs *D1: Read*. If the post-deploy run fails, roll
-back with `npx wrangler rollback` (or `npx wrangler deployments list` to pick a
-target) — fast, since the worker is on `*.workers.dev`.
+The CI deploy gates **pre-deploy** with the full `e2e` job (snapshots prod, deploy
+aborts on failure) — that snapshot is what needs the `CLOUDFLARE_API_TOKEN`'s
+*D1: Read*. **Post-deploy**, the `verify` job checks the live deployed system
+(sentinel-scoped; needs no secret). If verify fails, roll back with `npx wrangler
+rollback` (or `npx wrangler deployments list` to pick a target) — fast, since the
+worker is on `*.workers.dev`.
 
 ## Endpoints
 

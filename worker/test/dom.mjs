@@ -12,8 +12,16 @@ import { Window } from "happy-dom";
 const here = dirname(fileURLToPath(import.meta.url));
 export const DIST = resolve(here, "../../dist");
 
-export async function loadPage(file, { url, workerBase }) {
-  const html = readFileSync(resolve(DIST, file), "utf8");
+// Load a page from a local dist file (the local DOM tests).
+export async function loadPage(file, opts) {
+  return loadHtml(readFileSync(resolve(DIST, file), "utf8"), opts);
+}
+
+// Run a page given its full HTML — local dist or HTML fetched from a deployed
+// site (the post-deploy verify). `workerBase` rewrites the pages' hardcoded
+// localhost:8787 worker origin; omit it for a deployed page, which already
+// targets the live worker via its own hostname-derived STATS_URL.
+export async function loadHtml(html, { url, workerBase } = {}) {
   const win = new Window({ url });
   const logs = [];
   win.console.log = (...a) => logs.push(a.join(" "));

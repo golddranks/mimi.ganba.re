@@ -1,0 +1,54 @@
+// Post-deploy verification of the LIVE system. Unlike the pre-deploy DOM tests
+// (which build dist/ and boot a local worker), this fetches the *actually
+// deployed* dashboard from Pages and runs it in happy-dom: served from
+// mimi.ganba.re, the page's own STATS_URL points at the live worker, so the
+// fetches hit the real deployment — a true end-to-end check of what's serving.
+//
+// Safe to run against production: it only writes under the TestUser sentinel uid
+// (excluded from aggregates). Driven by scripts/verify.sh (CI post-deploy + by
+// hand). SITE/BASE default to production.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { loadHtml, waitFor } from "./dom.mjs";
+
+const SITE = (process.env.SITE || "https://mimi.ganba.re").replace(/\/$/, "");
+const BASE = (process.env.BASE || "https://mimi-stats.golddranks.workers.dev").replace(/\/$/, "");
+const SENTINEL = "00000000-0000-4000-8000-000000000000";
+
+test("verify: the deployed dashboard renders sentinel events from the live worker", async (t) => {
+  // Seed a known confusion under the sentinel via the live worker (sa picked as
+  // za once, correct once). The cell only grows across runs — >= tolerates it.
+  const ts = Date.now();
+  const events = [
+    { ts, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 },
+    { ts: ts + 1, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 },
+  ];
+  const post = await fetch(`${BASE}/v1/events`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ uid: SENTINEL, events }),
+  });
+  assert.equal(post.status, 200, `POST ${BASE}/v1/events`);
+
+  // Fetch and run the deployed dashboard itself.
+  const pageUrl = `${SITE}/dashboard/?uid=${SENTINEL}`;
+  const res = await fetch(pageUrl);
+  assert.equal(res.status, 200, `GET ${pageUrl}`);
+  const { win, close } = await loadHtml(await res.text(), { url: pageUrl });
+  t.after(close);
+
+  const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
+
+  // The deployed page fetched the sentinel's events from the live worker and
+  // rendered them: sa->za is a non-empty pick count in the default "asked" mode.
+  const asked = await waitFor(() => {
+    const txt = cell("sa", "za")?.textContent;
+    return /^\d+$/.test(txt || "") ? Number(txt) : null;
+  }, { timeout: 15000 });
+  assert.ok(asked >= 1, `asked sa/za >= 1 (got ${asked})`);
+
+  // "shown" mode proves opts flows end-to-end on the live stack: picked/offered.
+  win.document.querySelector('#confdenom button[data-denom="shown"]').click();
+  await win.happyDOM.waitUntilComplete();
+  assert.match(cell("sa", "za").textContent, /^\d+\/\d+$/);
+});
