@@ -218,7 +218,7 @@ async function handleEvents(req, env) {
 async function handleGetEvents(req, env, url) {
   const uid = decodeURIComponent(url.pathname.split("/")[3]);
   const rows = await env.mimi_stats.prepare(
-    "SELECT ts, target, idx, picked, cap, ms, ev, voice FROM events WHERE uid = ? ORDER BY ts ASC"
+    "SELECT ts, target, idx, picked, cap, ms, ev, voice, opts FROM events WHERE uid = ? ORDER BY ts ASC"
   ).bind(uid).all();
   return json({ events: rows.results || [] });
 }
