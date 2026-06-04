@@ -76,7 +76,7 @@ async function load(uid) {
     renderMora(data.by_mora);
     renderVoice(data.by_voice, data.by_voice_played);
     renderVoiceConfusion(data.by_voice_confusion);
-    renderConfusion(data.confusion);
+    renderConfusion(data.confusion, data.confusion_shown, data.confusion_offered);
     // Per-user / uid-drilldown sections — only if level-2 authorizes them.
     loadUserStats(uid);
   } catch (e) {
@@ -344,6 +344,20 @@ function hideUidPopup() {
       drawVoiceConfusion();
     });
   }
+
+  // Confusion matrix denominator toggle (asked sound vs shown kana) — its own
+  // switch; "when offered" only applies to the confusion matrix, so it alone
+  // redraws. Mirrors the user dashboard.
+  const denomSwitch = document.getElementById("confdenom");
+  denomSwitch.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-denom]");
+    if (!btn) return;
+    confDenom = btn.dataset.denom;
+    for (const b of denomSwitch.querySelectorAll("button[data-denom]")) {
+      b.classList.toggle("active", b.dataset.denom === confDenom);
+    }
+    drawConfusion();
+  });
 
   // Click-to-play delegations. Bound on stable parent elements so they
   // survive each redraw (which replaces only the inner HTML).
@@ -631,26 +645,51 @@ function drawVoiceConfusion() {
 }
 
 // ---------- confusion (same shape as user dashboard, server-side counts) ----------
-let confusionCounts = null;
-let confusionRowTotals = null;
+let confusionCounts = null;     // t/p -> picks, all answers ("asked" numerator)
+let confusionRowTotals = null;  // t   -> attempts, all answers ("asked" % denominator)
+let confusionShown = null;      // t/p -> picks among opts-bearing answers ("shown" numerator)
+let confusionOffered = null;    // t/p -> times kana p was on screen when t was asked ("shown" denominator)
 
-function renderConfusion(rows) {
-  const counts = {};
-  const rowTotals = {};
+// Denominator toggle, independent of the count/pct one — same as the user
+// dashboard. "asked" normalises by how often the sound was asked; "shown" by
+// how often that confuser kana was actually offered (true pairwise confusion).
+let confDenom = "asked";
+
+function renderConfusion(rows, shownRows, offeredRows) {
+  const counts = {}, rowTotals = {}, shown = {}, offered = {};
   for (const r of rows || []) {
     counts[`${r.t}/${r.p}`] = r.n;
     rowTotals[r.t] = (rowTotals[r.t] || 0) + r.n;
   }
+  for (const r of shownRows || []) shown[`${r.t}/${r.p}`] = r.n;
+  for (const r of offeredRows || []) offered[`${r.t}/${r.k}`] = r.n;
   confusionCounts = counts;
   confusionRowTotals = rowTotals;
+  confusionShown = shown;
+  confusionOffered = offered;
   drawConfusion();
 }
 
 function drawConfusion() {
   if (!confusionCounts) return;
   const cells = confchart.querySelectorAll("td[data-t]");
-  // value{display, mag, raw} — mag drives the colour, display is the text.
+  // value{display, mag, raw} — mag drives the colour, display is the text,
+  // raw>0 means "has data" (drives the .empty dimming).
   const valueFor = (t, p) => {
+    if (confDenom === "shown") {
+      const n = confusionShown[`${t}/${p}`] || 0;
+      const off = confusionOffered[`${t}/${p}`] || 0;
+      if (displayMode === "pct") {
+        const pct = off > 0 ? n / off * 100 : 0;
+        let display = "";
+        if (off > 0 && n > 0) {
+          const r = Math.round(pct);
+          display = r === 0 ? "<1" : String(r);
+        }
+        return { display, mag: pct, raw: off };
+      }
+      return { display: off ? `${n}/${off}` : "", mag: n, raw: off };
+    }
     const n = confusionCounts[`${t}/${p}`] || 0;
     if (displayMode === "pct") {
       const rt = confusionRowTotals[t] || 0;
@@ -684,6 +723,12 @@ function drawConfusion() {
     td.style.background = bg;
     td.textContent = v.display;
     td.classList.toggle("empty", v.raw === 0);
+  }
+  const legend = confchart.querySelector(".conflegend");
+  if (legend) {
+    legend.textContent = confDenom === "shown"
+      ? "rows = sound heard · columns = kana picked · value = picked ÷ times that kana was offered"
+      : "rows = sound heard · columns = kana picked · diagonal = correct";
   }
 }
 
