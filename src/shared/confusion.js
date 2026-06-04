@@ -21,26 +21,34 @@ export function pAbove20(k, n) {
 
 // Classify the off-diagonal cases from shown[`T/P`] (wrong picks) and
 // offered[`T/P`] (offers). Returns:
-//   grind — Set of "T/P" we're >95% sure exceed a 20% wrong-rate (drill these)
-//   probe — the single "T/P" with the highest observed wrong-rate among the
-//           still-uncertain cases (neither confidently above nor below 20%), or
-//           null. Recompute whenever the data changes.
+//   grind     — Set of "T/P" we're >95% sure exceed a 20% wrong-rate (drill these)
+//   bestGrind — the grind case with the highest observed wrong-rate, or null
+//   probe     — the single "T/P" with the highest observed wrong-rate among the
+//               still-uncertain cases (neither confidently above nor below 20%),
+//               or null. Recompute whenever the data changes.
 export function confusionTargets(shown, offered) {
   const grind = new Set();
   let probe = null, probeRate = -1, probeN = -1;
+  let bestGrind = null, grindRate = -1, grindN = -1;
   for (const key of Object.keys(offered)) {
     const [t, p] = key.split("/");
     if (t === p) continue;            // diagonal = correct answers, not a case
     const n = offered[key];
     if (!n) continue;
     const k = shown[key] || 0;
+    const rate = k / n;
     const pa = pAbove20(k, n);
-    if (pa > 0.95) { grind.add(key); continue; }   // confidently > 20% → grind
-    if (pa < 0.05) continue;                        // confidently < 20% → ignore
-    const rate = k / n;                             // uncertain → probe candidate
-    if (rate > probeRate || (rate === probeRate && n > probeN)) {
+    if (pa > 0.95) {                  // confidently > 20% → grind
+      grind.add(key);
+      if (rate > grindRate || (rate === grindRate && n > grindN)) {
+        bestGrind = key; grindRate = rate; grindN = n;
+      }
+      continue;
+    }
+    if (pa < 0.05) continue;          // confidently < 20% → ignore
+    if (rate > probeRate || (rate === probeRate && n > probeN)) {  // uncertain → probe
       probe = key; probeRate = rate; probeN = n;
     }
   }
-  return { grind, probe };
+  return { grind, bestGrind, probe };
 }
