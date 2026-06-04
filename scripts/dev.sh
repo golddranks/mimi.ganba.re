@@ -3,8 +3,9 @@
 #   - Static site on http://localhost:8080/      (python http.server, dist/)
 #   - Stats worker  on http://localhost:8787/    (wrangler dev, worker/)
 #
-# The worker runs against a fresh snapshot of PROD's D1, pulled into an isolated
-# local miniflare DB on every launch (reads prod, never writes it). The worker
+# The worker runs against a snapshot of PROD's D1 in an isolated local miniflare
+# DB, refreshed from prod when the local copy is >6h old (reads prod, never
+# writes it). The worker
 # then migrates that local copy on first request, so you develop against real
 # data with the schema the code expects. Needs `wrangler login`.
 
@@ -53,8 +54,8 @@ fi
 
 python3 scripts/build.py
 
-# Pull a fresh snapshot of prod into the local D1 on every launch. The worker
-# migrates this copy on first request, so local matches prod data + code schema.
+# Refresh the local D1 from a prod snapshot (cached — re-pulled only when >6h
+# old). The worker migrates this copy on first request, so local matches prod.
 bash scripts/snapshot.sh
 
 # Kill the whole process group when this script exits so both children die.
@@ -70,7 +71,7 @@ cat <<EOF
   worker: http://127.0.0.1:8787/
   admin:  http://localhost:8080/admin/?uid=<your-uid>
 
-  Local D1 is a fresh snapshot of prod, re-pulled each launch (reads prod only).
+  Local D1 mirrors prod, re-pulled from prod when >6h old (reads prod only).
 
 Ctrl-C to stop both.
 

@@ -25,9 +25,9 @@ For the combined site + worker stack — frontend on `:8080`, worker on `:8787`
 ./scripts/dev.sh
 ```
 
-On every launch `dev.sh` pulls a fresh snapshot of prod's D1 into an isolated
-local miniflare DB (via `scripts/snapshot.sh`) — it reads prod, never writes it,
-and needs `wrangler login`. The worker then migrates that local copy on first
+`dev.sh` keeps an isolated local miniflare DB mirroring prod's D1 (via
+`scripts/snapshot.sh`), refreshing it from prod only when the local copy is over
+6h old — it reads prod, never writes it, and needs `wrangler login`. The worker then migrates that local copy on first
 request, so you develop against real data with the schema the code expects. The
 frontend auto-detects `localhost` and talks to the local worker.
 
@@ -116,7 +116,7 @@ The suite lives in `worker/test/` and runs on `node:test`:
 ./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # API gate against a running worker (prod)
 ```
 
-With no argument it pulls a fresh prod snapshot (`scripts/snapshot.sh`), builds
+With no argument it refreshes the local DB from a prod snapshot (`scripts/snapshot.sh`, cached 6h), builds
 the site (`scripts/build.py`, so the DOM suite can load the real pages), boots the
 worker on a local miniflare D1, runs the full suite, and tears down — so the
 code's migrations run against prod's *actual* schema, exactly as a deploy would
@@ -133,9 +133,11 @@ the hook gates locally, then CI gates again and deploys. Bypass the hook with
 ### Snapshotting prod
 
 `scripts/snapshot.sh` does `wrangler d1 export` of prod into a SQL dump, resets
-the local miniflare DB, and imports it. It's the shared step both `dev.sh` and
-`smoke.sh` run on every launch, so local always mirrors prod. Needs `wrangler
-login` locally (or `CLOUDFLARE_API_TOKEN` with *D1: Read* in CI). It verifies the
+the local miniflare DB, and imports it. Both `dev.sh` and `smoke.sh` run it, but
+it's **cached**: the export only re-hits prod when the local copy is over 6h old
+(it never locks prod on every launch; `rm -rf worker/.wrangler/state` forces a
+pull). Needs `wrangler login` locally (or `CLOUDFLARE_API_TOKEN` with *D1: Read*
+in CI; CI containers are fresh, so they always pull). It verifies the
 dump before wiping local, so a failed/empty export never leaves you with an empty
 DB. The dump holds real user rows, lives under the system temp dir, and must not
 be committed or shared.

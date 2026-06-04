@@ -6,8 +6,9 @@
 #   ./scripts/smoke.sh <url>     run the API gate against an already-running
 #                                worker (e.g. production, post-deploy)
 #
-# Local mode pulls a fresh prod snapshot (snapshot.sh), so the worker's
-# migrations run against the real prod schema + data; it never writes prod. The
+# Local mode refreshes the local DB from a prod snapshot (snapshot.sh, cached 6h),
+# so the worker's migrations run against the real prod schema + data; never writes
+# prod. The
 # DOM suite drives the BUILT dist/ pages in happy-dom against the local worker:
 # the app posts real events through the worker into D1, the dashboard reads them
 # back. Tests live in worker/test/ (node:test; happy-dom for the DOM suite).
@@ -21,7 +22,7 @@ if [ "${1:-}" ]; then
   exec env BASE="${1%/}" node --test test/api.test.mjs
 fi
 
-# Local mode: fresh prod snapshot, build the site, boot the worker, run e2e.
+# Local mode: refresh prod snapshot (cached 6h), build the site, boot, run e2e.
 bash "$HERE/snapshot.sh"
 
 # The worker imports build-generated src/voicemap.js (gitignored); build.py
