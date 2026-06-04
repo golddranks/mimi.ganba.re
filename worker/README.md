@@ -25,9 +25,10 @@ For the combined site + worker stack — frontend on `:8080`, worker on `:8787`
 ./scripts/dev.sh
 ```
 
-The worker runs on an isolated local miniflare D1 and never touches prod. It
-starts empty (seeded from `schema.sql`); to work with real data, run
-`worker/snapshot.sh` first to load a copy of prod into the local DB. The
+On every launch `dev.sh` pulls a fresh snapshot of prod's D1 into an isolated
+local miniflare DB (via `scripts/snapshot.sh`) — it reads prod, never writes it,
+and needs `wrangler login`. The worker then migrates that local copy on first
+request, so you develop against real data with the schema the code expects. The
 frontend auto-detects `localhost` and talks to the local worker.
 
 The rare case of running against the live prod DB isn't a blessed workflow —
@@ -44,15 +45,18 @@ matches what's in the data dir on `main`.
 
 Required GitHub secret: `CLOUDFLARE_API_TOKEN`. Don't use the *Edit Workers*
 template — it grants way more than CI needs. Create a **Custom token** with
-a single permission:
+two permissions:
 
-| Permission                         | Why                                    |
-|------------------------------------|----------------------------------------|
-| Account → Workers Scripts: Edit    | Upload and publish the worker bundle.  |
+| Permission                         | Why                                              |
+|------------------------------------|--------------------------------------------------|
+| Account → Workers Scripts: Edit    | Upload and publish the worker bundle.            |
+| Account → D1: Read                 | Pre-deploy gate snapshots prod (`smoke.sh`).     |
 
-That's it. Wrangler 4 (which the workflow pins) skips the pre-deploy
-`/memberships` and D1-binding probes that wrangler 3 made, so the token
-needs neither *User Details: Read* nor *D1: Read*.
+The *D1: Read* permission is what lets the pre-deploy smoke `wrangler d1 export`
+a fresh prod snapshot and run the code's migrations against the real schema
+before deploying (see *Smoke tests*). Wrangler 4 (which the workflow pins) skips
+the `/memberships` probe wrangler 3 made, so the token still needs no
+*User Details: Read*.
 
 Additive schema migrations are **applied automatically** by the worker: the
 ordered list in `src/migrations.js` runs on the first request each isolate
@@ -83,63 +87,57 @@ smoke against the live worker.
 Manual deploy is still possible:
 
 ```sh
-python3 scripts/build.py --voicemap-only   # refresh voicemap
-cd worker
-bash snapshot.sh && bash smoke.sh          # pre-deploy check against a prod snapshot
-npx wrangler deploy
-node smoke.mjs https://mimi-stats.golddranks.workers.dev   # post-deploy check
+python3 scripts/build.py --voicemap-only                       # refresh voicemap
+./scripts/smoke.sh                                             # snapshot prod + smoke (pre-deploy)
+( cd worker && npx wrangler deploy )
+./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # post-deploy check
 ```
 
 ## Smoke tests
 
-`smoke.mjs` is a dependency-free check (Node 18+ `fetch`) that hits a worker and
-asserts the paths a schema/code mismatch breaks — most importantly a *non-empty*
-`POST /v1/events` INSERT round-trip, the exact 500 the migration system exists to
-prevent. (An empty batch early-returns before the INSERT, so it can't surface
-that bug — the test posts real rows.) It writes under the `TestUser` sentinel uid,
-so the rows stay out of all aggregates.
+`worker/smoke.mjs` is the dependency-free assertion engine (Node 18+ `fetch`): it
+hits a worker and asserts the paths a schema/code mismatch breaks — most
+importantly a *non-empty* `POST /v1/events` INSERT round-trip, the exact 500 the
+migration system exists to prevent. (An empty batch early-returns before the
+INSERT, so it can't surface that bug — the test posts real rows.) It writes under
+the `TestUser` sentinel uid, so the rows stay out of all aggregates.
+
+`scripts/smoke.sh` is the entry point:
 
 ```sh
-node smoke.mjs http://127.0.0.1:8787                       # an already-running worker
-node smoke.mjs https://mimi-stats.golddranks.workers.dev   # production
+./scripts/smoke.sh                                             # snapshot prod -> boot local -> assert
+./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # assert against a running worker (prod)
 ```
 
-`smoke.sh` wraps it: boots the worker on a local miniflare D1, waits, smokes it,
-tears down. No flags, never touches prod. Run `snapshot.sh` first to test against
-real prod state:
+With no argument it pulls a fresh prod snapshot (`scripts/snapshot.sh`), boots the
+worker on a local miniflare D1, smokes it, and tears down — so the code's
+migrations run against prod's *actual* schema, exactly as a deploy would apply
+them. That's how drift gets caught before publishing, with zero prod risk and the
+option to `rollback` the local copy and retry. Given a URL it skips the snapshot
+and just hits that worker.
 
-```sh
-bash snapshot.sh    # pull prod D1 into the local miniflare DB
-bash smoke.sh       # test that local copy
-```
-
-You rarely run `smoke.sh` by hand: a **pre-push hook** (`.githooks/pre-push`,
+You rarely run it by hand: a **pre-push hook** (`.githooks/pre-push`,
 auto-installed by `scripts/dev.sh`) runs it whenever a push changes the worker, so
 the whole workflow is just **`./scripts/dev.sh` to develop, `git push` to ship** —
 the hook gates locally, then CI gates again and deploys. Bypass the hook with
 `git push --no-verify`; it skips itself if `worker/node_modules` isn't installed.
 
-Without a snapshot, the local DB is seeded from `schema.sql` (every column
-present), so `smoke.sh` catches code regressions but not a *forgotten* migration
-entry. A snapshot reproduces prod's actual schema, so the migration runs locally
-exactly as a deploy would apply it — that's how you catch drift before
-publishing, with zero prod risk and the option to `rollback` the local copy and
-retry.
-
 ### Snapshotting prod
 
-`snapshot.sh` does `wrangler d1 export` of prod into a SQL dump, resets the local
-miniflare DB, and imports it — so `smoke.sh` (or `./scripts/dev.sh`) then runs
-against a real copy of prod. Needs `wrangler login`. The dump holds real user
-rows, is gitignored, and must not be committed or shared.
+`scripts/snapshot.sh` does `wrangler d1 export` of prod into a SQL dump, resets
+the local miniflare DB, and imports it. It's the shared step both `dev.sh` and
+`smoke.sh` run on every launch, so local always mirrors prod. Needs `wrangler
+login` locally (or `CLOUDFLARE_API_TOKEN` with *D1: Read* in CI). It verifies the
+dump before wiping local, so a failed/empty export never leaves you with an empty
+DB. The dump holds real user rows, lives under the system temp dir, and must not
+be committed or shared.
 
-The CI deploy runs the smoke twice: a **pre-deploy gate** (deploy aborts on
-failure; hermetic, no prod side effects) and a **post-deploy** run against
-production. CI's gate uses a bare `schema.sql` DB, not a snapshot (that would need
-a D1-read token), so it catches code regressions; the post-deploy run covers
-schema drift against the real DB. If it fails, roll back with `npx
-wrangler rollback` (or `npx wrangler deployments list` to pick a target) — fast,
-since the worker is on `*.workers.dev`.
+The CI deploy runs the smoke twice: a **pre-deploy gate** that snapshots prod and
+runs the migration against it (deploy aborts on failure) and a **post-deploy** run
+against the live worker. Both use the same `CLOUDFLARE_API_TOKEN` — the gate's
+snapshot is why the token needs *D1: Read*. If the post-deploy run fails, roll
+back with `npx wrangler rollback` (or `npx wrangler deployments list` to pick a
+target) — fast, since the worker is on `*.workers.dev`.
 
 ## Endpoints
 

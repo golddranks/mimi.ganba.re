@@ -3,10 +3,10 @@
 #   - Static site on http://localhost:8080/      (python http.server, dist/)
 #   - Stats worker  on http://localhost:8787/    (wrangler dev, worker/)
 #
-# The worker runs against an isolated local miniflare D1 — it never touches
-# prod. To work with real data, run worker/snapshot.sh first to load a copy of
-# prod into the local DB; the dashboards then show that snapshot. No flags, no
-# Cloudflare auth, fully offline.
+# The worker runs against a fresh snapshot of PROD's D1, pulled into an isolated
+# local miniflare DB on every launch (reads prod, never writes it). The worker
+# then migrates that local copy on first request, so you develop against real
+# data with the schema the code expects. Needs `wrangler login`.
 
 set -euo pipefail
 
@@ -53,11 +53,9 @@ fi
 
 python3 scripts/build.py
 
-# Seed the local miniflare D1 with the schema (idempotent — schema.sql uses
-# CREATE TABLE IF NOT EXISTS, so this is a no-op on a snapshot-loaded DB).
-echo "Applying schema to local D1…"
-( cd worker && npx wrangler d1 execute mimi-stats --local --file=schema.sql ) > /dev/null 2>&1 \
-  || echo "warning: local D1 init failed; first /v1/events POST may error. Run manually: (cd worker && npx wrangler d1 execute mimi-stats --local --file=schema.sql)"
+# Pull a fresh snapshot of prod into the local D1 on every launch. The worker
+# migrates this copy on first request, so local matches prod data + code schema.
+bash scripts/snapshot.sh
 
 # Kill the whole process group when this script exits so both children die.
 trap 'kill 0 2>/dev/null || true' EXIT INT TERM
@@ -72,8 +70,7 @@ cat <<EOF
   worker: http://127.0.0.1:8787/
   admin:  http://localhost:8080/admin/?uid=<your-uid>
 
-  Local D1 only — never touches prod. Run worker/snapshot.sh to load a copy
-  of prod data into it.
+  Local D1 is a fresh snapshot of prod, re-pulled each launch (reads prod only).
 
 Ctrl-C to stop both.
 

@@ -33,4 +33,4 @@ fi
 
 echo "pre-push: smoking the worker (skip with --no-verify)…"
 # Port 8799 so it can't clash with a dev.sh already on 8787.
-PORT=8799 bash worker/smoke.sh
+PORT=8799 bash scripts/smoke.sh

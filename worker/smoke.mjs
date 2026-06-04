@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Dependency-free smoke test for the mimi-stats worker. Exercises the request
 // paths a schema/code mismatch breaks — above all the INSERT in /v1/events, the
-// 500 that motivated the migration system. Run against any base URL:
+// 500 that motivated the migration system. The assertion engine behind
+// scripts/smoke.sh (which snapshots prod + boots a local worker, or takes a
+// URL); runnable directly against any base URL too:
 //
-//   node smoke.mjs http://127.0.0.1:8787                       # local miniflare
-//   node smoke.mjs https://mimi-stats.golddranks.workers.dev   # production
+//   node worker/smoke.mjs https://mimi-stats.golddranks.workers.dev
 //
 // Writes a couple of rows under the TestUser sentinel uid (nickname 'TestUser'),
 // so production aggregates exclude them (see EXCLUDE_TEST in src/index.js). That
