@@ -105,6 +105,28 @@ test("app: a Y/N question saves a y event end to end", async (t) => {
   assert.equal(yn[0].picked, "sa");
 });
 
+test("app: day-start probing drills the uncertain confusion (released without the grind flag)", async (t) => {
+  const { win, close } = await loadPage("index.html", {
+    url: ORIGIN + "/",
+    setup: (w) => {
+      // sa→za: 2 wrong of 3 offered → uncertain → the probe target. No stats
+      // today, so the day-start probe phase starts even with grind off.
+      w.localStorage.setItem("grind_tally", JSON.stringify({
+        sa: { n: 3, correct: 1, conf: { za: 2 }, offered: { za: 3 } },
+      }));
+    },
+  });
+  t.after(close);
+
+  win.primary.click();
+  const btns = await waitFor(() => {
+    const b = win.choices.querySelectorAll("button.choice");
+    return b.length ? b : null;
+  });
+  const morae = [...btns].map((b) => b.dataset.mora).sort();
+  assert.deepEqual(morae, ["sa", "za"], "probe drills the sa/za pair as a 2-button question");
+});
+
 test("dashboard: confusion matrix renders asked vs shown denominators", async (t) => {
   // Per-uid view, so counts are exact. With the sa fixture, za is picked 3x &
   // offered 5x, sya picked 1x & offered 1x.

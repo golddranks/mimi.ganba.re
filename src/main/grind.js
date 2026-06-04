@@ -18,9 +18,11 @@ import { viewMode, stats, today, acc } from "./app.js";
 import { daysAgo } from "../shared/dates.js";
 import { confusionTargets } from "../shared/confusion.js";
 
-// Master switch for the drill. While false the tally still accumulates (and the
-// server records opts/skill), but no user is ever pulled into a drill — we're
-// collecting data to validate the trigger before release. Flip to true to ship.
+// Probing — drilling your most uncertain confusion at day-start — ships
+// unflagged. GRIND_ENABLED gates only the *grind* phase that would follow the
+// probes (the focused drill of a confirmed grind target), which isn't released
+// yet; until it's on, probing just ends and normal questions resume. The tally
+// accumulates either way. Flip to true to also ship grind.
 const GRIND_ENABLED = false;
 
 const PROBE_MAX = 5;            // questions spent probing at day-start
@@ -111,7 +113,9 @@ export const getGrind = () => {
 };
 
 function startGrindPhase() {
-  const g = bestGrindTarget();
+  // Probing is over; enter the grind phase only if it's released, else end
+  // (grind = null → normal questions).
+  const g = GRIND_ENABLED ? bestGrindTarget() : null;
   grind = g ? { phase: "grind", target: g.target, confuser: g.confuser, answered: 0 } : null;
   saveGrind();
 }
@@ -120,6 +124,7 @@ function loadGrind() {
   try {
     const g = JSON.parse(localStorage.grind);
     if (!g || g.date !== daysAgo(0) || !g.phase) return null;
+    if (g.phase === "grind" && !GRIND_ENABLED) return null;   // grind not released
     return g;
   } catch { return null; }
 }
@@ -141,8 +146,10 @@ function grindShouldExit() {
 // drill mid-session.
 export function initGrind() {
   migrateLog();
-  if (!GRIND_ENABLED) return;   // drill off; tally keeps accumulating above
   grind = loadGrind();
+  // At day-start (today has no answers yet) begin probing, so we don't yank the
+  // user into a drill mid-session. Probing is always on; the grind phase that may
+  // follow it is gated in startGrindPhase.
   if (!grind && !stats[daysAgo(0)]) {
     grind = { phase: "probe", probesAsked: 0 };
     saveGrind();
