@@ -21,11 +21,15 @@ CREATE TABLE IF NOT EXISTS users (
 --         and breaks the streak. The voice replayed is the question's.
 --   'p' — after a wrong/guess answer, a choice button was tapped during
 --         review to play that choice's audio. picked = the mora tapped.
+--   'y' — Y/N quiz, user answered ○ ("yes, this kana is the sound").
+--         picked = the displayed kana's mora; correct iff picked = target.
+--   'n' — Y/N quiz, user answered ✕ ("no, it isn't").
+--         picked = the displayed kana's mora; correct iff picked != target.
 --
 -- `idx` and `voice` describe the voice that was played in *this* event.
 -- The mora that voice belongs to depends on the event kind:
---    'a'/'g'/'r'   →  target  (so idx = target's voice idx, voice = target's voice name)
---    'p'           →  picked  (so idx = picked's voice idx, voice = picked's voice name)
+--    'a'/'g'/'r'/'y'/'n'  →  target  (idx/voice = target's; the sound played is the target's)
+--    'p'                   →  picked  (so idx = picked's voice idx, voice = picked's voice name)
 -- This polymorphism lets a single (idx, voice) pair carry "what was played"
 -- across all kinds without redundant pidx/pvoice columns.
 --

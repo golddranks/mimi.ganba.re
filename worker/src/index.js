@@ -175,7 +175,7 @@ async function handleEvents(req, env) {
     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
   const inserts = body.events.map((e) => {
-    const ev = ["a", "g", "r", "p"].includes(e.ev) ? e.ev : "a";
+    const ev = ["a", "g", "r", "p", "y", "n"].includes(e.ev) ? e.ev : "a";
     const target = String(e.target || "");
     const idx = e.idx | 0;
     const picked = String(e.picked || "");

@@ -60,3 +60,19 @@ test("POST /v1/events with no events[] -> 400 (not 500)", async () => {
   const bad = await req("POST", "/v1/events", { uid: UID });
   assert.equal(bad.status, 400);
 });
+
+test("POST /v1/events preserves Y/N event kinds (not coerced to 'a')", async () => {
+  const ts = Date.now();
+  const events = [
+    { ts, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 800, ev: "y", skill: 16 },
+    { ts: ts + 1, target: "si", idx: 0, picked: "ti", cap: 2, ms: 900, ev: "n", skill: 16 },
+  ];
+  const post = await req("POST", "/v1/events", { uid: UID, events });
+  assert.equal(post.status, 200, post.data ? JSON.stringify(post.data) : "");
+
+  const got = (await req("GET", `/v1/user/${UID}/events`)).data?.events || [];
+  const y = got.find((e) => e.ts === ts);
+  const n = got.find((e) => e.ts === ts + 1);
+  assert.equal(y?.ev, "y", "y event kind preserved");
+  assert.equal(n?.ev, "n", "n event kind preserved");
+});

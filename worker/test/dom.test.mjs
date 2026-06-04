@@ -24,11 +24,14 @@ const postEvents = (uid, events) =>
 
 // power_user has no API setter (it's granted by hand via SQL), so poke the local
 // D1 the dev worker reads. Local-only, like this whole suite; runs from worker/.
-const grantPowerUser = (uid, level = 1) =>
-  execFileSync("npx", [
-    "wrangler", "d1", "execute", "mimi-stats", "--local",
-    "--command", `UPDATE users SET power_user=${level} WHERE uid='${uid}'`,
-  ], { stdio: "ignore" });
+// Honors WRANGLER_PERSIST so it targets the same state dir the worker booted on
+// (smoke.sh uses the default; an isolated test run can point both at a temp dir).
+const grantPowerUser = (uid, level = 1) => {
+  const args = ["wrangler", "d1", "execute", "mimi-stats", "--local"];
+  if (process.env.WRANGLER_PERSIST) args.push("--persist-to", process.env.WRANGLER_PERSIST);
+  args.push("--command", `UPDATE users SET power_user=${level} WHERE uid='${uid}'`);
+  execFileSync("npx", args, { stdio: "ignore" });
+};
 
 // Six deterministic answers for sound "sa", reused by the dashboard and admin
 // tests: za picked 3x & offered 5x, sa picked 2x, sya picked 1x & offered 1x.
@@ -72,6 +75,34 @@ test("app: answering questions posts events (with opts) to the worker", async (t
     answers.some((e) => typeof e.opts === "string" && e.opts.includes(",")),
     "answer events carry the opts column end-to-end",
   );
+});
+
+test("app: a Y/N question saves a y event end to end", async (t) => {
+  const { win, close } = await loadPage("index.html", {
+    url: ORIGIN + "/",
+    workerBase: BASE,
+    setup: (w) => {
+      // Unlock Y/N for vowel 'a' (skill >= 15), and force the Y/N branch with the
+      // shown kana == target: Math.random()->0.01 makes pick/idx deterministic and
+      // both `< YN_RATIO` (0.2) and `< 0.5` true, so target=sa, shown=さ, answer=yes.
+      w.localStorage.setItem("mora", JSON.stringify({ s: {}, k: 0, x: { a: 20 } }));
+      w.Math.random = () => 0.01;
+    },
+  });
+  t.after(close);
+  const uid = win.localStorage.uid;
+
+  win.primary.click();
+  await waitFor(() => !win.yn.hidden);
+  assert.equal(win.ynprompt.textContent, "さ");
+  win.ynyes.click();   // ○: さ is the sa sound → correct
+
+  const yn = await waitFor(async () => {
+    const e = (await getEvents(uid)).filter((x) => x.ev === "y" || x.ev === "n");
+    return e.length ? e : null;
+  });
+  assert.equal(yn[0].ev, "y");
+  assert.equal(yn[0].picked, "sa");
 });
 
 test("dashboard: confusion matrix renders asked vs shown denominators", async (t) => {

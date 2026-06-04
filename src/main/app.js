@@ -160,9 +160,22 @@ function play(src) {
   audio.play().catch(() => { });
 }
 
+// Fraction of *normal* questions (not grind/probe drills) that become a Y/N
+// quiz, once the target's vowel group has unlocked it (cap >= 4 buttons).
+const YN_RATIO = 0.2;
+
+// Clear per-question UI before the next question renders.
+function resetQuiz() {
+  choices.hidden = true;
+  yn.hidden = true;
+  ynactual.hidden = true;
+  for (const b of [ynyes, ynno]) b.classList.remove("correct", "wrong");
+}
+
 function newQuestion() {
   locked = false;
   disarmRelisten();
+  resetQuiz();
   let target, opts;
   const g = getGrind();
   if (g) {
@@ -179,13 +192,16 @@ function newQuestion() {
     target = pick(ALL);
     const v = target.slice(-1);
     const cap = capFor(skill[v] || 0);
+    // Y/N quiz unlocks at cap >= 4 buttons (skill >= 15) for this vowel group;
+    // a fraction of those normal questions use it instead of multi-choice.
+    if (cap >= 4 && Math.random() < YN_RATIO) { newYNQuestion(target, v); return; }
     const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
     opts = shuffle([target, ...shuffle(sibs).slice(0, cap - 1)]);
   }
   const idx = rand(target);
   // skill = the target vowel's level (correct-count) at question time — frozen
   // into the event so changing the level rules can't rewrite history.
-  current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now(), opts, skill: skill[target.slice(-1)] || 0 };
+  current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now(), opts, skill: skill[target.slice(-1)] || 0, kind: "m" };
   primary.hidden = true;
   // Each button gets a fixed sample index — tapping a button during review
   // always replays the same audio. Long-press during review plays a random one.
@@ -198,6 +214,47 @@ function newQuestion() {
   choices.hidden = false;
   play(current.voice);
 }
+
+// Y/N quiz: play one mora, show one hiragana; the user decides whether they
+// match. 50/50 the shown kana is the real target vs a random same-vowel sibling.
+// Not fed into the grind tally (no choice set), and excluded from the dashboard.
+function newYNQuestion(target, v) {
+  const idx = rand(target);
+  const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
+  const displayed = (sibs.length === 0 || Math.random() < 0.5) ? target : pick(sibs);
+  current = { target, idx, voice: path(target, idx), displayed, cap: 2, startTs: Date.now(), skill: skill[v] || 0, kind: "yn" };
+  primary.hidden = true;
+  ynprompt.textContent = HIRAGANA[displayed];
+  yn.hidden = false;
+  play(current.voice);
+}
+
+// ○ = "yes, that's the sound" (correct iff shown kana is the target); ✕ = "no".
+function ynSubmit(yes) {
+  if (!current || current.kind !== "yn" || locked) return;
+  disarmRelisten();
+  const { target, idx, displayed, startTs, skill: level } = current;
+  const correct = yes ? (displayed === target) : (displayed !== target);
+  const ms = Date.now() - startTs;
+  record(correct, target.slice(-1));
+  pushEvent({ ts: Date.now(), target, idx, picked: displayed, cap: 2, ms, ev: yes ? "y" : "n", skill: level });
+  const btn = yes ? ynyes : ynno;
+  if (correct) {
+    btn.classList.add("correct");
+    current = null;
+    setTimeout(newQuestion, 650);
+  } else {
+    btn.classList.add("wrong");
+    locked = true;
+    // Reveal what the sound actually was, so the user can connect ear to symbol.
+    ynactual.innerHTML = `actually: <strong>${HIRAGANA[target]}</strong>`;
+    ynactual.hidden = false;
+    primary.textContent = "Next";
+    primary.hidden = false;
+  }
+}
+ynyes.onclick = () => ynSubmit(true);
+ynno.onclick = () => ynSubmit(false);
 
 // Long-press = "guess": if right, counts as correct but stays in review mode
 // (no auto-advance) so the user can re-listen before moving on.
@@ -336,7 +393,8 @@ onkeydown = (e) => {
     else return;
     e.preventDefault();
   } else if (/^[1-9]$/.test(e.key)) {
-    choices.children[+e.key - 1]?.click();
+    if (current?.kind === "yn") [ynyes, ynno][+e.key - 1]?.click();
+    else choices.children[+e.key - 1]?.click();
   }
 };
 
@@ -352,13 +410,14 @@ async function loadAsUser(targetUid) {
   stats = {}; skill = {}; run = 0;
   let lastDay = null;
   for (const e of events) {
-    if (e.ev !== "a" && e.ev !== "g" && e.ev !== "r") continue;
+    if (!["a", "g", "r", "y", "n"].includes(e.ev)) continue;
     const k = dateKey(new Date(e.ts));
     if (lastDay !== null && k !== lastDay) run = 0;   // day boundary resets streak
     lastDay = k;
     const v = e.target.slice(-1);
-    if (e.ev === "r") applyRelisten(v);
-    else applyAnswer(k, v, e.picked === e.target);
+    if (e.ev === "r") { applyRelisten(v); continue; }
+    // Y/N 'n' inverts correctness: a correct "no" means the shown kana wasn't it.
+    applyAnswer(k, v, e.ev === "n" ? e.picked !== e.target : e.picked === e.target);
   }
   render();
 }

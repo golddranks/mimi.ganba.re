@@ -438,6 +438,52 @@ body {
     outline-offset: 2px;
 }
 
+/* Y/N quiz: a single big hiragana prompt + maru / batsu buttons. */
+#yn {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    width: 100%;
+}
+
+#ynprompt {
+    background: var(--panel);
+    border: 2px solid var(--panel-2);
+    border-radius: 12px;
+    padding: 2.2rem 1rem;
+    font-size: 5.5rem;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1;
+}
+
+#ynactual {
+    font-size: .9rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: -.4rem;
+}
+
+#ynactual strong {
+    color: var(--good);
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-left: .3rem;
+    vertical-align: middle;
+}
+
+#ynbuttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .7rem;
+}
+
+.choice.yn {
+    font-size: 2.4rem;
+    padding: 1.2rem .4rem;
+}
+
 @media (max-width: 420px) {
     .choice {
         font-size: 2.4rem;
