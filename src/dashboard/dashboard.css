@@ -483,6 +483,14 @@ body {
 .confgrid td.grind { box-shadow: inset 0 0 0 3px var(--bad); }
 .confgrid td.probe { box-shadow: inset 0 0 0 1px var(--bad); }
 
+/* Clicked cell + its history strip (red/green per-answer boxes + trend line). */
+.confgrid td { cursor: pointer; }
+.confgrid td.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+#confdetail { margin-top: .6rem; }
+#confdetail .cd-head { font-size: .8rem; color: var(--fg); margin-bottom: .3rem; }
+#confdetail .cd-strip { display: block; width: 100%; height: 22px; }
+
 /* ---- legend ---- */
 .legend {
     display: flex;

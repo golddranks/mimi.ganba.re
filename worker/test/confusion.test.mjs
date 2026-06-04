@@ -3,7 +3,15 @@
 // best-grind / probe selection the dashboard borders and grind mode rely on.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pAbove20, confusionTargets } from "../../src/shared/confusion.js";
+import { pAbove20, confusionTargets, logisticFit, logisticAt } from "../../src/shared/confusion.js";
+
+test("logisticFit captures trend direction over a 0/1 sequence", () => {
+  const up = logisticFit([0, 0, 0, 0, 1, 1, 1, 1]);
+  const down = logisticFit([1, 1, 1, 1, 0, 0, 0, 0]);
+  assert.ok(logisticAt(up, 1) - logisticAt(up, 0) > 0.1, "rising sequence trends up");
+  assert.ok(logisticAt(down, 1) - logisticAt(down, 0) < -0.1, "falling sequence trends down");
+  assert.equal(logisticFit([1]), null, "needs at least two points");
+});
 
 test("pAbove20 matches the Beta-binomial identity", () => {
   // 0/0 is the Beta(1,4) prior: P(p>0.2) = 1 - CDF(0.2) = (1-0.2)^4 = 0.4096.

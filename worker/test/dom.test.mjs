@@ -151,6 +151,29 @@ test("dashboard: confusion matrix marks grind and probe targets", async (t) => {
   assert.ok(!cell("sa", "sa").classList.contains("grind") && !cell("sa", "sa").classList.contains("probe"));
 });
 
+test("dashboard: clicking a confusion cell shows its history strip", async (t) => {
+  // 6 sa-questions with za offered: picked za (red) 3x, sa (green) 3x.
+  const uid = randomUUID();
+  const t0 = Date.now();
+  const mk = (i, picked) => ({ ts: t0 + i, target: "sa", idx: 0, picked, cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 });
+  const events = [mk(1, "za"), mk(2, "sa"), mk(3, "za"), mk(4, "sa"), mk(5, "za"), mk(6, "sa")];
+  assert.equal((await postEvents(uid, events)).status, 200);
+
+  const { win, close } = await loadPage("dashboard/index.html", { url: `${ORIGIN}/dashboard/?uid=${uid}`, workerBase: BASE });
+  t.after(close);
+  const cell = () => win.confchart.querySelector('td[data-t="sa"][data-p="za"]');
+  const detail = win.document.getElementById("confdetail");
+
+  await waitFor(() => cell()?.textContent === "3");   // matrix rendered (asked count of za = 3)
+  assert.ok(detail.hidden, "history hidden until a cell is clicked");
+  cell().click();
+
+  await waitFor(() => !detail.hidden && detail.querySelectorAll("svg rect").length > 0);
+  assert.equal(detail.querySelectorAll("svg rect").length, 6, "one box per offered event");
+  assert.match(detail.querySelector(".cd-head").textContent, /picked ざ 3\/6/);
+  assert.ok(cell().classList.contains("selected"), "clicked cell is marked selected");
+});
+
 test("admin: confusion matrix uses server-aggregated asked vs shown counts", async (t) => {
   // The admin matrix is global (all users), so we can't assert exact counts
   // against a prod snapshot — we add the sa fixture and assert robust shape:

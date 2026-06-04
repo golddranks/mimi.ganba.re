@@ -1,6 +1,6 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { pad2, dateKey, dayKey } from "../shared/dates.js";
-import { confusionTargets } from "../shared/confusion.js";
+import { confusionTargets, logisticFit, logisticAt } from "../shared/confusion.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
 // a handful of visualizations. No localStorage writes, no event posts.
@@ -329,8 +329,12 @@ let confusionOffered = null;    // T/P -> times kana P was on screen when T was 
 //             pairwise confusion the `opts` column was added to measure.
 let confDenom = "asked";
 
+// Opts-bearing answers, kept chronological for the click-to-inspect cell history.
+let confusionEvents = [];
+
 function renderConfusion(events) {
   const counts = {}, rowTotals = {}, shown = {}, offered = {};
+  confusionEvents = events.filter((e) => isAnswer(e) && e.opts).sort((a, b) => a.ts - b.ts);
   for (const e of events) {
     if (!isAnswer(e)) continue;
     counts[`${e.target}/${e.picked}`] = (counts[`${e.target}/${e.picked}`] || 0) + 1;
@@ -461,6 +465,66 @@ function drawConfusion() {
     drawConfusion();
   });
 })();
+
+// ---------- confusion cell history ----------
+// Click a matrix cell to inspect that sound→kana pair over time as a red/green
+// strip with a logistic trend line. "Red" is the bad outcome for that cell:
+// off-diagonal → the user picked the column kana (the confusion happened);
+// diagonal → the user got it wrong. Only opts-bearing answers where the column
+// kana was actually offered count (same data as the shown/grind metrics).
+function showCellHistory(td) {
+  const t = td.dataset.t, p = td.dataset.p, diag = t === p;
+  const series = confusionEvents.filter((e) => e.target === t && e.opts.split(",").includes(p));
+  const outcomes = series.map((e) => ((diag ? e.picked !== t : e.picked === p) ? 1 : 0)); // 1 = red/bad
+
+  // Pair label from the headers: row th = katakana sound, col th = hiragana kana.
+  const table = td.closest("table");
+  const rowGlyph = td.parentElement.querySelector("th").textContent;
+  const colGlyph = table.querySelector("thead tr").children[td.cellIndex].textContent;
+
+  for (const c of confchart.querySelectorAll("td.selected")) c.classList.remove("selected");
+  td.classList.add("selected");
+
+  const pair = diag ? rowGlyph : `${rowGlyph} → ${colGlyph}`;
+  if (outcomes.length === 0) {
+    confdetail.innerHTML = `<div class="cd-head">${pair} — no answers with ${colGlyph} offered yet</div>`;
+    confdetail.hidden = false;
+    return;
+  }
+
+  const n = outcomes.length;
+  const bad = outcomes.reduce((s, o) => s + o, 0);
+  const W = 100, H = 16, gap = 0.15, bw = W / n;
+  const boxes = outcomes.map((o, i) =>
+    `<rect x="${(i * bw).toFixed(3)}" y="0" width="${Math.max(bw - gap, 0.2).toFixed(3)}" height="${H}" fill="var(--${o ? "bad" : "good"})"/>`,
+  ).join("");
+
+  // Logistic trend over chronological position; a downward (less-red) line means
+  // the confusion is fading. Need a few points before a trend is meaningful.
+  let curve = "", trend = "(too few to trend)";
+  if (n >= 5) {
+    const fit = logisticFit(outcomes);
+    const pts = [];
+    for (let s = 0; s <= 24; s++) {
+      const x = s / 24;
+      pts.push(`${(x * W).toFixed(2)},${(H - logisticAt(fit, x) * H).toFixed(2)}`);
+    }
+    curve = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>`;
+    const delta = logisticAt(fit, 1) - logisticAt(fit, 0);
+    trend = delta < -0.1 ? "improving ↓" : delta > 0.1 ? "worsening ↑" : "no clear trend";
+  }
+
+  const label = diag ? `${bad}/${n} wrong` : `picked ${colGlyph} ${bad}/${n}`;
+  confdetail.innerHTML =
+    `<div class="cd-head">${pair} · ${label} · ${trend}</div>` +
+    `<svg class="cd-strip" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${pair} history">${boxes}${curve}</svg>`;
+  confdetail.hidden = false;
+}
+
+confchart.addEventListener("click", (e) => {
+  const td = e.target.closest("td[data-t]");
+  if (td) showCellHistory(td);
+});
 
 // ---------- streak ----------
 // Per-day *peak* streak as a bar chart with a calendar-uniform x-axis. The

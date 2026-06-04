@@ -19,6 +19,33 @@ export function pAbove20(k, n) {
   return Math.min(cdf, 1);
 }
 
+// Fit P(y=1) = sigmoid(b0 + b1*x) to a chronological 0/1 sequence, with x the
+// position normalised to [0,1]. Used by the dashboard cell-history view to show
+// whether a confusion is trending up or down over time. Ridge-regularised
+// gradient descent so perfectly-separable runs converge to a finite, gentle
+// slope instead of diverging. Returns { b0, b1 } (or null for < 2 points).
+export function logisticFit(ys) {
+  const n = ys.length;
+  if (n < 2) return null;
+  let b0 = 0, b1 = 0;
+  const lr = 0.5, lambda = 2e-3, iters = 800;
+  for (let it = 0; it < iters; it++) {
+    let g0 = 0, g1 = 0;
+    for (let i = 0; i < n; i++) {
+      const x = i / (n - 1);
+      const p = 1 / (1 + Math.exp(-(b0 + b1 * x)));
+      const d = p - ys[i];
+      g0 += d; g1 += d * x;
+    }
+    b0 -= lr * (g0 / n + lambda * b0);
+    b1 -= lr * (g1 / n + lambda * b1);
+  }
+  return { b0, b1 };
+}
+
+// Probability the fitted line predicts at normalised position x in [0,1].
+export const logisticAt = (fit, x) => 1 / (1 + Math.exp(-(fit.b0 + fit.b1 * x)));
+
 // Classify the off-diagonal cases from shown[`T/P`] (wrong picks) and
 // offered[`T/P`] (offers). Returns:
 //   grind     — Set of "T/P" we're >95% sure exceed a 20% wrong-rate (drill these)
