@@ -144,13 +144,18 @@ function grindShouldExit() {
 // Restore an in-progress run (same calendar day); otherwise start the probe phase
 // only at day-start (today has no answers yet) so we don't yank the user into a
 // drill mid-session.
+// Secret testing flag: ?morning forces the day-start probe phase to (re)start,
+// even mid-session or after answering today — so the probe drilling can be
+// exercised on demand without waiting for a real new day.
+const FORCE_MORNING = new URLSearchParams(location.search).has("morning");
+
 export function initGrind() {
   migrateLog();
   grind = loadGrind();
   // At day-start (today has no answers yet) begin probing, so we don't yank the
   // user into a drill mid-session. Probing is always on; the grind phase that may
-  // follow it is gated in startGrindPhase.
-  if (!grind && !stats[daysAgo(0)]) {
+  // follow it is gated in startGrindPhase. ?morning forces it for testing.
+  if (FORCE_MORNING || (!grind && !stats[daysAgo(0)])) {
     grind = { phase: "probe", probesAsked: 0 };
     saveGrind();
   }

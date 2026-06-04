@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { loadPage, waitFor } from "./dom.mjs";
+import { daysAgo } from "../../src/shared/dates.js";
 
 const BASE = (process.env.BASE || "http://127.0.0.1:8787").replace(/\/$/, "");
 // hostname localhost/127.0.0.1 makes the pages target the local worker on :8787.
@@ -125,6 +126,24 @@ test("app: day-start probing drills the uncertain confusion (released without th
   });
   const morae = [...btns].map((b) => b.dataset.mora).sort();
   assert.deepEqual(morae, ["sa", "za"], "probe drills the sa/za pair as a 2-button question");
+});
+
+test("app: ?morning forces the probe phase even with answers logged today", async (t) => {
+  const { win, close } = await loadPage("index.html", {
+    url: ORIGIN + "/?morning",
+    setup: (w) => {
+      // Today already has answers — would normally suppress the day-start probe.
+      w.localStorage.setItem("mora", JSON.stringify({ s: { [daysAgo(0)]: { correct: 5, total: 5, maxRun: 5 } }, k: 5, x: { a: 20 } }));
+      w.localStorage.setItem("grind_tally", JSON.stringify({ sa: { n: 3, correct: 1, conf: { za: 2 }, offered: { za: 3 } } }));
+    },
+  });
+  t.after(close);
+  win.primary.click();
+  const btns = await waitFor(() => {
+    const b = win.choices.querySelectorAll("button.choice");
+    return b.length ? b : null;
+  });
+  assert.deepEqual([...btns].map((b) => b.dataset.mora).sort(), ["sa", "za"], "?morning probes despite today's stats");
 });
 
 test("dashboard: confusion matrix renders asked vs shown denominators", async (t) => {
