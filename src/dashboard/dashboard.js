@@ -1,6 +1,6 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { pad2, dateKey, dayKey } from "../shared/dates.js";
-import { confusionTargets, logisticFit, logisticAt } from "../shared/confusion.js";
+import { confusionTargets, logisticTrend, logisticAt } from "../shared/confusion.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
 // a handful of visualizations. No localStorage writes, no event posts.
@@ -492,32 +492,35 @@ function showCellHistory(td) {
     return;
   }
 
+  // Fixed-size boxes (~1:3, taller than wide), oldest→newest; the strip scrolls
+  // if there are many. The optional trend line plots P(bad) from the top, so it
+  // rises as the cell improves.
   const n = outcomes.length;
   const bad = outcomes.reduce((s, o) => s + o, 0);
-  const W = 100, H = 16, gap = 0.15, bw = W / n;
+  const BW = 7, BH = 21, GAP = 2, W = n * (BW + GAP) - GAP;
   const boxes = outcomes.map((o, i) =>
-    `<rect x="${(i * bw).toFixed(3)}" y="0" width="${Math.max(bw - gap, 0.2).toFixed(3)}" height="${H}" fill="var(--${o ? "bad" : "good"})"/>`,
+    `<rect x="${i * (BW + GAP)}" y="0" width="${BW}" height="${BH}" fill="var(--${o ? "bad" : "good"})"/>`,
   ).join("");
 
-  // Logistic trend over chronological position; a downward (less-red) line means
-  // the confusion is fading. Need a few points before a trend is meaningful.
-  let curve = "", trend = "(too few to trend)";
-  if (n >= 5) {
-    const fit = logisticFit(outcomes);
+  // Only draw a trend line / call a direction when the trend is statistically
+  // real (likelihood-ratio test) — never off a few noisy points.
+  const tr = logisticTrend(outcomes);
+  let curve = "", trend = "no clear trend";
+  if (tr.significant) {
     const pts = [];
     for (let s = 0; s <= 24; s++) {
       const x = s / 24;
-      pts.push(`${(x * W).toFixed(2)},${(H - logisticAt(fit, x) * H).toFixed(2)}`);
+      const xpx = x * (n - 1) * (BW + GAP) + BW / 2;
+      pts.push(`${xpx.toFixed(1)},${(BH - logisticAt(tr.fit, x) * BH).toFixed(1)}`);
     }
-    curve = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>`;
-    const delta = logisticAt(fit, 1) - logisticAt(fit, 0);
-    trend = delta < -0.1 ? "improving ↓" : delta > 0.1 ? "worsening ↑" : "no clear trend";
+    curve = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+    trend = tr.improving ? "improving ↑" : "worsening ↓";
   }
 
-  const label = diag ? `${bad}/${n} wrong` : `picked ${colGlyph} ${bad}/${n}`;
+  const label = diag ? `${bad}/${n} wrong` : `picked ${bad}/${n}`;
   confdetail.innerHTML =
     `<div class="cd-head">${pair} · ${label} · ${trend}</div>` +
-    `<svg class="cd-strip" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${pair} history">${boxes}${curve}</svg>`;
+    `<svg class="cd-strip" width="${W}" height="${BH}" role="img" aria-label="${pair} history">${boxes}${curve}</svg>`;
   confdetail.hidden = false;
 }
 

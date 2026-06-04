@@ -3,7 +3,7 @@
 // best-grind / probe selection the dashboard borders and grind mode rely on.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pAbove20, confusionTargets, logisticFit, logisticAt } from "../../src/shared/confusion.js";
+import { pAbove20, confusionTargets, logisticFit, logisticAt, logisticTrend } from "../../src/shared/confusion.js";
 
 test("logisticFit captures trend direction over a 0/1 sequence", () => {
   const up = logisticFit([0, 0, 0, 0, 1, 1, 1, 1]);
@@ -11,6 +11,21 @@ test("logisticFit captures trend direction over a 0/1 sequence", () => {
   assert.ok(logisticAt(up, 1) - logisticAt(up, 0) > 0.1, "rising sequence trends up");
   assert.ok(logisticAt(down, 1) - logisticAt(down, 0) < -0.1, "falling sequence trends down");
   assert.equal(logisticFit([1]), null, "needs at least two points");
+});
+
+test("logisticTrend only flags statistically real trends", () => {
+  // 8 noisy points (50% then 75% red) — not a real trend.
+  assert.equal(logisticTrend([1, 0, 0, 1, 0, 1, 1, 1]).significant, false);
+  // 30 noisy points, no drift — not a trend despite ample data.
+  assert.equal(logisticTrend(Array.from({ length: 30 }, (_, i) => [1, 0, 1, 1, 0, 0, 1, 0, 1, 0][i % 10])).significant, false);
+  // Clean red→green flip — improving (bad rate falls).
+  const imp = logisticTrend([1, 1, 1, 1, 1, 0, 0, 0, 0, 0]);
+  assert.ok(imp.significant && imp.improving, "clean red→green is improving");
+  // Clean green→red flip — worsening.
+  const wor = logisticTrend([0, 0, 0, 0, 0, 1, 1, 1, 1, 1]);
+  assert.ok(wor.significant && !wor.improving, "clean green→red is worsening");
+  // Too few points — no trend.
+  assert.equal(logisticTrend([1, 0, 1]).significant, false);
 });
 
 test("pAbove20 matches the Beta-binomial identity", () => {

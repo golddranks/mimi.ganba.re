@@ -46,6 +46,27 @@ export function logisticFit(ys) {
 // Probability the fitted line predicts at normalised position x in [0,1].
 export const logisticAt = (fit, x) => 1 / (1 + Math.exp(-(fit.b0 + fit.b1 * x)));
 
+// Whether a 0/1 sequence shows a *statistically real* trend, so we don't claim
+// "improving/worsening" off a handful of noisy points. Likelihood-ratio test of
+// the fitted line vs an intercept-only (flat) model: LR ~ chi-square(1), so
+// LR >= 3.84 is p < 0.05. (e.g. 8 noisy points → not significant; a clean run or
+// a large consistent drift → significant.) Returns { significant, improving, fit }.
+export function logisticTrend(ys) {
+  const n = ys.length;
+  if (n < 5) return { significant: false };
+  const fit = logisticFit(ys);
+  const clamp = (p) => Math.min(1 - 1e-9, Math.max(1e-9, p));
+  let llFull = 0;
+  for (let i = 0; i < n; i++) {
+    const p = clamp(logisticAt(fit, i / (n - 1)));
+    llFull += ys[i] * Math.log(p) + (1 - ys[i]) * Math.log(1 - p);
+  }
+  const m = clamp(ys.reduce((a, b) => a + b, 0) / n);
+  const llNull = n * (m * Math.log(m) + (1 - m) * Math.log(1 - m));
+  const lr = 2 * (llFull - llNull);
+  return { significant: lr >= 3.84, improving: logisticAt(fit, 1) < logisticAt(fit, 0), fit };
+}
+
 // Classify the off-diagonal cases from shown[`T/P`] (wrong picks) and
 // offered[`T/P`] (offers). Returns:
 //   grind     — Set of "T/P" we're >95% sure exceed a 20% wrong-rate (drill these)
