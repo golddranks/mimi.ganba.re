@@ -196,6 +196,26 @@ test("dashboard: clicking a confusion cell shows its history strip", async (t) =
   assert.ok(cell().classList.contains("selected"), "clicked cell is marked selected");
 });
 
+test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", async (t) => {
+  // 8 sa-questions with za offered, always answered sa → never confused (0/8).
+  const uid = randomUUID();
+  const t0 = Date.now();
+  const events = Array.from({ length: 8 }, (_, i) =>
+    ({ ts: t0 + i, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }));
+  assert.equal((await postEvents(uid, events)).status, 200);
+
+  const { win, close } = await loadPage("dashboard/index.html", { url: `${ORIGIN}/dashboard/?uid=${uid}`, workerBase: BASE });
+  t.after(close);
+  const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
+  const detail = win.document.getElementById("confdetail");
+
+  await waitFor(() => cell("sa", "sa")?.textContent === "8");   // diagonal: 8 correct → render done
+  cell("sa", "za").click();
+  await waitFor(() => !detail.hidden && detail.querySelector(".cd-head"));
+  assert.match(detail.querySelector(".cd-head").textContent, /confused 0\/8 · consistent/);
+  assert.equal(detail.querySelectorAll("svg polyline").length, 0, "no trend line for a flat cell");
+});
+
 test("admin: confusion matrix uses server-aggregated asked vs shown counts", async (t) => {
   // The admin matrix is global (all users), so we can't assert exact counts
   // against a prod snapshot — we add the sa fixture and assert robust shape:

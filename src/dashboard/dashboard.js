@@ -502,10 +502,13 @@ function showCellHistory(td) {
     `<rect x="${i * (BW + GAP)}" y="0" width="${BW}" height="${BH}" fill="var(--${o ? "bad" : "good"})"/>`,
   ).join("");
 
-  // Only draw a trend line / call a direction when the trend is statistically
-  // real (likelihood-ratio test) — never off a few noisy points.
+  // Draw a trend line / call a direction only when the trend is statistically
+  // real (likelihood-ratio test) — never off a few noisy points. Otherwise: a
+  // clearly one-sided cell (e.g. 0/8) is "consistent", not random; only a genuinely
+  // mixed one is "no clear trend".
   const tr = logisticTrend(outcomes);
-  let curve = "", trend = "no clear trend";
+  const rate = bad / n;
+  let curve = "", trend;
   if (tr.significant) {
     const pts = [];
     for (let s = 0; s <= 24; s++) {
@@ -515,6 +518,10 @@ function showCellHistory(td) {
     }
     curve = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
     trend = tr.improving ? "improving ↑" : "worsening ↓";
+  } else if (n >= 5 && (rate <= 0.2 || rate >= 0.8)) {
+    trend = "consistent";
+  } else {
+    trend = "no clear trend";
   }
 
   const label = diag ? `${bad}/${n} wrong` : `confused ${bad}/${n}`;
