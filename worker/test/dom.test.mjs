@@ -192,7 +192,7 @@ test("dashboard: clicking a confusion cell shows its history strip", async (t) =
 
   await waitFor(() => !detail.hidden && detail.querySelectorAll("svg rect").length > 0);
   assert.equal(detail.querySelectorAll("svg rect").length, 6, "one box per offered event");
-  assert.match(detail.querySelector(".cd-head").textContent, /→ ざ · picked 3\/6/);
+  assert.match(detail.querySelector(".cd-head").textContent, /→ ざ · confused 3\/6/);
   assert.ok(cell().classList.contains("selected"), "clicked cell is marked selected");
 });
 

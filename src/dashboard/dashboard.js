@@ -517,7 +517,7 @@ function showCellHistory(td) {
     trend = tr.improving ? "improving ↑" : "worsening ↓";
   }
 
-  const label = diag ? `${bad}/${n} wrong` : `picked ${bad}/${n}`;
+  const label = diag ? `${bad}/${n} wrong` : `confused ${bad}/${n}`;
   confdetail.innerHTML =
     `<div class="cd-head">${pair} · ${label} · ${trend}</div>` +
     `<svg class="cd-strip" width="${W}" height="${BH}" role="img" aria-label="${pair} history">${boxes}${curve}</svg>`;
