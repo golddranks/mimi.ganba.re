@@ -327,7 +327,8 @@ let confusionOffered = null;    // T/P -> times kana P was on screen when T was 
 //   "asked" — normalise a pick by how often the sound was asked (rows total)
 //   "shown" — normalise by how often *that confuser kana was offered*, the true
 //             pairwise confusion the `opts` column was added to measure.
-let confDenom = "asked";
+// Defaults to "shown" (the meaningful metric); "asked" is on its way out.
+let confDenom = "shown";
 
 // Opts-bearing answers, kept chronological for the click-to-inspect cell history.
 let confusionEvents = [];

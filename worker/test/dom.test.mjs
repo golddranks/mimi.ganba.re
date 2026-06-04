@@ -157,15 +157,15 @@ test("dashboard: confusion matrix renders asked vs shown denominators", async (t
 
   const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
 
-  // Default "asked" mode: off-diagonal cell is the raw pick count.
-  await waitFor(() => cell("sa", "za")?.textContent === "3");
-  assert.equal(cell("sa", "sya").textContent, "1");
-
-  // "shown" mode: picked / times-that-kana-was-offered.
-  win.document.querySelector('#confdenom button[data-denom="shown"]').click();
-  await win.happyDOM.waitUntilComplete();
-  assert.equal(cell("sa", "za").textContent, "3/5");
+  // Default is now "shown": picked / times-that-kana-was-offered.
+  await waitFor(() => cell("sa", "za")?.textContent === "3/5");
   assert.equal(cell("sa", "sya").textContent, "1/1");
+
+  // Toggle to "asked": the raw pick count.
+  win.document.querySelector('#confdenom button[data-denom="asked"]').click();
+  await win.happyDOM.waitUntilComplete();
+  assert.equal(cell("sa", "za").textContent, "3");
+  assert.equal(cell("sa", "sya").textContent, "1");
 });
 
 test("dashboard: confusion matrix marks grind and probe targets", async (t) => {
@@ -205,7 +205,7 @@ test("dashboard: clicking a confusion cell shows its history strip", async (t) =
   const cell = () => win.confchart.querySelector('td[data-t="sa"][data-p="za"]');
   const detail = win.document.getElementById("confdetail");
 
-  await waitFor(() => cell()?.textContent === "3");   // matrix rendered (asked count of za = 3)
+  await waitFor(() => cell()?.textContent === "3/6");   // matrix rendered (shown: za picked 3 of 6 offered)
   assert.ok(detail.hidden, "history hidden until a cell is clicked");
   cell().click();
 
@@ -228,7 +228,7 @@ test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", asy
   const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
   const detail = win.document.getElementById("confdetail");
 
-  await waitFor(() => cell("sa", "sa")?.textContent === "8");   // diagonal: 8 correct → render done
+  await waitFor(() => cell("sa", "sa")?.textContent === "8/8");   // diagonal (shown): 8 correct of 8 → render done
   cell("sa", "za").click();
   await waitFor(() => !detail.hidden && detail.querySelector(".cd-head"));
   assert.match(detail.querySelector(".cd-head").textContent, /confused 0\/8 · consistent/);
@@ -248,20 +248,20 @@ test("admin: confusion matrix uses server-aggregated asked vs shown counts", asy
 
   const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
 
-  // Asked mode: integer >= the 3 sa->za we just added.
-  const asked = await waitFor(() => {
+  // Default "shown" mode: "picked/offered", picked<=offered, offered >= the 5 we added.
+  const shown = await waitFor(() => {
     const txt = cell("sa", "za")?.textContent;
-    return /^\d+$/.test(txt || "") ? Number(txt) : null;
+    return /^\d+\/\d+$/.test(txt || "") ? txt : null;
   });
-  assert.ok(asked >= 3, `asked sa/za >= 3 (got ${asked})`);
-
-  // Shown mode: "picked/offered", picked<=offered, offered >= the 5 we added.
-  win.document.querySelector('#confdenom button[data-denom="shown"]').click();
-  await win.happyDOM.waitUntilComplete();
-  const shown = cell("sa", "za").textContent;
   const m = shown.match(/^(\d+)\/(\d+)$/);
-  assert.ok(m, `shown sa/za is "picked/offered" (got ${JSON.stringify(shown)})`);
   const [, picked, offered] = m.map(Number);
   assert.ok(picked <= offered, `picked ${picked} <= offered ${offered}`);
   assert.ok(offered >= 5, `offered >= 5 (got ${offered})`);
+
+  // Toggle to "asked": integer >= the 3 sa->za we added.
+  win.document.querySelector('#confdenom button[data-denom="asked"]').click();
+  await win.happyDOM.waitUntilComplete();
+  const asked = cell("sa", "za").textContent;
+  assert.match(asked, /^\d+$/, `asked sa/za is an integer (got ${JSON.stringify(asked)})`);
+  assert.ok(Number(asked) >= 3, `asked sa/za >= 3 (got ${asked})`);
 });

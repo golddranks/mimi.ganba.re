@@ -653,7 +653,8 @@ let confusionOffered = null;    // t/p -> times kana p was on screen when t was 
 // Denominator toggle, independent of the count/pct one — same as the user
 // dashboard. "asked" normalises by how often the sound was asked; "shown" by
 // how often that confuser kana was actually offered (true pairwise confusion).
-let confDenom = "asked";
+// Defaults to "shown"; "asked" is on its way out.
+let confDenom = "shown";
 
 function renderConfusion(rows, shownRows, offeredRows) {
   const counts = {}, rowTotals = {}, shown = {}, offered = {};
