@@ -494,7 +494,9 @@ body {
 
 #confdetail { margin-top: .6rem; overflow-x: auto; }
 #confdetail .cd-head { font-size: .8rem; color: var(--fg); margin-bottom: .3rem; }
-#confdetail .cd-strip { display: block; }
+/* Keep the strip its natural size — the global `.card svg { width: 100% }`
+   chart rule would otherwise stretch it to the card width (and ~280px tall). */
+#confdetail .cd-strip { display: block; width: auto; height: auto; }
 
 /* ---- legend ---- */
 .legend {
