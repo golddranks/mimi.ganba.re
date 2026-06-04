@@ -80,9 +80,11 @@ under Repo Settings → Environments → New environment → `worker`, then:
 token is only loaded by jobs that explicitly declare `environment: worker`,
 and never reachable from a stray PR-triggered workflow.)
 
-The deploy job is gated and verified by the e2e suite (see below): it runs the
-local e2e first and aborts if it fails, deploys, then runs the production API
-gate against the live worker.
+Both deploys are gated by a shared **`e2e`** job (see below): it snapshots prod,
+builds the site, and runs the full suite, and runs whenever *either* the pages or
+the worker changed — so a frontend-only change is gated too. `deploy-pages` and
+`deploy-worker` run only if it passes; the worker deploy then runs a production
+API gate against the live worker.
 
 Manual deploy is still possible:
 
