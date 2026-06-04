@@ -317,27 +317,61 @@ function drawMora() {
 // Walks the static td[data-t][data-p] cells across all four vowel-group tables.
 // Color intensity is per-category (diag vs off-diag) so off-diagonal errors
 // don't get drowned out by big correct counts.
-let confusionCounts = null;
-let confusionRowTotals = null;
+let confusionCounts = null;     // T/P -> picks, all answers (the "asked" denominator's numerator)
+let confusionRowTotals = null;  // T   -> attempts, all answers ("asked" % denominator)
+let confusionShown = null;      // T/P -> picks among opts-bearing answers ("shown" numerator)
+let confusionOffered = null;    // T/P -> times kana P was on screen when T was asked ("shown" denominator)
+
+// Denominator toggle, independent of the count/pct one:
+//   "asked" — normalise a pick by how often the sound was asked (rows total)
+//   "shown" — normalise by how often *that confuser kana was offered*, the true
+//             pairwise confusion the `opts` column was added to measure.
+let confDenom = "asked";
 
 function renderConfusion(events) {
-  const counts = {};
-  const rowTotals = {};
+  const counts = {}, rowTotals = {}, shown = {}, offered = {};
   for (const e of events) {
     if (!isAnswer(e)) continue;
     counts[`${e.target}/${e.picked}`] = (counts[`${e.target}/${e.picked}`] || 0) + 1;
     rowTotals[e.target] = (rowTotals[e.target] || 0) + 1;
+    // The "shown" view only counts answers that recorded their offered choices
+    // (opts is null on pre-migration rows and on 'r'/'p'). picked is always one
+    // of opts, so shown[T/P] <= offered[T/P] and the ratio stays in [0,1].
+    if (e.opts) {
+      shown[`${e.target}/${e.picked}`] = (shown[`${e.target}/${e.picked}`] || 0) + 1;
+      for (const k of e.opts.split(",")) {
+        offered[`${e.target}/${k}`] = (offered[`${e.target}/${k}`] || 0) + 1;
+      }
+    }
   }
   confusionCounts = counts;
   confusionRowTotals = rowTotals;
+  confusionShown = shown;
+  confusionOffered = offered;
   drawConfusion();
 }
 
 function drawConfusion() {
   if (!confusionCounts) return;
   const cells = confchart.querySelectorAll("td[data-t]");
-  // value{display, mag, raw} — mag drives colour, display is the textContent.
+  // value{display, mag, raw} — mag drives colour, display is the textContent,
+  // raw>0 means "has data" (drives the .empty dimming).
   const valueFor = (t, p) => {
+    if (confDenom === "shown") {
+      const n = confusionShown[`${t}/${p}`] || 0;
+      const off = confusionOffered[`${t}/${p}`] || 0;
+      if (displayMode === "pct") {
+        const pct = off > 0 ? n / off * 100 : 0;
+        let display = "";
+        if (off > 0 && n > 0) {
+          const r = Math.round(pct);
+          display = r === 0 ? "<1" : String(r);
+        }
+        return { display, mag: pct, raw: off };
+      }
+      // counts: "picked / offered", e.g. 3/12.
+      return { display: off ? `${n}/${off}` : "", mag: n, raw: off };
+    }
     const n = confusionCounts[`${t}/${p}`] || 0;
     if (displayMode === "pct") {
       const rt = confusionRowTotals[t] || 0;
@@ -372,6 +406,12 @@ function drawConfusion() {
     td.textContent = v.display;
     td.classList.toggle("empty", v.raw === 0);
   }
+  const legend = confchart.querySelector(".conflegend");
+  if (legend) {
+    legend.textContent = confDenom === "shown"
+      ? "rows = sound heard · columns = kana picked · value = picked ÷ times that kana was offered"
+      : "rows = sound heard · columns = kana picked · diagonal = correct";
+  }
 }
 
 // Hook up every .modeswitch once at module load. Clicking any of them flips
@@ -393,6 +433,22 @@ function drawConfusion() {
       drawMora();
     });
   }
+})();
+
+// The confusion matrix's denominator toggle (asked sound vs shown kana). Its
+// own switch, separate from the shared count/pct one above, since "when offered"
+// has no meaning for the per-mora chart — only the confusion matrix redraws.
+(() => {
+  const sw = document.getElementById("confdenom");
+  sw.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-denom]");
+    if (!btn) return;
+    confDenom = btn.dataset.denom;
+    for (const b of sw.querySelectorAll("button[data-denom]")) {
+      b.classList.toggle("active", b.dataset.denom === confDenom);
+    }
+    drawConfusion();
+  });
 })();
 
 // ---------- streak ----------
