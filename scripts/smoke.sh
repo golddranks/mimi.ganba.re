@@ -15,11 +15,16 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Direct mode: API gate only — there's no local frontend to drive against a
-# remote worker, and post-deploy all we need is the migration/round-trip check.
+# Direct mode: run against an already-running worker (e.g. prod, post-deploy).
+# Build the site so the deployed DOM check can load the real dashboard, then run
+# the prod-safe suite: the API migration gate + a dashboard e2e scoped to the
+# excluded TestUser sentinel. (The app/admin DOM tests stay local-only — they'd
+# write non-sentinel rows or need the local D1.)
 if [ "${1:-}" ]; then
+  python3 "$HERE/voicemap.py" >/dev/null
+  python3 "$HERE/build.py"
   cd "$HERE/../worker"
-  exec env BASE="${1%/}" node --test test/api.test.mjs
+  exec env BASE="${1%/}" node --test test/api.test.mjs test/deployed.test.mjs
 fi
 
 # Local mode: refresh prod snapshot (cached 6h), build the site, boot, run e2e.
@@ -50,4 +55,4 @@ if [ "${code:-000}" = "000" ]; then
   exit 1
 fi
 
-BASE="$BASE" node --test test/api.test.mjs test/dom.test.mjs
+BASE="$BASE" node --test test/api.test.mjs test/dom.test.mjs test/deployed.test.mjs

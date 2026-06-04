@@ -185,8 +185,13 @@ jobs:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
         with:
           node-version: '22.22.3'
-      # Post-deploy check against the live worker: a non-empty /v1/events INSERT
-      # round-trip, which is exactly what a schema/code mismatch 500s on. The
-      # first request also forces migrations to run on the fresh deployment.
-      - name: Production API check (post-deploy)
+      - run: npm ci                            # happy-dom for the post-deploy DOM check
+        working-directory: worker
+      - run: curl -fsSL https://esbuild.github.io/dl/v0.28.0 | sh   # smoke.sh builds dist
+      # Post-deploy e2e against the live worker: the migration/round-trip API gate
+      # (a non-empty /v1/events INSERT — what a schema/code mismatch 500s on; the
+      # first request also runs migrations on the fresh deployment) plus a
+      # dashboard render driven against the live worker, both scoped to the
+      # excluded TestUser sentinel so prod stats stay clean.
+      - name: Production e2e (post-deploy)
         run: ./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev
