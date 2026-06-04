@@ -360,8 +360,10 @@ function drawConfusion() {
     if (confDenom === "shown") {
       const n = confusionShown[`${t}/${p}`] || 0;
       const off = confusionOffered[`${t}/${p}`] || 0;
+      // Colour by the pick-when-offered *rate* in both displays, so a cell reads
+      // the same whether it shows "3/4" or "75%" — they're the same quantity.
+      const pct = off > 0 ? n / off * 100 : 0;
       if (displayMode === "pct") {
-        const pct = off > 0 ? n / off * 100 : 0;
         let display = "";
         if (off > 0 && n > 0) {
           const r = Math.round(pct);
@@ -369,8 +371,8 @@ function drawConfusion() {
         }
         return { display, mag: pct, raw: off };
       }
-      // counts: "picked / offered", e.g. 3/12.
-      return { display: off ? `${n}/${off}` : "", mag: n, raw: off };
+      // counts: "picked / offered" text (e.g. 3/4), coloured by the rate above.
+      return { display: off ? `${n}/${off}` : "", mag: pct, raw: off };
     }
     const n = confusionCounts[`${t}/${p}`] || 0;
     if (displayMode === "pct") {
