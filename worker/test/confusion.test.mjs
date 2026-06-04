@@ -18,14 +18,15 @@ test("pAbove20 matches the Beta-binomial identity", () => {
 test("confusionTargets picks grind set, highest-rate best grind, and the probe", () => {
   const shown   = { "sa/za": 10, "ta/za": 6, "su/zu": 2, "so/zo": 1, "si/zi": 0 };
   const offered = { "sa/za": 10, "ta/za": 10, "su/zu": 3, "so/zo": 4, "si/zi": 20 };
-  const { grind, bestGrind, probe } = confusionTargets(shown, offered);
+  const { grind, bestGrind, probes, probe } = confusionTargets(shown, offered);
 
   // Both high-rate cases are confidently >20% → grind; best grind is the higher rate.
   assert.deepEqual([...grind].sort(), ["sa/za", "ta/za"]);
   assert.equal(bestGrind, "sa/za");          // 10/10 beats 6/10
 
-  // Probe = highest-rate *uncertain* case. su/zu (0.67) beats so/zo (0.25);
-  // si/zi (0/20) is confidently <20% and excluded.
+  // probes = every uncertain case; si/zi (0/20) is confidently <20% and excluded.
+  assert.deepEqual([...probes].sort(), ["so/zo", "su/zu"]);
+  // probe = the single highest-rate uncertain one (su/zu 0.67 beats so/zo 0.25).
   assert.equal(probe, "su/zu");
 });
 

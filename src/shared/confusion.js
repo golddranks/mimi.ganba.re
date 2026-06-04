@@ -23,11 +23,13 @@ export function pAbove20(k, n) {
 // offered[`T/P`] (offers). Returns:
 //   grind     — Set of "T/P" we're >95% sure exceed a 20% wrong-rate (drill these)
 //   bestGrind — the grind case with the highest observed wrong-rate, or null
-//   probe     — the single "T/P" with the highest observed wrong-rate among the
-//               still-uncertain cases (neither confidently above nor below 20%),
-//               or null. Recompute whenever the data changes.
+//   probes    — Set of all still-uncertain "T/P" (neither confidently above nor
+//               below 20%); the dashboard rings every one of these
+//   probe     — the single uncertain case with the highest wrong-rate (the one
+//               grind mode probes next), or null. Recompute when the data changes.
 export function confusionTargets(shown, offered) {
   const grind = new Set();
+  const probes = new Set();
   let probe = null, probeRate = -1, probeN = -1;
   let bestGrind = null, grindRate = -1, grindN = -1;
   for (const key of Object.keys(offered)) {
@@ -46,9 +48,10 @@ export function confusionTargets(shown, offered) {
       continue;
     }
     if (pa < 0.05) continue;          // confidently < 20% → ignore
-    if (rate > probeRate || (rate === probeRate && n > probeN)) {  // uncertain → probe
+    probes.add(key);                  // uncertain
+    if (rate > probeRate || (rate === probeRate && n > probeN)) {
       probe = key; probeRate = rate; probeN = n;
     }
   }
-  return { grind, bestGrind, probe };
+  return { grind, bestGrind, probes, probe };
 }

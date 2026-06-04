@@ -390,8 +390,9 @@ function drawConfusion() {
   };
 
   // Grind/probe targets are a property of the pick-when-offered data, not the
-  // display mode, so they're marked in every mode (see shared/confusion.js).
-  const { grind, probe } = confusionTargets(confusionShown, confusionOffered);
+  // display mode, so they're marked in every mode (see shared/confusion.js). The
+  // dashboard rings every uncertain case (probes), not just the next-to-drill one.
+  const { grind, probes } = confusionTargets(confusionShown, confusionOffered);
 
   let maxOn = 0, maxOff = 0;
   for (const td of cells) {
@@ -414,7 +415,7 @@ function drawConfusion() {
     td.classList.toggle("empty", v.raw === 0);
     const key = `${td.dataset.t}/${td.dataset.p}`;
     td.classList.toggle("grind", grind.has(key));
-    td.classList.toggle("probe", key === probe);
+    td.classList.toggle("probe", probes.has(key));
   }
   const legend = confchart.querySelector(".conflegend");
   if (legend) {
