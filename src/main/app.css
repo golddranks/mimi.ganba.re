@@ -438,8 +438,11 @@ body {
     outline-offset: 2px;
 }
 
-/* Y/N quiz: a single big hiragana prompt + maru / batsu buttons. */
-#yn {
+/* Y/N quiz: a single big hiragana prompt + maru / batsu buttons. The
+   :not([hidden]) guard keeps the `hidden` attribute working — an #yn id selector
+   would otherwise out-specify the [hidden] { display: none } UA rule and show the
+   static ○/✕ buttons on the idle screen. */
+#yn:not([hidden]) {
     display: flex;
     flex-direction: column;
     align-items: stretch;
