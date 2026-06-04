@@ -32,6 +32,13 @@
     box-sizing: border-box;
 }
 
+/* The `hidden` attribute must always win: an id selector with `display` (e.g.
+   #choices, #yn) would otherwise out-specify the UA [hidden]{display:none} and
+   leave the element on screen — and clickable. Enforce it once for everything. */
+[hidden] {
+    display: none !important;
+}
+
 html,
 body {
     height: 100%;
@@ -438,11 +445,9 @@ body {
     outline-offset: 2px;
 }
 
-/* Y/N quiz: a single big hiragana prompt + maru / batsu buttons. The
-   :not([hidden]) guard keeps the `hidden` attribute working — an #yn id selector
-   would otherwise out-specify the [hidden] { display: none } UA rule and show the
-   static ○/✕ buttons on the idle screen. */
-#yn:not([hidden]) {
+/* Y/N quiz: a single big hiragana prompt + maru / batsu buttons. (Stays hidden
+   when idle via the global [hidden] rule above.) */
+#yn {
     display: flex;
     flex-direction: column;
     align-items: stretch;

@@ -10,6 +10,11 @@
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif;
 }
 
+/* The `hidden` attribute must always win over an id selector that sets `display`. */
+[hidden] {
+    display: none !important;
+}
+
 @media (prefers-color-scheme: light) {
     :root {
         --bg: #f7f8fa;
