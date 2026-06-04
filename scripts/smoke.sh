@@ -1,32 +1,37 @@
 #!/usr/bin/env bash
-# Smoke-test the mimi-stats worker.
+# End-to-end tests for mimi.ganba.re.
 #
-#   ./scripts/smoke.sh           snapshot prod -> boot local miniflare -> assert
-#   ./scripts/smoke.sh <url>     assert against an already-running worker
-#                                (e.g. production, post-deploy)
+#   ./scripts/smoke.sh           snapshot prod -> build site -> boot local worker
+#                                -> run the full e2e suite (API + happy-dom DOM)
+#   ./scripts/smoke.sh <url>     run the API gate against an already-running
+#                                worker (e.g. production, post-deploy)
 #
-# Local mode always pulls a fresh prod snapshot first (via snapshot.sh), so it
-# tests the code's migrations against the real prod schema + data. Never writes
-# prod. The assertions live in worker/smoke.mjs (dependency-free, Node 18+).
+# Local mode pulls a fresh prod snapshot (snapshot.sh), so the worker's
+# migrations run against the real prod schema + data; it never writes prod. The
+# DOM suite drives the BUILT dist/ pages in happy-dom against the local worker:
+# the app posts real events through the worker into D1, the dashboard reads them
+# back. Tests live in worker/test/ (node:test; happy-dom for the DOM suite).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SMOKE_MJS="$HERE/../worker/smoke.mjs"
 
-# Direct mode: just hit the given URL (no snapshot, no local boot).
+# Direct mode: API gate only — there's no local frontend to drive against a
+# remote worker, and post-deploy all we need is the migration/round-trip check.
 if [ "${1:-}" ]; then
-  exec node "$SMOKE_MJS" "$1"
+  cd "$HERE/../worker"
+  exec env BASE="${1%/}" node --test test/api.test.mjs
 fi
 
-# Local mode: fresh prod snapshot, then boot the worker and smoke it.
+# Local mode: fresh prod snapshot, build the site, boot the worker, run e2e.
 bash "$HERE/snapshot.sh"
+
+# The worker imports build-generated src/voicemap.js (gitignored); build.py
+# needs it too. Build dist/ so the DOM suite can load the real pages.
+python3 "$HERE/voicemap.py" >/dev/null
+python3 "$HERE/build.py"
 
 cd "$HERE/../worker"
 PORT="${PORT:-8787}"
 BASE="http://127.0.0.1:${PORT}"
-
-# The worker imports the build-generated src/voicemap.js (gitignored); generate
-# it before bundling, the same step the deploy workflow runs.
-python3 "$HERE/voicemap.py" >/dev/null
 
 npx wrangler dev --local --port "$PORT" >/tmp/wrangler-smoke.log 2>&1 &
 DEV_PID=$!
@@ -44,4 +49,4 @@ if [ "${code:-000}" = "000" ]; then
   exit 1
 fi
 
-node "$SMOKE_MJS" "$BASE"
+BASE="$BASE" node --test test/api.test.mjs test/dom.test.mjs

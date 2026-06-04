@@ -52,9 +52,9 @@ two permissions:
 | Account → Workers Scripts: Edit    | Upload and publish the worker bundle.            |
 | Account → D1: Read                 | Pre-deploy gate snapshots prod (`smoke.sh`).     |
 
-The *D1: Read* permission is what lets the pre-deploy smoke `wrangler d1 export`
+The *D1: Read* permission is what lets the pre-deploy gate `wrangler d1 export`
 a fresh prod snapshot and run the code's migrations against the real schema
-before deploying (see *Smoke tests*). Wrangler 4 (which the workflow pins) skips
+before deploying (see *End-to-end tests*). Wrangler 4 (which the workflow pins) skips
 the `/memberships` probe wrangler 3 made, so the token still needs no
 *User Details: Read*.
 
@@ -80,41 +80,49 @@ under Repo Settings → Environments → New environment → `worker`, then:
 token is only loaded by jobs that explicitly declare `environment: worker`,
 and never reachable from a stray PR-triggered workflow.)
 
-The deploy job is gated and verified by smoke tests (see below): it runs the
-local smoke first and aborts if it fails, deploys, then runs the production
-smoke against the live worker.
+The deploy job is gated and verified by the e2e suite (see below): it runs the
+local e2e first and aborts if it fails, deploys, then runs the production API
+gate against the live worker.
 
 Manual deploy is still possible:
 
 ```sh
 python3 scripts/build.py --voicemap-only                       # refresh voicemap
-./scripts/smoke.sh                                             # snapshot prod + smoke (pre-deploy)
+./scripts/smoke.sh                                             # snapshot prod + e2e (pre-deploy)
 ( cd worker && npx wrangler deploy )
-./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # post-deploy check
+./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # post-deploy API gate
 ```
 
-## Smoke tests
+## End-to-end tests
 
-`worker/smoke.mjs` is the dependency-free assertion engine (Node 18+ `fetch`): it
-hits a worker and asserts the paths a schema/code mismatch breaks — most
-importantly a *non-empty* `POST /v1/events` INSERT round-trip, the exact 500 the
-migration system exists to prevent. (An empty batch early-returns before the
-INSERT, so it can't surface that bug — the test posts real rows.) It writes under
-the `TestUser` sentinel uid, so the rows stay out of all aggregates.
+The suite lives in `worker/test/` and runs on `node:test`:
+
+- **`test/api.test.mjs`** — the migration gate. Hits a worker over HTTP and
+  asserts the paths a schema/code mismatch breaks — above all a *non-empty*
+  `POST /v1/events` INSERT round-trip, the exact 500 the migration system exists
+  to prevent. (An empty batch early-returns before the INSERT, so it can't
+  surface that bug — the test posts real rows.) Writes under the `TestUser`
+  sentinel uid, so the rows stay out of all aggregates. Runs against any worker.
+- **`test/dom.test.mjs`** — a full-stack check in happy-dom (`test/dom.mjs` loads
+  the BUILT `dist/` pages). It drives the app UI through a few questions — the
+  answers POST real events through the worker into D1 — then loads the dashboard
+  against those events and asserts the confusion matrix renders. A break anywhere
+  along app → worker → D1 → dashboard surfaces here.
 
 `scripts/smoke.sh` is the entry point:
 
 ```sh
-./scripts/smoke.sh                                             # snapshot prod -> boot local -> assert
-./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # assert against a running worker (prod)
+./scripts/smoke.sh                                             # snapshot prod -> build -> boot local -> full e2e
+./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # API gate against a running worker (prod)
 ```
 
-With no argument it pulls a fresh prod snapshot (`scripts/snapshot.sh`), boots the
-worker on a local miniflare D1, smokes it, and tears down — so the code's
-migrations run against prod's *actual* schema, exactly as a deploy would apply
-them. That's how drift gets caught before publishing, with zero prod risk and the
-option to `rollback` the local copy and retry. Given a URL it skips the snapshot
-and just hits that worker.
+With no argument it pulls a fresh prod snapshot (`scripts/snapshot.sh`), builds
+the site (`scripts/build.py`, so the DOM suite can load the real pages), boots the
+worker on a local miniflare D1, runs the full suite, and tears down — so the
+code's migrations run against prod's *actual* schema, exactly as a deploy would
+apply them. That's how drift gets caught before publishing, with zero prod risk.
+Given a URL it skips the snapshot and build and runs only the API gate (there's no
+local frontend to drive against a remote worker).
 
 You rarely run it by hand: a **pre-push hook** (`.githooks/pre-push`,
 auto-installed by `scripts/dev.sh`) runs it whenever a push changes the worker, so
@@ -132,8 +140,8 @@ dump before wiping local, so a failed/empty export never leaves you with an empt
 DB. The dump holds real user rows, lives under the system temp dir, and must not
 be committed or shared.
 
-The CI deploy runs the smoke twice: a **pre-deploy gate** that snapshots prod and
-runs the migration against it (deploy aborts on failure) and a **post-deploy** run
+The CI deploy gates twice: a **pre-deploy** run that snapshots prod and runs the
+full e2e against it (deploy aborts on failure) and a **post-deploy** API gate
 against the live worker. Both use the same `CLOUDFLARE_API_TOKEN` — the gate's
 snapshot is why the token needs *D1: Read*. If the post-deploy run fails, roll
 back with `npx wrangler rollback` (or `npx wrangler deployments list` to pick a

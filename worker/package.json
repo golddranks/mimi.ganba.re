@@ -4,10 +4,12 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "test": "node --test test/",
     "schema:remote": "wrangler d1 execute mimi-stats --remote --file=schema.sql",
     "schema:local": "wrangler d1 execute mimi-stats --local --file=schema.sql"
   },
   "devDependencies": {
+    "happy-dom": "^20.10.1",
     "wrangler": "^4.93.0"
   }
 }

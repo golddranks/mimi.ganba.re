@@ -154,11 +154,15 @@ jobs:
           node-version: '22.22.3'
       - run: npm ci
         working-directory: worker
+      # build.py (run by smoke.sh to bundle dist/ for the DOM e2e) minifies via
+      # esbuild — fetch the pinned binary into the repo root. Keep in sync with
+      # scripts/build.py + scripts/dev.sh.
+      - run: curl -fsSL https://esbuild.github.io/dl/v0.28.0 | sh
       # Pre-deploy gate: pull a fresh prod snapshot into a local miniflare D1 and
-      # smoke the worker against it, so the code's migrations run against the REAL
+      # run the e2e suite against it, so the code's migrations run against the REAL
       # prod schema before we deploy. A failure here stops the job before the
-      # deploy step. Needs CLOUDFLARE_API_TOKEN with D1:Read (see worker/README.md).
-      - name: Local smoke (snapshot prod, pre-deploy gate)
+      # deploy step. Needs CLOUDFLARE_API_TOKEN with D1 (see worker/README.md).
+      - name: Local e2e (snapshot prod, pre-deploy gate)
         run: ./scripts/smoke.sh
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -170,5 +174,5 @@ jobs:
       # Post-deploy check against the live worker: a non-empty /v1/events INSERT
       # round-trip, which is exactly what a schema/code mismatch 500s on. The
       # first request also forces migrations to run on the fresh deployment.
-      - name: Production smoke (post-deploy)
+      - name: Production API check (post-deploy)
         run: ./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev
