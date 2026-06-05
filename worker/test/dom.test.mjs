@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { loadPage, waitFor } from "./dom.mjs";
+import { loadPage, waitFor, readConfusion } from "./dom.mjs";
 import { daysAgo } from "../../src/shared/dates.js";
 
 const BASE = (process.env.BASE || "http://127.0.0.1:8787").replace(/\/$/, "");
@@ -148,24 +148,17 @@ test("app: ?morning forces the probe phase even with answers logged today", asyn
 
 test("dashboard: confusion matrix renders asked vs shown denominators", async (t) => {
   // Per-uid view, so counts are exact. With the sa fixture, za is picked 3x &
-  // offered 5x, sya picked 1x & offered 1x.
+  // offered 5x, sya picked 1x & offered 1x. Default "shown" = picked/offered,
+  // "asked" = raw pick count.
   const uid = randomUUID();
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
 
   const { win, close } = await loadPage("dashboard/index.html", { url: `${ORIGIN}/dashboard/?uid=${uid}`, workerBase: BASE });
   t.after(close);
 
-  const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
-
-  // Default is now "shown": picked / times-that-kana-was-offered.
-  await waitFor(() => cell("sa", "za")?.textContent === "3/5");
-  assert.equal(cell("sa", "sya").textContent, "1/1");
-
-  // Toggle to "asked": the raw pick count.
-  win.document.querySelector('#confdenom button[data-denom="asked"]').click();
-  await win.happyDOM.waitUntilComplete();
-  assert.equal(cell("sa", "za").textContent, "3");
-  assert.equal(cell("sa", "sya").textContent, "1");
+  const r = await readConfusion(win, [["sa", "za"], ["sa", "sya"]]);
+  assert.deepEqual(r["sa/za"], { picked: 3, offered: 5, asked: 3 });
+  assert.deepEqual(r["sa/sya"], { picked: 1, offered: 1, asked: 1 });
 });
 
 test("dashboard: confusion matrix marks grind and probe targets", async (t) => {

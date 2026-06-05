@@ -9,7 +9,7 @@
 // hand). SITE/BASE default to production.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadHtml, waitFor } from "./dom.mjs";
+import { loadHtml, waitFor, readConfusion } from "./dom.mjs";
 
 const SITE = (process.env.SITE || "https://mimi.ganba.re").replace(/\/$/, "");
 const BASE = (process.env.BASE || "https://mimi-stats.golddranks.workers.dev").replace(/\/$/, "");
@@ -76,20 +76,10 @@ test("verify: the deployed dashboard renders sentinel events from the live worke
   const { win, close } = await loadHtml(await res.text(), { url: pageUrl });
   t.after(close);
 
-  const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
-
   // The deployed page fetched the sentinel's events from the live worker and
-  // rendered them. The default "shown" mode reads picked/offered — proving opts
-  // flows end-to-end on the live stack.
-  const shown = await waitFor(() => {
-    const txt = cell("sa", "za")?.textContent;
-    return /^\d+\/\d+$/.test(txt || "") ? txt : null;
-  }, { timeout: 15000 });
-  const [picked, offered] = shown.split("/").map(Number);
+  // rendered them. The shown view (picked/offered) proves opts flows end-to-end
+  // on the live stack; the sentinel only grows, so we assert bounds, not exacts.
+  const { picked, offered, asked } = (await readConfusion(win, [["sa", "za"]]))["sa/za"];
   assert.ok(picked >= 1 && offered >= picked, `shown sa/za: ${picked}/${offered}`);
-
-  // "asked" mode is the raw pick count.
-  win.document.querySelector('#confdenom button[data-denom="asked"]').click();
-  await win.happyDOM.waitUntilComplete();
-  assert.match(cell("sa", "za").textContent, /^\d+$/);
+  assert.ok(asked >= 1, `asked sa/za >= 1 (got ${asked})`);
 });
