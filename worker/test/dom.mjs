@@ -13,6 +13,16 @@ import { Window } from "happy-dom";
 const here = dirname(fileURLToPath(import.meta.url));
 export const DIST = resolve(here, "../../dist");
 
+// Test target. Default: the BUILT dist pages driven against a local worker
+// (booted by testenv.sh; BASE is its origin). Set SITE to run the SAME suite
+// against a deployed site instead — verify.sh points SITE/BASE at production.
+// LIVE flips both the page source (fetch the deployed HTML vs read local dist)
+// and the worker wiring (a deployed page targets its own worker; locally we
+// rewrite the dist page's hardcoded :8787 origin to BASE).
+export const LIVE = !!process.env.SITE;
+export const SITE = (process.env.SITE || "http://127.0.0.1:8080").replace(/\/$/, "");
+export const WORKER = (process.env.BASE || "http://127.0.0.1:8787").replace(/\/$/, "");
+
 // Load a page from a local dist file (the local DOM tests).
 export async function loadPage(file, opts) {
   return loadHtml(readFileSync(resolve(DIST, file), "utf8"), opts);
@@ -65,6 +75,21 @@ export async function loadHtml(html, { url, workerBase, setup } = {}) {
 
   await win.happyDOM.waitUntilComplete();
   return { win, logs, close: () => win.happyDOM.close() };
+}
+
+// Open an app page by URL path ("/", "/dashboard/?uid=…", "/?morning"),
+// abstracting over the target so test bodies run identically on either. Live:
+// fetch the deployed HTML, which already talks to the live worker. Local: load
+// the matching built dist file and rewrite its :8787 worker origin to BASE.
+const distFileFor = (path) =>
+  path.startsWith("/dashboard") ? "dashboard/index.html"
+    : path.startsWith("/admin") ? "admin/index.html"
+      : "index.html";
+
+export async function openPage(path, { setup } = {}) {
+  const url = SITE + path;
+  if (LIVE) return loadHtml(await (await fetch(url)).text(), { url, setup });
+  return loadPage(distFileFor(path), { url, workerBase: WORKER, setup });
 }
 
 // Poll until predicate() returns truthy, or throw on timeout. The pages fire
