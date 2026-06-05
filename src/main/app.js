@@ -203,6 +203,7 @@ function newQuestion() {
   // into the event so changing the level rules can't rewrite history.
   current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now(), opts, skill: skill[target.slice(-1)] || 0, kind: "m" };
   primary.hidden = true;
+  relisten.hidden = false;   // a sound to replay exists now
   // Each button gets a fixed sample index — tapping a button during review
   // always replays the same audio. Long-press during review plays a random one.
   choices.innerHTML = opts
@@ -224,6 +225,7 @@ function newYNQuestion(target, v) {
   const displayed = (sibs.length === 0 || Math.random() < 0.5) ? target : pick(sibs);
   current = { target, idx, voice: path(target, idx), displayed, cap: 2, startTs: Date.now(), skill: skill[v] || 0, kind: "yn" };
   primary.hidden = true;
+  relisten.hidden = false;   // a sound to replay exists now
   ynprompt.textContent = HIRAGANA[displayed];
   yn.hidden = false;
   play(current.voice);
@@ -233,6 +235,7 @@ function newYNQuestion(target, v) {
 function ynSubmit(yes) {
   if (!current || current.kind !== "yn" || locked) return;
   disarmRelisten();
+  relisten.hidden = true;   // answered — nothing to replay until the next question
   const { target, idx, displayed, startTs, skill: level } = current;
   const correct = yes ? (displayed === target) : (displayed !== target);
   const ms = Date.now() - startTs;
@@ -294,6 +297,7 @@ choices.onclick = (e) => {
 
 function guess(btn) {
   disarmRelisten();
+  relisten.hidden = true;   // answered — nothing to replay until the next question
   const picked = btn.dataset.mora;
   const { target, idx, cap, startTs, opts, skill: level } = current;
   if (picked !== target) { submit(picked, btn, true); return; }
@@ -322,6 +326,7 @@ function replay(m, btn, random = false) {
 
 function submit(picked, btn, wasGuess = false) {
   disarmRelisten();
+  relisten.hidden = true;   // answered — nothing to replay until the next question
   const { target, idx, cap, startTs, opts, skill: level } = current;
   const correct = picked === target;
   const ms = Date.now() - startTs;
