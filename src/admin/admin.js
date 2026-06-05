@@ -558,19 +558,30 @@ function drawVoiceConfusion() {
     return max;
   };
 
+  // Share of a (mora, voice) row's attempts that were answered wrong — the total
+  // off-diagonal mass, not just the worst confuser. Used to order recordings.
+  const rowWrongPct = (m, voice) => {
+    const rt = totals[`${m}/${voice}`] || 0;
+    if (rt === 0) return 0;
+    return (rt - (counts[`${m}/${voice}/${m}`] || 0)) / rt * 100;
+  };
+
   const html = [];
   for (const v of ["a", "i", "u", "o"]) {
     const morae = VOWEL_GROUPS[v];
 
+    // Keep the per-sound clustering (morae in fixed order), but within each
+    // sound order its recordings hardest-first by incorrect-answer rate.
     const rowsInGroup = [];
     for (const m of morae) {
-      for (const voice of map[m] || []) {
-        const key = `${m}/${voice}`;
-        const attempts = totals[key] || 0;
-        if (attempts < minA) continue;
-        if (minW > 0 && rowMaxOffPct(m, voice) < minW) continue;
-        rowsInGroup.push({ m, voice });
-      }
+      const voices = (map[m] || []).filter((voice) => {
+        const attempts = totals[`${m}/${voice}`] || 0;
+        if (attempts < minA) return false;
+        if (minW > 0 && rowMaxOffPct(m, voice) < minW) return false;
+        return true;
+      });
+      voices.sort((a, b) => rowWrongPct(m, b) - rowWrongPct(m, a));
+      for (const voice of voices) rowsInGroup.push({ m, voice });
     }
 
     // value{display, mag, raw} — same shape as drawConfusion's valueFor.
