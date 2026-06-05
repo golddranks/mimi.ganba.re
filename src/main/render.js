@@ -85,7 +85,9 @@ function renderBar() {
     const k = daysAgo(i);
     const s = stats[k] || emptyDay();
     const isT = k === t;
-    const cls = "bar-bin" + (isT ? " today" : "") + (isT && !s.total ? " empty" : "");
+    // Week (Monday) / month (1st) guides, matching the dashboard's daily charts.
+    const mark = k.slice(-2) === "01" ? " mo" : (new Date(k).getUTCDay() === 1 ? " wk" : "");
+    const cls = "bar-bin" + mark + (isT ? " today" : "") + (isT && !s.total ? " empty" : "");
     const stack = "bar-stack" + dayTier(s);
     // Negative animation-delay desyncs each bar's pulse via inline --delay.
     const inner = s.total
