@@ -265,3 +265,73 @@ test("admin: confusion matrix uses server-aggregated asked vs shown counts", asy
   assert.match(asked, /^\d+$/, `asked sa/za is an integer (got ${JSON.stringify(asked)})`);
   assert.ok(Number(asked) >= 3, `asked sa/za >= 3 (got ${asked})`);
 });
+
+test("dashboard: detects local-tally drift and syncs from the server", async (t) => {
+  // The viewer's OWN dashboard, but this device's grind_tally is empty while the
+  // server has confusion data → drift notice. Sync rebuilds the tally from the
+  // events. (This is the after-a-local-reset case the feature exists for.)
+  const uid = randomUUID();
+  assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
+
+  const { win, close } = await loadPage("dashboard/index.html", {
+    url: `${ORIGIN}/dashboard/?uid=${uid}`,
+    workerBase: BASE,
+    setup: (w) => {
+      w.localStorage.setItem("uid", uid);            // viewing our OWN data
+      w.localStorage.setItem("grind_tally", "{}");   // but the device tally is empty
+    },
+  });
+  t.after(close);
+  const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
+
+  await waitFor(() => cell("sa", "za")?.textContent === "3/5");   // matrix rendered
+  assert.equal(win.syncnotice.hidden, false, "empty tally vs server data is flagged as drift");
+
+  win.syncbtn.click();
+  const tally = JSON.parse(win.localStorage.getItem("grind_tally"));
+  assert.deepEqual(tally.sa, { n: 6, correct: 2, conf: { za: 3, sya: 1 }, offered: { za: 5, sya: 1 } });
+  assert.match(win.syncnotice.textContent, /Synced/);
+});
+
+test("dashboard: no drift notice when the local tally already matches", async (t) => {
+  const uid = randomUUID();
+  assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
+
+  const { win, close } = await loadPage("dashboard/index.html", {
+    url: `${ORIGIN}/dashboard/?uid=${uid}`,
+    workerBase: BASE,
+    setup: (w) => {
+      w.localStorage.setItem("uid", uid);
+      w.localStorage.setItem("grind_tally", JSON.stringify({
+        sa: { n: 6, correct: 2, conf: { za: 3, sya: 1 }, offered: { za: 5, sya: 1 } },
+      }));
+    },
+  });
+  t.after(close);
+  const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
+
+  await waitFor(() => cell("sa", "za")?.textContent === "3/5");
+  assert.equal(win.syncnotice.hidden, true, "matching tally → no drift notice");
+});
+
+test("dashboard: no drift notice when viewing someone else's data", async (t) => {
+  // Drift is about THIS device's tally, which only reflects the viewer's own
+  // answers — so drilling into another uid never flags it, however stale.
+  const other = randomUUID();
+  assert.equal((await postEvents(other, saFixture(Date.now()))).status, 200);
+  const me = randomUUID();
+
+  const { win, close } = await loadPage("dashboard/index.html", {
+    url: `${ORIGIN}/dashboard/?uid=${other}`,
+    workerBase: BASE,
+    setup: (w) => {
+      w.localStorage.setItem("uid", me);             // viewer is someone else
+      w.localStorage.setItem("grind_tally", "{}");   // whose empty tally would "drift"
+    },
+  });
+  t.after(close);
+  const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
+
+  await waitFor(() => cell("sa", "za")?.textContent === "3/5");
+  assert.equal(win.syncnotice.hidden, true, "another user's matrix never flags local drift");
+});

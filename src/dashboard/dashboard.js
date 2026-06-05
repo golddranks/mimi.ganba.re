@@ -83,6 +83,7 @@ async function load(uid) {
     renderHourly(events);
     renderMora(events);
     renderConfusion(events);
+    checkTallyDrift(events);
     renderStreak(events);
     renderRtime(events);
   } catch (e) {
@@ -536,6 +537,64 @@ confchart.addEventListener("click", (e) => {
   const td = e.target.closest("td[data-t]");
   if (td) showCellHistory(td);
 });
+
+// ---------- local drill-tally drift ----------
+// The app keeps a localStorage `grind_tally` (built from your answers) that the
+// day-start probe reads; it never re-syncs with the server, so after local DB
+// resets it can drift from what this dashboard shows. Detect that and offer a
+// one-click resync that rebuilds the tally from these events. Only when viewing
+// your OWN uid — the tally is the viewer's, so comparing it to someone else's
+// events would be meaningless.
+function tallyFromEvents(events) {
+  const t = {};
+  for (const e of events) {
+    if (!isAnswer(e)) continue;
+    const row = (t[e.target] ||= { n: 0, correct: 0, conf: {}, offered: {} });
+    row.n++;
+    if (e.picked === e.target) row.correct++;
+    else if (e.opts) row.conf[e.picked] = (row.conf[e.picked] || 0) + 1;
+    if (e.opts) for (const o of e.opts.split(",")) if (o !== e.target) row.offered[o] = (row.offered[o] || 0) + 1;
+  }
+  return t;
+}
+
+// Off-diagonal shown/offered maps from a tally — what the probe (and drift) care
+// about (grind.js only tracks wrong picks / sibling offers, never the diagonal).
+function tallyShownOffered(tally) {
+  const shown = {}, offered = {};
+  for (const target of Object.keys(tally)) {
+    const { conf = {}, offered: off = {} } = tally[target];
+    for (const c of Object.keys(conf)) shown[`${target}/${c}`] = conf[c];
+    for (const o of Object.keys(off)) offered[`${target}/${o}`] = off[o];
+  }
+  return { shown, offered };
+}
+
+const sameMap = (a, b) => {
+  const ak = Object.keys(a);
+  return ak.length === Object.keys(b).length && ak.every((k) => a[k] === b[k]);
+};
+// The confusion maps include the diagonal; the tally never does — drop it to compare like-for-like.
+const offDiag = (m) => Object.fromEntries(Object.entries(m).filter(([k]) => { const [t, p] = k.split("/"); return t !== p; }));
+
+let pendingSync = null;   // tally rebuilt from the DB, written on Sync
+
+function checkTallyDrift(events) {
+  if (uid !== viewerUid) { syncnotice.hidden = true; pendingSync = null; return; }  // own data only
+  let stored = {};
+  try { stored = JSON.parse(localStorage.grind_tally) || {}; } catch { }
+  const s = tallyShownOffered(stored);
+  const drift = !sameMap(s.shown, offDiag(confusionShown)) || !sameMap(s.offered, offDiag(confusionOffered));
+  pendingSync = drift ? tallyFromEvents(events) : null;
+  syncnotice.hidden = !drift;
+}
+
+syncbtn.onclick = () => {
+  if (!pendingSync) return;
+  localStorage.grind_tally = JSON.stringify(pendingSync);
+  pendingSync = null;
+  syncnotice.textContent = "Synced — reload the app for the probe to use the updated data.";
+};
 
 // ---------- streak ----------
 // Per-day *peak* streak as a bar chart with a calendar-uniform x-axis. The
