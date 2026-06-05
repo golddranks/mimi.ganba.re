@@ -79,15 +79,17 @@ test("verify: the deployed dashboard renders sentinel events from the live worke
   const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
 
   // The deployed page fetched the sentinel's events from the live worker and
-  // rendered them: sa->za is a non-empty pick count in the default "asked" mode.
-  const asked = await waitFor(() => {
+  // rendered them. The default "shown" mode reads picked/offered — proving opts
+  // flows end-to-end on the live stack.
+  const shown = await waitFor(() => {
     const txt = cell("sa", "za")?.textContent;
-    return /^\d+$/.test(txt || "") ? Number(txt) : null;
+    return /^\d+\/\d+$/.test(txt || "") ? txt : null;
   }, { timeout: 15000 });
-  assert.ok(asked >= 1, `asked sa/za >= 1 (got ${asked})`);
+  const [picked, offered] = shown.split("/").map(Number);
+  assert.ok(picked >= 1 && offered >= picked, `shown sa/za: ${picked}/${offered}`);
 
-  // "shown" mode proves opts flows end-to-end on the live stack: picked/offered.
-  win.document.querySelector('#confdenom button[data-denom="shown"]').click();
+  // "asked" mode is the raw pick count.
+  win.document.querySelector('#confdenom button[data-denom="asked"]').click();
   await win.happyDOM.waitUntilComplete();
-  assert.match(cell("sa", "za").textContent, /^\d+\/\d+$/);
+  assert.match(cell("sa", "za").textContent, /^\d+$/);
 });
