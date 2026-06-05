@@ -1,6 +1,7 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { pad2, dateKey, dayKey } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt } from "../shared/confusion.js";
+import { tallyFromEvents, tallyMaps } from "../shared/tally.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
 // a handful of visualizations. No localStorage writes, no event posts.
@@ -544,31 +545,9 @@ confchart.addEventListener("click", (e) => {
 // resets it can drift from what this dashboard shows. Detect that and offer a
 // one-click resync that rebuilds the tally from these events. Only when viewing
 // your OWN uid — the tally is the viewer's, so comparing it to someone else's
-// events would be meaningless.
-function tallyFromEvents(events) {
-  const t = {};
-  for (const e of events) {
-    if (!isAnswer(e)) continue;
-    const row = (t[e.target] ||= { n: 0, correct: 0, conf: {}, offered: {} });
-    row.n++;
-    if (e.picked === e.target) row.correct++;
-    else if (e.opts) row.conf[e.picked] = (row.conf[e.picked] || 0) + 1;
-    if (e.opts) for (const o of e.opts.split(",")) if (o !== e.target) row.offered[o] = (row.offered[o] || 0) + 1;
-  }
-  return t;
-}
-
-// Off-diagonal shown/offered maps from a tally — what the probe (and drift) care
-// about (grind.js only tracks wrong picks / sibling offers, never the diagonal).
-function tallyShownOffered(tally) {
-  const shown = {}, offered = {};
-  for (const target of Object.keys(tally)) {
-    const { conf = {}, offered: off = {} } = tally[target];
-    for (const c of Object.keys(conf)) shown[`${target}/${c}`] = conf[c];
-    for (const o of Object.keys(off)) offered[`${target}/${o}`] = off[o];
-  }
-  return { shown, offered };
-}
+// events would be meaningless. The tally build (tallyFromEvents) and the
+// shown/offered projection (tallyMaps) come from shared/tally.js — the same code
+// the app uses, so what we compare against is exactly what the app would build.
 
 const sameMap = (a, b) => {
   const ak = Object.keys(a);
@@ -583,9 +562,9 @@ function checkTallyDrift(events) {
   if (uid !== viewerUid) { syncnotice.hidden = true; pendingSync = null; return; }  // own data only
   let stored = {};
   try { stored = JSON.parse(localStorage.grind_tally) || {}; } catch { }
-  const s = tallyShownOffered(stored);
+  const s = tallyMaps(stored);
   const drift = !sameMap(s.shown, offDiag(confusionShown)) || !sameMap(s.offered, offDiag(confusionOffered));
-  pendingSync = drift ? tallyFromEvents(events) : null;
+  pendingSync = drift ? tallyFromEvents(events, isAnswer) : null;
   syncnotice.hidden = !drift;
 }
 

@@ -17,6 +17,7 @@
 import { viewMode, stats, today, acc } from "./app.js";
 import { daysAgo } from "../shared/dates.js";
 import { confusionTargets } from "../shared/confusion.js";
+import { bump, tallyMaps } from "../shared/tally.js";
 
 // Probing — drilling your most uncertain confusion at day-start — ships
 // unflagged. GRIND_ENABLED gates only the *grind* phase that would follow the
@@ -33,27 +34,14 @@ const GRIND_EXIT_ACC_MIN_TOTAL = 20;
 // null | { phase: "probe", probesAsked } | { phase: "grind", target, confuser, answered }
 let grind = null;
 
-// Running per-heard-sound tally the targets are computed from. Shape per sound:
-//   { n, correct, conf: {picked: count}, offered: {sibling: count} }
-// conf = wrong picks (only counted when the choice set was known); offered = how
-// often each distractor was on screen. conf[C] <= offered[C], so they form the
-// k/n a confusion case needs. Lifetime counts, not a recency window.
+// Running per-heard-sound tally the targets are computed from (shape and the
+// bump/tallyMaps logic live in shared/tally.js, shared with the dashboard so the
+// two can't drift). Lifetime counts, not a recency window.
 let grindTally = {};
 try { grindTally = JSON.parse(localStorage.grind_tally) || {}; } catch { }
 
-function bump(target, picked, opts = []) {
-  const t = (grindTally[target] ||= { n: 0, correct: 0, conf: {}, offered: {} });
-  t.n++;
-  t.conf ||= {}; t.offered ||= {};   // guard entries saved before these existed
-  if (picked === target) t.correct++;
-  // A wrong pick is only a usable confusion when we know what was offered — the
-  // picked/offered rate needs numerator and denominator from the same answers.
-  else if (opts.length) t.conf[picked] = (t.conf[picked] || 0) + 1;
-  for (const o of opts) if (o !== target) t.offered[o] = (t.offered[o] || 0) + 1;
-}
-
 export function tallyAnswer(target, picked, opts) {
-  bump(target, picked, opts);
+  bump(grindTally, target, picked, opts);
   if (!viewMode) localStorage.grind_tally = JSON.stringify(grindTally);
 }
 
@@ -69,34 +57,22 @@ function migrateLog() {
     const parts = line.split(/\s+/);
     if (parts.length < 4) continue;
     const target = parts[2].split("/")[0];
-    bump(target, parts.length === 5 ? parts[3] : target);
+    bump(grindTally, target, parts.length === 5 ? parts[3] : target);
   }
   localStorage.grind_tally = JSON.stringify(grindTally);
   delete localStorage.mora_log;
 }
 
-// Build the shown[T/P] (wrong picks) and offered[T/P] (offers) maps the target
-// classifier expects from the per-sound tally.
-function tallyMaps() {
-  const shown = {}, offered = {};
-  for (const target of Object.keys(grindTally)) {
-    const { conf = {}, offered: off = {} } = grindTally[target];
-    for (const c of Object.keys(conf)) shown[`${target}/${c}`] = conf[c];
-    for (const o of Object.keys(off)) offered[`${target}/${o}`] = off[o];
-  }
-  return { shown, offered };
-}
-
 const splitKey = (k) => { const [target, confuser] = k.split("/"); return { target, confuser }; };
 
 function currentProbe() {
-  const { shown, offered } = tallyMaps();
+  const { shown, offered } = tallyMaps(grindTally);
   const { probe } = confusionTargets(shown, offered);
   return probe ? splitKey(probe) : null;
 }
 
 function bestGrindTarget() {
-  const { shown, offered } = tallyMaps();
+  const { shown, offered } = tallyMaps(grindTally);
   const { bestGrind } = confusionTargets(shown, offered);
   return bestGrind ? splitKey(bestGrind) : null;
 }
