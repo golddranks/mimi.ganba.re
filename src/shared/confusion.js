@@ -103,3 +103,103 @@ export function confusionTargets(shown, offered) {
   }
   return { grind, bestGrind, probes, probe };
 }
+
+// ---------- consonant grouping ----------
+// A *phonetic* (Hepburn) grouping, NOT the kunrei spelling the data uses: し/しゃ…
+// are stored as si/sya etc. but sound "sh"; ち→ch, つ→ts. So the plain s/z/t rows
+// split by sound. CONSONANT_ORDER is the consonant matrix's row/column order;
+// together these partition all 19 morae with none left over.
+export const CONSONANT_ORDER = ["s", "z", "ts", "sh", "j", "ch"];
+export const CONSONANT_GROUPS = {
+  s:  ["sa", "su", "so"],
+  z:  ["za", "zu", "zo"],
+  ts: ["tu"],
+  sh: ["si", "sya", "syu", "syo"],
+  j:  ["zi", "zya", "zyu", "zyo"],
+  ch: ["ti", "tya", "tyu", "tyo"],
+};
+const MORA_CONSONANT = Object.fromEntries(
+  Object.entries(CONSONANT_GROUPS).flatMap(([c, ms]) => ms.map((m) => [m, c])),
+);
+export const consonantOf = (mora) => MORA_CONSONANT[mora];
+
+// Collapse mora-keyed confusion maps to consonant-keyed ones, summing over every
+// vowel. Option sets are always same-vowel, so confusion[t/p] is non-zero only
+// for same-vowel pairs; summing every t∈cT, p∈cP therefore gives exactly the
+// consonant-vs-consonant totals. `maps` and the result share the shape
+// { counts:T/P→n, rowTotals:T→n, shown:T/P→n, offered:T/P→n }.
+export function aggregateByConsonant(maps) {
+  const out = { counts: {}, rowTotals: {}, shown: {}, offered: {} };
+  const addPair = (dst, key, v) => {
+    const [t, p] = key.split("/");
+    const ct = consonantOf(t), cp = consonantOf(p);
+    if (ct && cp) dst[`${ct}/${cp}`] = (dst[`${ct}/${cp}`] || 0) + v;
+  };
+  for (const k in maps.counts) addPair(out.counts, k, maps.counts[k]);
+  for (const k in maps.shown) addPair(out.shown, k, maps.shown[k]);
+  for (const k in maps.offered) addPair(out.offered, k, maps.offered[k]);
+  for (const t in maps.rowTotals) {
+    const ct = consonantOf(t);
+    if (ct) out.rowTotals[ct] = (out.rowTotals[ct] || 0) + maps.rowTotals[t];
+  }
+  return out;
+}
+
+// ---------- confusion-cell rendering ----------
+// Shared by the per-vowel and consonant matrices in both the dashboard and admin
+// so all four read identically. One cell's { display, mag, raw }: mag drives the
+// colour, display is the text, raw>0 means "has data". `maps` = { counts,
+// rowTotals, shown, offered }; `denom` = "shown"|"asked"; `mode` = "pct"|"count".
+export function confusionValue(maps, t, p, denom, mode) {
+  if (denom === "shown") {
+    const n = maps.shown[`${t}/${p}`] || 0;
+    const off = maps.offered[`${t}/${p}`] || 0;
+    // Colour by the pick-when-offered rate in both displays, so a cell reads the
+    // same whether it shows "3/4" or "75%" — they're the same quantity.
+    const pct = off > 0 ? n / off * 100 : 0;
+    if (mode === "pct") {
+      let display = "";
+      if (off > 0 && n > 0) { const r = Math.round(pct); display = r === 0 ? "<1" : String(r); }
+      return { display, mag: pct, raw: off };
+    }
+    return { display: off ? `${n}/${off}` : "", mag: pct, raw: off };
+  }
+  const n = maps.counts[`${t}/${p}`] || 0;
+  if (mode === "pct") {
+    const rt = maps.rowTotals[t] || 0;
+    const pct = rt > 0 ? n / rt * 100 : 0;
+    let display = "";
+    if (n > 0) { const r = Math.round(pct); display = r === 0 ? "<1" : String(r); }
+    return { display, mag: pct, raw: n };
+  }
+  return { display: n ? String(n) : "", mag: n, raw: n };
+}
+
+// Cell background for a magnitude, normalised within its category (diagonal vs
+// off-diagonal) so off-diagonal errors aren't drowned out by big correct counts.
+export function confusionBg(mag, diag, maxOn, maxOff) {
+  if (!(mag > 0)) return "transparent";
+  const a = diag ? (maxOn ? mag / maxOn : 0) : (maxOff ? mag / maxOff : 0);
+  const base = diag ? "var(--good)" : "var(--bad)";
+  const pct = Math.round((diag ? 15 : 20) + a * (diag ? 55 : 60));
+  return `color-mix(in srgb, ${base} ${pct}%, transparent)`;
+}
+
+// Paint a set of td[data-t][data-p] cells from `maps`: two passes (find the
+// per-category maxima, then colour). Sets background, textContent and .empty.
+// Grind/probe marking is left to the caller (dashboard's per-vowel matrix only).
+export function fillConfusionCells(cells, maps, denom, mode) {
+  let maxOn = 0, maxOff = 0;
+  const seen = [];
+  for (const td of cells) {
+    const diag = td.dataset.t === td.dataset.p;
+    const v = confusionValue(maps, td.dataset.t, td.dataset.p, denom, mode);
+    seen.push([td, diag, v]);
+    if (diag) { if (v.mag > maxOn) maxOn = v.mag; } else if (v.mag > maxOff) maxOff = v.mag;
+  }
+  for (const [td, diag, v] of seen) {
+    td.style.background = confusionBg(v.mag, diag, maxOn, maxOff);
+    td.textContent = v.display;
+    td.classList.toggle("empty", v.raw === 0);
+  }
+}

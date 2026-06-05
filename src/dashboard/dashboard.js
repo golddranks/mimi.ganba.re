@@ -1,6 +1,6 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { pad2, dateKey, dayKey } from "../shared/dates.js";
-import { confusionTargets, logisticTrend, logisticAt } from "../shared/confusion.js";
+import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
 import { tallyFromEvents, tallyMaps } from "../shared/tally.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
@@ -372,65 +372,15 @@ function renderConfusion(events) {
 
 function drawConfusion() {
   if (!confusionCounts) return;
+  const maps = { counts: confusionCounts, rowTotals: confusionRowTotals, shown: confusionShown, offered: confusionOffered };
   const cells = confchart.querySelectorAll("td[data-t]");
-  // value{display, mag, raw} — mag drives colour, display is the textContent,
-  // raw>0 means "has data" (drives the .empty dimming).
-  const valueFor = (t, p) => {
-    if (confDenom === "shown") {
-      const n = confusionShown[`${t}/${p}`] || 0;
-      const off = confusionOffered[`${t}/${p}`] || 0;
-      // Colour by the pick-when-offered *rate* in both displays, so a cell reads
-      // the same whether it shows "3/4" or "75%" — they're the same quantity.
-      const pct = off > 0 ? n / off * 100 : 0;
-      if (displayMode === "pct") {
-        let display = "";
-        if (off > 0 && n > 0) {
-          const r = Math.round(pct);
-          display = r === 0 ? "<1" : String(r);
-        }
-        return { display, mag: pct, raw: off };
-      }
-      // counts: "picked / offered" text (e.g. 3/4), coloured by the rate above.
-      return { display: off ? `${n}/${off}` : "", mag: pct, raw: off };
-    }
-    const n = confusionCounts[`${t}/${p}`] || 0;
-    if (displayMode === "pct") {
-      const rt = confusionRowTotals[t] || 0;
-      const pct = rt > 0 ? n / rt * 100 : 0;
-      let display = "";
-      if (n > 0) {
-        const r = Math.round(pct);
-        display = r === 0 ? "<1" : String(r);
-      }
-      return { display, mag: pct, raw: n };
-    }
-    return { display: n ? String(n) : "", mag: n, raw: n };
-  };
+  fillConfusionCells(cells, maps, confDenom, displayMode);
 
-  // Grind/probe targets are a property of the pick-when-offered data, not the
+  // Grind/probe rings are a property of the pick-when-offered data, not the
   // display mode, so they're marked in every mode (see shared/confusion.js). The
   // dashboard rings every uncertain case (probes), not just the next-to-drill one.
   const { grind, probes } = confusionTargets(confusionShown, confusionOffered);
-
-  let maxOn = 0, maxOff = 0;
   for (const td of cells) {
-    const v = valueFor(td.dataset.t, td.dataset.p);
-    if (td.dataset.t === td.dataset.p) maxOn = Math.max(maxOn, v.mag);
-    else maxOff = Math.max(maxOff, v.mag);
-  }
-  for (const td of cells) {
-    const v = valueFor(td.dataset.t, td.dataset.p);
-    const diag = td.dataset.t === td.dataset.p;
-    let bg = "transparent";
-    if (v.mag > 0) {
-      const a = diag ? (maxOn ? v.mag / maxOn : 0) : (maxOff ? v.mag / maxOff : 0);
-      const base = diag ? "var(--good)" : "var(--bad)";
-      const pct = Math.round((diag ? 15 : 20) + a * (diag ? 55 : 60));
-      bg = `color-mix(in srgb, ${base} ${pct}%, transparent)`;
-    }
-    td.style.background = bg;
-    td.textContent = v.display;
-    td.classList.toggle("empty", v.raw === 0);
     const key = `${td.dataset.t}/${td.dataset.p}`;
     td.classList.toggle("grind", grind.has(key));
     td.classList.toggle("probe", probes.has(key));
@@ -441,6 +391,16 @@ function drawConfusion() {
       ? "rows = sound heard · columns = kana picked · value = picked ÷ times that kana was offered"
       : "rows = sound heard · columns = kana picked · diagonal = correct";
   }
+  drawConsonantConfusion();
+}
+
+// The consonant matrix collapses every vowel and shows confusion between the six
+// consonant classes (s z ts sh j ch). Same data, denominator and display mode as
+// the per-vowel matrix above, just aggregated by consonant. Non-clickable.
+function drawConsonantConfusion() {
+  if (!confusionCounts) return;
+  const maps = aggregateByConsonant({ counts: confusionCounts, rowTotals: confusionRowTotals, shown: confusionShown, offered: confusionOffered });
+  fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, confDenom, displayMode);
 }
 
 // Hook up every .modeswitch once at module load. Clicking any of them flips
