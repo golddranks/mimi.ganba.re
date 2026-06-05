@@ -2,7 +2,7 @@
 // Pure — no worker, D1, or DOM; runs anywhere node:test does.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dayStats, dueNudge, vapidAuth, sendPush, START_HOUR, DONE_HOUR } from "../src/push.js";
+import { dayStats, dueNudge, vapidAuth, encryptPayload, sendPush, START_HOUR, DONE_HOUR } from "../src/push.js";
 
 const { subtle } = globalThis.crypto;
 const b64url = (buf) => Buffer.from(buf).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -77,9 +77,10 @@ test("vapidAuth: a verifiable ES256 JWT scoped to the endpoint origin", async ()
   assert.ok(ok, "signature verifies against the public key");
 });
 
-test("sendPush: POSTs payloadless with VAPID auth + TTL, returns the status", async () => {
+test("sendPush: POSTs the encrypted body with VAPID auth, TTL, and aes128gcm encoding", async () => {
   let seen;
-  const status = await sendPush("https://push.example.com/x", "vapid t=jwt, k=key", async (url, init) => {
+  const body = new Uint8Array([1, 2, 3]);
+  const status = await sendPush("https://push.example.com/x", "vapid t=jwt, k=key", body, async (url, init) => {
     seen = { url, init };
     return { status: 201 };
   });
@@ -88,5 +89,34 @@ test("sendPush: POSTs payloadless with VAPID auth + TTL, returns the status", as
   assert.equal(seen.init.method, "POST");
   assert.equal(seen.init.headers.Authorization, "vapid t=jwt, k=key");
   assert.equal(seen.init.headers.TTL, "86400");
-  assert.equal(seen.init.body, undefined, "no body — payloadless push");
+  assert.equal(seen.init.headers["Content-Encoding"], "aes128gcm");
+  assert.equal(seen.init.body, body, "the aes128gcm payload");
+});
+
+// RFC 8291 §5 worked example: a fixed sender key + salt must reproduce the exact
+// published ciphertext, proving the HKDF derivation, AES-128-GCM, and aes128gcm
+// framing are interop-correct (not merely self-consistent).
+test("encryptPayload: matches the RFC 8291 §5 test vector", async () => {
+  const v = {
+    plaintext: "When I grow up, I want to be a watermelon",
+    auth: "BTBZMqHH6r4Tts7J_aSIgg",
+    uaPublic: "BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4",
+    asPublic: "BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8",
+    asPrivate: "yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw",
+    salt: "DGv6ra1nlYgDCS1FRnbzlw",
+    body: "DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN",
+  };
+  const point = unb64url(v.asPublic);   // 0x04 ‖ X(32) ‖ Y(32)
+  const asKeys = {
+    privateKey: await subtle.importKey(
+      "jwk",
+      { kty: "EC", crv: "P-256", d: v.asPrivate, x: b64url(point.subarray(1, 33)), y: b64url(point.subarray(33, 65)) },
+      { name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"],
+    ),
+    publicKey: await subtle.importKey("raw", point, { name: "ECDH", namedCurve: "P-256" }, true, []),
+  };
+  const out = await encryptPayload(v.plaintext, { p256dh: v.uaPublic, auth: v.auth }, {
+    asKeys, salt: unb64url(v.salt),
+  });
+  assert.equal(b64url(out), v.body);
 });

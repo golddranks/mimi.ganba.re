@@ -16,7 +16,7 @@ import { nameOf } from "./voicemap.js";
 import { MIGRATIONS } from "./migrations.js";
 import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/shared/skill.js";
 import { VAPID_PUBLIC_KEY } from "../../src/shared/vapid.js";
-import { localStamp, dueNudge, vapidAuth, sendPush, START_HOUR, DONE_HOUR } from "./push.js";
+import { localStamp, dueNudge, vapidAuth, encryptPayload, sendPush, NUDGE_TEXT, START_HOUR, DONE_HOUR } from "./push.js";
 
 // Exclude users tagged as test fixtures so seeded data (worker/seed.sql)
 // doesn't pollute global stats. The seed user is INSERTed with this nickname;
@@ -195,7 +195,8 @@ async function runReminders(env, now) {
     if (!due) continue;
 
     const auth = await vapidAuth(sub.endpoint, privateJwk, VAPID_PUBLIC_KEY);
-    const status = await sendPush(sub.endpoint, auth);
+    const body = await encryptPayload(NUDGE_TEXT[due.tier], { p256dh: sub.p256dh, auth: sub.auth });
+    const status = await sendPush(sub.endpoint, auth, body);
     if (status === 404 || status === 410) {
       await env.mimi_stats.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(sub.endpoint).run();
     } else {
@@ -329,10 +330,11 @@ async function handlePushTest(req, env) {
   const body = await req.json().catch(() => null);
   if (!body || typeof body.endpoint !== "string") return new Response("bad request", { status: 400 });
   if (!VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return new Response("push not configured", { status: 503 });
-  const sub = await env.mimi_stats.prepare("SELECT endpoint FROM push_subs WHERE endpoint = ?").bind(body.endpoint).first();
+  const sub = await env.mimi_stats.prepare("SELECT endpoint, p256dh, auth FROM push_subs WHERE endpoint = ?").bind(body.endpoint).first();
   if (!sub) return new Response("unknown subscription", { status: 404 });
-  const auth = await vapidAuth(body.endpoint, JSON.parse(env.VAPID_PRIVATE_KEY), VAPID_PUBLIC_KEY);
-  const status = await sendPush(body.endpoint, auth);
+  const auth = await vapidAuth(sub.endpoint, JSON.parse(env.VAPID_PRIVATE_KEY), VAPID_PUBLIC_KEY);
+  const payload = await encryptPayload("Reminders are on — this is a test nudge. ✔", { p256dh: sub.p256dh, auth: sub.auth });
+  const status = await sendPush(sub.endpoint, auth, payload);
   return json({ ok: status >= 200 && status < 300, status });
 }
 

@@ -5,3 +5,4 @@ worker/src/voicemap.js
 .DS_Store
 .wrangler
 /esbuild
+.vapid-private.json
