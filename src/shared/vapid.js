@@ -7,4 +7,4 @@
 //
 // Blank until set: with no key the client skips push subscription and the cron
 // no-ops, so the rest of the app is unaffected.
-export const VAPID_PUBLIC_KEY = "";
+export const VAPID_PUBLIC_KEY = "BJ4cRqQZJDJZHWkWGaYHlA3duxelWbcSNft2rXn1agpiH6vOXfed9y12pcl4JwlasvayNkT4c8FvSaq2of73iZk";
