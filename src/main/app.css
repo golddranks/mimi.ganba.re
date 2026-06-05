@@ -6,8 +6,16 @@
     --muted: #8893a3;
     --accent: #5da9ff;
     --accent-strong: #2d7fd6;
-    --good: #6fd49a;
-    --bad: #e88592;
+    /* good/bad are blue-green vs orange, not green vs red: they separate on the
+       blue–yellow axis that red-green colourblind vision keeps, and --good is
+       kept lighter than --bad so they also differ in luminance. Correct/wrong is
+       reinforced by ○/✕ marks and segment borders, never colour alone. */
+    --good: #3fc7b4;
+    --bad: #e08544;
+    /* The "wrong / not-yet-correct" fill for every bar (daily, hourly, 30-day,
+       per-mora): one muted token so it's consistent across charts, and mixing
+       toward the bg pushes it away from --good's luminance in both themes. */
+    --bad-bar: color-mix(in srgb, var(--bad) 55%, var(--panel));
     /* Left/right edge of the centered 700px column; every position:fixed
        element anchors to it via max(<padding>, var(--col)). */
     --col: calc(50% - 350px);
@@ -23,8 +31,8 @@
         --muted: #6b7480;
         --accent: #2664c4;
         --accent-strong: #1a4a99;
-        --good: #1f8a4c;
-        --bad: #c43838;
+        --good: #0c7a6e;
+        --bad: #c2661c;
     }
 }
 
@@ -117,7 +125,7 @@ body {
     /* On narrow screens reserve the right 12rem for #score (the viewport-edge
        layout); on wide screens cap to 28rem so the message can't grow across
        the 700px column into the column-anchored #score. */
-    max-width: min(calc(100vw - 12rem), 28rem);
+    max-width: min(calc(100vw - 15rem), 28rem);
 }
 
 #score {
@@ -261,7 +269,8 @@ body {
 }
 
 #remindprompt span {
-    padding-right: 1.2rem;   /* clear the corner dismiss × */
+    padding-right: 1.2rem;
+    /* clear the corner dismiss × */
 }
 
 #remindyes {
@@ -321,7 +330,7 @@ body {
     width: 70%;
     max-width: 18px;
     min-height: 2px;
-    background: color-mix(in srgb, var(--bad) 55%, var(--panel));
+    background: var(--bad-bar);
     border-radius: 2px 2px 0 0;
     position: relative;
 }
@@ -343,16 +352,30 @@ body {
 }
 
 @keyframes sparkle-90 {
-    0%, 100% { box-shadow: 0 0 4px #FFB347; }
-    50%      { box-shadow: 0 0 10px #FFB347,
-                           0 0 14px #FFD27F; }
+
+    0%,
+    100% {
+        box-shadow: 0 0 4px #FFB347;
+    }
+
+    50% {
+        box-shadow: 0 0 10px #FFB347,
+            0 0 14px #FFD27F;
+    }
 }
 
 @keyframes sparkle-95 {
-    0%, 100% { box-shadow: 0 0 6px #FFA500; }
-    50%      { box-shadow: 0 0 14px #FFA500,
-                           0 0 22px #FF8C00,
-                           0 0 30px #FFD700; }
+
+    0%,
+    100% {
+        box-shadow: 0 0 6px #FFA500;
+    }
+
+    50% {
+        box-shadow: 0 0 14px #FFA500,
+            0 0 22px #FF8C00,
+            0 0 30px #FFD700;
+    }
 }
 
 .bar-correct {
@@ -360,6 +383,9 @@ body {
     inset: auto 0 0 0;
     background: var(--good);
     border-radius: 2px 2px 0 0;
+    /* Hairline where "correct" meets the rest, so the boundary is visible
+       without relying on the colour step (red-green colourblind support). */
+    box-shadow: 0 -1px 0 var(--bg);
 }
 
 
@@ -403,6 +429,7 @@ body {
 }
 
 .choice {
+    position: relative;
     background: var(--panel);
     color: var(--fg);
     border: 2px solid transparent;
@@ -420,9 +447,11 @@ body {
         border-color: var(--accent);
         background: var(--panel-2);
     }
+
     #primary:hover {
         background: var(--accent);
     }
+
     #relisten:hover {
         background: var(--panel-2);
     }
@@ -440,6 +469,28 @@ body {
 .choice.wrong {
     border-color: var(--bad);
     background: color-mix(in srgb, var(--bad) 28%, var(--panel));
+}
+
+/* まる・ばつ corner mark so right vs wrong reads by shape, not just the
+   tint (red-green colourblind support). Covers the Y/N ○/✕ buttons too. */
+.choice.correct::after,
+.choice.wrong::after {
+    position: absolute;
+    top: .4rem;
+    right: .6rem;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.choice.correct::after {
+    content: "○";
+    color: var(--good);
+}
+
+.choice.wrong::after {
+    content: "✕";
+    color: var(--bad);
 }
 
 .choice.playing {

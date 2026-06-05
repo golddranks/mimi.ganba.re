@@ -156,7 +156,7 @@ function renderDaily(daily, uids) {
     const cH = d.n ? d.correct / d.n * totH : 0;
     const tip = `${d.k}  ${d.correct}/${d.n}`;
     if (d.n) {
-      bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - totH}" width="${barW}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
+      bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - totH}" width="${barW}" height="${totH}" fill="var(--bad-bar)"><title>${tip}</title></rect>`;
       bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
     }
     const month = d.k.slice(0, 7);
@@ -388,7 +388,7 @@ function renderHourly(hourly) {
     const cH = hrs[i].n ? hrs[i].correct / hrs[i].n * totH : 0;
     const tip = `${pad2(i)}:00 UTC  ${hrs[i].correct}/${hrs[i].n}`;
     if (hrs[i].n) {
-      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
+      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad-bar)"><title>${tip}</title></rect>`;
       bars += `<rect x="${x}" y="${h - 20 - cH}" width="${bw * 0.8}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
     }
     if (i % 3 === 0) {

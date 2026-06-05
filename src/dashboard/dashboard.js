@@ -233,7 +233,7 @@ function renderDaily(events) {
   dayBarChart(dailychart, days, 200, (d) => d.total, (d, x, barW, bh, y0) => {
     const cH = d.correct / d.total * bh;
     const tip = `${d.k}  ${d.correct}/${d.total}`;
-    return `<rect x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--bad)"><title>${tip}</title></rect>`
+    return `<rect x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--bad-bar)"><title>${tip}</title></rect>`
       + `<rect x="${x}" y="${y0 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
   });
 }
@@ -258,7 +258,7 @@ function renderHourly(events) {
     const cH = tot ? hrs[i].correct / tot * totH : 0;
     const tip = `${pad2(i)}:00  ${hrs[i].correct}/${tot}`;
     if (tot) {
-      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad)"><title>${tip}</title></rect>`;
+      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad-bar)"><title>${tip}</title></rect>`;
       bars += `<rect x="${x}" y="${h - 20 - cH}" width="${bw * 0.8}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
     }
     if (i % 3 === 0) {
@@ -470,8 +470,8 @@ function drawConfusion() {
 })();
 
 // ---------- confusion cell history ----------
-// Click a matrix cell to inspect that sound→kana pair over time as a red/green
-// strip with a logistic trend line. "Red" is the bad outcome for that cell:
+// Click a matrix cell to inspect that sound→kana pair over time as a ○/✕ strip
+// (✕ = bad, teal/orange-tinted) with a logistic trend line. The bad outcome is:
 // off-diagonal → the user picked the column kana (the confusion happened);
 // diagonal → the user got it wrong. Only opts-bearing answers where the column
 // kana was actually offered count (same data as the shown/grind metrics).
@@ -495,15 +495,21 @@ function showCellHistory(td) {
     return;
   }
 
-  // Fixed-size boxes (~1:3, taller than wide), oldest→newest; the strip scrolls
-  // if there are many. The optional trend line plots P(bad) from the top, so it
-  // rises as the cell improves.
+  // One まる・ばつ mark per answer, oldest→newest; the strip scrolls if there are
+  // many. Shape (○ good / ✕ bad) carries the outcome so it reads without colour
+  // (red-green colourblind support); the teal/orange fill reinforces. The
+  // optional trend line plots P(bad) from the top, so it rises as the cell improves.
   const n = outcomes.length;
   const bad = outcomes.reduce((s, o) => s + o, 0);
-  const BW = 7, BH = 21, GAP = 2, W = n * (BW + GAP) - GAP;
-  const boxes = outcomes.map((o, i) =>
-    `<rect x="${i * (BW + GAP)}" y="0" width="${BW}" height="${BH}" fill="var(--${o ? "bad" : "good"})"/>`,
-  ).join("");
+  const CW = 13, BH = 18, W = n * CW, R = 4;
+  // ○ = a stroked circle, ✕ = a stroked cross, both centred on (cx, cy) — drawn
+  // as SVG shapes (not font glyphs, whose baselines differ) so they line up.
+  const marks = outcomes.map((o, i) => {
+    const cx = i * CW + CW / 2, cy = BH / 2, col = `var(--${o ? "bad" : "good"})`;
+    return o
+      ? `<path d="M${cx - R} ${cy - R}l${2 * R} ${2 * R}M${cx + R} ${cy - R}l${-2 * R} ${2 * R}" stroke="${col}" stroke-width="1.6" fill="none"/>`
+      : `<circle cx="${cx}" cy="${cy}" r="${R}" stroke="${col}" stroke-width="1.6" fill="none"/>`;
+  }).join("");
 
   // Draw a trend line / call a direction only when the trend is statistically
   // real (likelihood-ratio test) — never off a few noisy points. Otherwise: a
@@ -516,7 +522,7 @@ function showCellHistory(td) {
     const pts = [];
     for (let s = 0; s <= 24; s++) {
       const x = s / 24;
-      const xpx = x * (n - 1) * (BW + GAP) + BW / 2;
+      const xpx = x * (n - 1) * CW + CW / 2;
       pts.push(`${xpx.toFixed(1)},${(BH - logisticAt(tr.fit, x) * BH).toFixed(1)}`);
     }
     curve = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
@@ -530,7 +536,7 @@ function showCellHistory(td) {
   const label = diag ? `${bad}/${n} wrong` : `confused ${bad}/${n}`;
   confdetail.innerHTML =
     `<div class="cd-head">${pair} · ${label} · ${trend}</div>` +
-    `<svg class="cd-strip" width="${W}" height="${BH}" role="img" aria-label="${pair} history">${boxes}${curve}</svg>`;
+    `<svg class="cd-strip" width="${W}" height="${BH}" role="img" aria-label="${pair} history">${marks}${curve}</svg>`;
   confdetail.hidden = false;
 }
 
@@ -616,7 +622,7 @@ function renderRtime(events) {
     const lo = Math.round(i * cap / buckets);
     const hi = Math.round((i + 1) * cap / buckets);
     bars += `<rect x="${x}" y="${h - 20 - ch}" width="${bw * 0.45}" height="${ch}" fill="var(--good)"><title>${lo}-${hi}ms: ${cb[i]} correct</title></rect>`;
-    bars += `<rect x="${x + bw * 0.5}" y="${h - 20 - wh}" width="${bw * 0.45}" height="${wh}" fill="var(--bad)"><title>${lo}-${hi}ms: ${wb[i]} wrong</title></rect>`;
+    bars += `<rect x="${x + bw * 0.5}" y="${h - 20 - wh}" width="${bw * 0.45}" height="${wh}" fill="var(--bad-bar)"><title>${lo}-${hi}ms: ${wb[i]} wrong</title></rect>`;
   }
   let axis = "";
   for (let t = 0; t <= cap; t += 1000) {
