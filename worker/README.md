@@ -240,7 +240,7 @@ Generate a VAPID keypair, commit the public half, store the private half as a
 secret:
 
 ```sh
-node scripts/vapid-keygen.mjs
+./scripts/vapid-keygen.mjs
 # paste the public key into src/shared/vapid.js (VAPID_PUBLIC_KEY)
 cd worker && npx wrangler secret put VAPID_PRIVATE_KEY   # paste the private JWK
 ```

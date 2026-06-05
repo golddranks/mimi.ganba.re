@@ -1,6 +1,7 @@
+#!/usr/bin/env node
 // One-off: generate a VAPID keypair for Web Push.
 //
-//   node scripts/vapid-keygen.mjs
+//   ./scripts/vapid-keygen.mjs
 //
 // Paste the PUBLIC key into src/shared/vapid.js, and store the PRIVATE key as
 // the worker secret (it never needs to be committed):
