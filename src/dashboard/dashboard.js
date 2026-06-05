@@ -2,6 +2,7 @@ import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../sha
 import { pad2, dateKey, dayKey } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
 import { tallyFromEvents, tallyMaps } from "../shared/tally.js";
+import { dayBarChart } from "../shared/daychart.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
 // a handful of visualizations. No localStorage writes, no event posts.
@@ -183,49 +184,6 @@ function calendarDays(events, valueFor) {
     days.push({ k, ...valueFor(k) });
   }
   return days;
-}
-
-// Day-bar chart into `el` (fixed 960×h viewBox; bottom 20 units are the label
-// gutter). Bins cap at 18 viewBox units and right-anchor — newest day flush
-// right, short ranges leave the left empty rather than smearing thinly, like
-// the app's #topbar. `mag(d)` is the bar magnitude (drives the y-axis scale);
-// `bar(d, x, barW, bh, y0)` returns the SVG for one day's bar(s); optional
-// `annotate(max)` adds a corner label.
-function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = false) {
-  const w = 960, innerH = h - 40, y0 = h - 20;
-  const max = Math.max(1, ...days.map(mag));
-  const binW = Math.min((w - 40) / Math.max(1, days.length), 18);
-  const barW = Math.min(binW * 0.8, 14);
-  const xRightmost = w - 20 - barW;
-  let bars = "", labels = "", lastMonth = "", gridlines = "";
-  for (let i = 0; i < days.length; i++) {
-    const d = days[i];
-    const x = xRightmost - (days.length - 1 - i) * binW;
-    if (mag(d) > 0) bars += bar(d, x, barW, mag(d) / max * innerH, y0);
-    const month = d.k.slice(0, 7);
-    if (month !== lastMonth) {
-      lastMonth = month;
-      labels += `<text x="${x}" y="${h - 4}" fill="var(--muted)" font-size="10">${month}</text>`;
-    }
-    // Date-axis guides at the bin's leading edge, behind the bars: a dim line
-    // each Monday, a stronger one at the first of the month. new Date(k) parses
-    // YYYY-MM-DD as UTC, so getUTCDay() gives the calendar weekday cleanly.
-    if (grid) {
-      const lx = (x - (binW - barW) / 2).toFixed(1);
-      if (d.k.slice(-2) === "01") {
-        gridlines += `<line x1="${lx}" x2="${lx}" y1="0" y2="${y0}" stroke="var(--muted)" stroke-width=".6" stroke-opacity=".5"/>`;
-      } else if (new Date(d.k).getUTCDay() === 1) {
-        gridlines += `<line x1="${lx}" x2="${lx}" y1="0" y2="${y0}" stroke="var(--panel-2)" stroke-width=".5"/>`;
-      }
-    }
-  }
-  let axis = "";
-  for (const t of niceTicks(max)) {
-    const y = y0 - t / max * innerH;
-    axis += `<text x="0" y="${y + 3}" fill="var(--muted)" font-size="10">${t}</text>`;
-    axis += `<line x1="20" x2="${w}" y1="${y}" y2="${y}" stroke="var(--panel-2)" stroke-width=".5"/>`;
-  }
-  el.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${axis}${gridlines}${bars}${labels}${annotate(max)}</svg>`;
 }
 
 function renderDaily(events) {
@@ -564,7 +522,7 @@ function renderStreak(events) {
   dayBarChart(streakchart, days, 160, (d) => d.run,
     (d, x, barW, bh, y0) =>
       `<rect x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--accent)"><title>${d.k}  peak streak ${d.run}</title></rect>`,
-    (max) => `<text x="940" y="14" fill="var(--muted)" font-size="11" text-anchor="end">peak: ${max}</text>`);
+    (max) => `<text x="940" y="14" fill="var(--muted)" font-size="11" text-anchor="end">peak: ${max}</text>`, true);
 }
 
 // ---------- reaction time ----------
@@ -604,11 +562,4 @@ function renderRtime(events) {
 }
 
 // ---------- helpers ----------
-function niceTicks(max) {
-  const exp = Math.pow(10, Math.floor(Math.log10(max)));
-  const m = max / exp;
-  const step = m < 2 ? 0.5 * exp : m < 5 ? 1 * exp : 2 * exp;
-  const out = [];
-  for (let t = step; t <= max; t += step) out.push(Math.round(t));
-  return out;
-}
+// (niceTicks + dayBarChart now in src/shared/daychart.js)

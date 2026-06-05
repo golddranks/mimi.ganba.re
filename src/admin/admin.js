@@ -1,5 +1,6 @@
 import { pad2 } from "../shared/dates.js";
 import { aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
+import { dayBarChart } from "../shared/daychart.js";
 
 // Power-user-only app-wide aggregate dashboard. Fans two endpoints into the
 // static skeleton declared in admin/index.html. Auth is the requester's own
@@ -126,58 +127,27 @@ function renderOverview(data) {
 // stack reveals the contributing uids — same pattern as the histograms.
 function renderDaily(daily, uids) {
   if (!daily || daily.length === 0) { dailychart.textContent = "(no data)"; return; }
-  // Fill in any missing days between first and last so the x-axis is calendar-uniform.
+  // Fill any missing days between first and last so the x-axis is calendar-uniform.
+  const map = new Map(daily.map((r) => [r.d, r]));
   const first = new Date(daily[0].d + "T00:00:00Z");
   const last = new Date(daily[daily.length - 1].d + "T00:00:00Z");
-  const map = new Map(daily.map((r) => [r.d, r]));
   const days = [];
   for (const d = new Date(first); d <= last; d.setUTCDate(d.getUTCDate() + 1)) {
     const k = `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
     const r = map.get(k) || { n: 0, correct: 0 };
     days.push({ k, n: r.n, correct: r.correct });
   }
-  const max = Math.max(1, ...days.map((d) => d.n));
-  const w = 960, h = 200;
-  const innerH = h - 40;
-  // Each day gets a fixed bin (up to 18 units, shrinking on long histories
-  // so we still fit). The newest day sits flush against the right edge
-  // — short date ranges leave empty space on the left rather than smearing
-  // thinly across the chart. Matches the main app's #topbar where today
-  // is at the right end.
-  const idealBin = (w - 40) / Math.max(1, days.length);
-  const binW = Math.min(idealBin, 18);
-  const barW = Math.min(binW * 0.8, 14);
-  const xRightmost = w - 20 - barW;
-  let bars = "", labels = "";
-  let lastMonth = "";
-  for (let i = 0; i < days.length; i++) {
-    const d = days[i];
-    const x = xRightmost - (days.length - 1 - i) * binW;
-    const totH = d.n / max * innerH;
-    const cH = d.n ? d.correct / d.n * totH : 0;
+  // Bars carry data-date so clicking a stack reveals the contributing uids.
+  dayBarChart(dailychart, days, 200, (d) => d.n, (d, x, barW, bh, y0) => {
+    const cH = d.n ? d.correct / d.n * bh : 0;
     const tip = `${d.k}  ${d.correct}/${d.n}`;
-    if (d.n) {
-      bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - totH}" width="${barW}" height="${totH}" fill="var(--bad-bar)"><title>${tip}</title></rect>`;
-      bars += `<rect data-date="${d.k}" x="${x}" y="${h - 20 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
-    }
-    const month = d.k.slice(0, 7);
-    if (month !== lastMonth) {
-      lastMonth = month;
-      labels += `<text x="${x}" y="${h - 4}" fill="var(--muted)" font-size="10">${month}</text>`;
-    }
-  }
-  let axis = "";
-  for (const t of niceTicks(max)) {
-    const y = h - 20 - t / max * innerH;
-    axis += `<text x="0" y="${y + 3}" fill="var(--muted)" font-size="10">${t}</text>`;
-    axis += `<line x1="20" x2="${w}" y1="${y}" y2="${y}" stroke="var(--panel-2)" stroke-width=".5"/>`;
-  }
-  dailychart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${axis}${bars}${labels}</svg>`;
+    return `<rect data-date="${d.k}" x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--bad-bar)"><title>${tip}</title></rect>`
+      + `<rect data-date="${d.k}" x="${x}" y="${y0 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+  }, () => "", true);
   dailychart.onclick = (e) => {
     const r = e.target.closest("rect[data-date]");
     if (!r) return;
-    const d = r.dataset.date;
-    showUidPopup(d, (uids || {})[d] || []);
+    showUidPopup(r.dataset.date, (uids || {})[r.dataset.date] || []);
   };
 }
 
@@ -706,11 +676,4 @@ function drawConsonantConfusion() {
 }
 
 // ---------- helpers ----------
-function niceTicks(max) {
-  const exp = Math.pow(10, Math.floor(Math.log10(max)));
-  const m = max / exp;
-  const step = m < 2 ? 0.5 * exp : m < 5 ? 1 * exp : 2 * exp;
-  const out = [];
-  for (let t = step; t <= max; t += step) out.push(Math.round(t));
-  return out;
-}
+// (niceTicks now in src/shared/daychart.js)
