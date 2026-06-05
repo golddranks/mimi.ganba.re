@@ -1,7 +1,7 @@
 // Full-stack DOM e2e: drive the app pages in happy-dom against a real worker.
 // The app's answers POST real events through the worker into D1; the dashboard
 // reads them back and renders. One set of cases, two targets:
-//   - local (default): built dist/ + a worker booted by scripts/testenv.sh
+//   - local (default): built dist/ + a worker booted by scripts/e2e.sh
 //   - live (SITE set): the deployed Pages site + live worker, post-deploy, via
 //     scripts/verify.sh
 // openPage() hides the difference. Every uid the suite writes under is
@@ -49,7 +49,7 @@ const WAIT = { timeout: LIVE ? 20000 : 5000 };
 
 // power_user has no API setter (granted by hand via SQL), so poke the local D1
 // the dev worker reads. Local-only — the admin test that uses it skips live.
-// Honors WRANGLER_PERSIST so it targets the state dir testenv.sh booted on.
+// Honors WRANGLER_PERSIST so it targets the state dir e2e.sh booted on.
 const grantPowerUser = (uid, level = 1) => {
   const args = ["wrangler", "d1", "execute", "mimi-stats", "--local"];
   if (process.env.WRANGLER_PERSIST) args.push("--persist-to", process.env.WRANGLER_PERSIST);

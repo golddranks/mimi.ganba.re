@@ -20,7 +20,7 @@ while read -r _lref lsha _rref rsha; do
   else
     range="$rsha..$lsha"
   fi
-  files="$(git diff --name-only "$range" -- worker/ src/shared/skill.js 2>/dev/null || echo FORCE)"
+  files="$(git diff --name-only "$range" -- worker/ src/shared/ 2>/dev/null || echo FORCE)"
   [ -n "$files" ] && { touched=true; break; }
 done
 $touched || exit 0
@@ -31,6 +31,6 @@ if [ ! -d worker/node_modules ]; then
   exit 0
 fi
 
-echo "pre-push: smoking the worker (skip with --no-verify)…"
-# Port 8799 so it can't clash with a dev.sh already on 8787.
-PORT=8799 bash scripts/smoke.sh
+echo "pre-push: running the e2e gate (skip with --no-verify)…"
+# Isolated: temp state dir + random port, so it can't clash with a running dev.sh.
+bash scripts/e2e.sh --snapshot

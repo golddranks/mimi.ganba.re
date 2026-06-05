@@ -50,7 +50,7 @@ two permissions:
 | Permission                         | Why                                              |
 |------------------------------------|--------------------------------------------------|
 | Account → Workers Scripts: Edit    | Upload and publish the worker bundle.            |
-| Account → D1: Read                 | Pre-deploy gate snapshots prod (`smoke.sh`).     |
+| Account → D1: Read                 | Pre-deploy gate snapshots prod (`e2e.sh --snapshot`). |
 
 The *D1: Read* permission is what lets the pre-deploy gate `wrangler d1 export`
 a fresh prod snapshot and run the code's migrations against the real schema
@@ -91,7 +91,7 @@ Manual deploy is still possible:
 
 ```sh
 python3 scripts/build.py --voicemap-only                       # refresh voicemap
-./scripts/smoke.sh                                             # snapshot prod + e2e (pre-deploy)
+./scripts/e2e.sh --snapshot                                    # snapshot prod + e2e (pre-deploy)
 ( cd worker && npx wrangler deploy )
 ./scripts/verify.sh                                            # verify the live deployment
 ```
@@ -120,42 +120,46 @@ The suite lives in `worker/test/` and runs on `node:test`:
 - **`test/push.test.mjs`** — pure unit tests for the reminder cron's due-logic and
   VAPID JWT signing (`src/push.js`); no worker, D1, or DOM.
 
-`scripts/smoke.sh` runs the pre-deploy gate; `scripts/verify.sh` the post-deploy:
+`scripts/e2e.sh` runs the pre-deploy gate; `scripts/verify.sh` the post-deploy:
 
 ```sh
-./scripts/smoke.sh                                             # snapshot prod -> build -> boot local -> full e2e
-./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # just the API migration gate, against a running worker
-./scripts/verify.sh                                            # api + dom e2e suites against the live deployment
+./scripts/e2e.sh                                              # empty-schema sandbox, full suite
+./scripts/e2e.sh --snapshot                                  # prod snapshot -> build -> boot isolated -> full e2e (the gate)
+./scripts/e2e.sh https://mimi-stats.golddranks.workers.dev   # just the API migration gate, against a running worker
+./scripts/verify.sh                                          # api + dom e2e suites against the live deployment
 ```
 
-With no argument it refreshes the local DB from a prod snapshot (`scripts/snapshot.sh`, cached 6h), builds
-the site (`scripts/build.py`, so the DOM suite can load the real pages), boots the
-worker on a local miniflare D1, runs the full suite, and tears down — so the
-code's migrations run against prod's *actual* schema, exactly as a deploy would
-apply them. That's how drift gets caught before publishing, with zero prod risk.
-Given a URL it skips the snapshot/build/boot and runs just the API migration gate
-against that worker.
+`e2e.sh` is **always isolated** — it boots a throwaway worker on a random port
+against a temp `--persist-to` dir, builds the site (`scripts/build.py`, so the DOM
+suite can load the real pages), runs the suite, and tears it all down by PID. It
+never touches your dev environment's `worker/.wrangler/state` or `:8787`, so it's
+safe alongside a running `dev.sh`. `--snapshot` seeds that temp DB from a prod
+snapshot (`scripts/snapshot.sh`, cached 6h) so the code's migrations run against
+prod's *actual* schema, exactly as a deploy would apply them — that's how drift
+gets caught before publishing, with zero prod risk. Given a URL it skips the boot
+and runs just the API migration gate against that worker.
 
 You rarely run it by hand: a **pre-push hook** (`.githooks/pre-push`,
-auto-installed by `scripts/dev.sh`) runs it whenever a push changes the worker, so
-the whole workflow is just **`./scripts/dev.sh` to develop, `git push` to ship** —
-the hook gates locally, then CI gates again and deploys. Bypass the hook with
-`git push --no-verify`; it skips itself if `worker/node_modules` isn't installed.
+auto-installed by `scripts/dev.sh`) runs `e2e.sh --snapshot` whenever a push
+changes the worker (or `src/shared/`), so the whole workflow is just
+**`./scripts/dev.sh` to develop, `git push` to ship** — the hook gates locally,
+then CI gates again and deploys. Bypass the hook with `git push --no-verify`; it
+skips itself if `worker/node_modules` isn't installed.
 
 ### Snapshotting prod
 
-`scripts/snapshot.sh` does `wrangler d1 export` of prod into a SQL dump, resets
-the local miniflare DB, and imports it. Both `dev.sh` and `smoke.sh` run it, but
-the **prod export is cached for 6h**, keyed off the *dump file's* age (it lives in
-the temp dir, not `.wrangler/state`). So prod is hit at most every 6h regardless
-of the local DB — wiping `worker/.wrangler/state` just re-imports the cached dump,
-it does not re-hit prod. Force a fresh pull by deleting the dump
+`scripts/snapshot.sh` does `wrangler d1 export` of prod into a SQL dump and prints
+its path — that's *all* it does. It reads prod, never writes it, and never touches
+any `.wrangler/state`; the caller decides what to import the dump into (`dev.sh`
+imports it into the dev DB, `e2e.sh --snapshot` into a throwaway one). The **export
+is cached for 6h**, keyed off the *dump file's* age (it lives in the temp dir), so
+prod is hit at most every 6h. Force a fresh pull by deleting the dump
 (`$TMPDIR/mimi-stats-snapshot.sql`). Needs `wrangler login` locally (or
 `CLOUDFLARE_API_TOKEN` with *D1: Read* in CI; CI containers are fresh, so they
-always pull). It verifies the
-dump before wiping local, so a failed/empty export never leaves you with an empty
-DB. The dump holds real user rows, lives under the system temp dir, and must not
-be committed or shared.
+always pull). It verifies the dump is non-empty before printing its path, so a
+failed export surfaces as an error rather than a bad cached dump. The dump holds
+real user rows, lives under the system temp dir, and must not be committed or
+shared.
 
 The CI deploy gates **pre-deploy** with the full `e2e` job (snapshots prod, deploy
 aborts on failure) — that snapshot is what needs the `CLOUDFLARE_API_TOKEN`'s

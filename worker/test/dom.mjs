@@ -14,7 +14,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const DIST = resolve(here, "../../dist");
 
 // Test target. Default: the BUILT dist pages driven against a local worker
-// (booted by testenv.sh; BASE is its origin). Set SITE to run the SAME suite
+// (booted by e2e.sh; BASE is its origin). Set SITE to run the SAME suite
 // against a deployed site instead — verify.sh points SITE/BASE at production.
 // LIVE flips both the page source (fetch the deployed HTML vs read local dist)
 // and the worker wiring (a deployed page targets its own worker; locally we

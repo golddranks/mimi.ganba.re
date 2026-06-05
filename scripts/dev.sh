@@ -54,10 +54,14 @@ fi
 
 python3 scripts/build.py
 
-# Reset the local D1 to a prod snapshot, so local mirrors prod on every launch.
-# The prod export is cached (re-pulled only when >6h old); the local re-import is
-# unconditional. The worker migrates this copy on first request.
-bash scripts/snapshot.sh
+# Reset the local dev D1 to a prod snapshot, so local mirrors prod on every
+# launch. snapshot.sh pulls (cached 6h, reads prod only) and prints the dump
+# path; this is the one place that owns worker/.wrangler/state. The worker
+# migrates this copy on first request.
+SNAP="$(bash scripts/snapshot.sh)"
+rm -rf worker/.wrangler/state
+( cd worker && npx wrangler d1 execute mimi-stats --local --file="$SNAP" >/dev/null )
+echo "Local D1 now mirrors prod."
 
 # Kill the whole process group when this script exits so both children die.
 trap 'kill 0 2>/dev/null || true' EXIT INT TERM

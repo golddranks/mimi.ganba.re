@@ -2,7 +2,7 @@
 # Post-deploy verification of the LIVE deployed system: run the e2e suites
 # against the deployed Pages site + live worker, confirming the real, serving
 # deployment works end-to-end. This is the SAME dom.test.mjs that runs locally
-# (testenv.sh) — SITE makes it fetch the deployed pages and target the live
+# (e2e.sh) — SITE makes it fetch the deployed pages and target the live
 # worker instead of a local one; the admin test self-skips (it needs local SQL).
 # api.test.mjs runs the worker-API gate against the live worker too. All writes
 # are under the TestUser nickname, which production aggregates exclude.
