@@ -31,12 +31,17 @@ export function scheduleReminders() {
   if (viewMode) return;
   if (!pushSupported()) return;
 
-  // ?remind testing/recovery hook, bypassing the gates below. Bare ?remind
-  // re-installs (clears a past opt-out, asks permission if needed, subscribes).
-  // ?remind=test additionally asks the worker to push this device right now —
-  // the end-to-end delivery check (works even with the app backgrounded).
+  // ?remind testing/recovery hook, bypassing the gates below. It force-shows the
+  // opt-in prompt — the SAME gesture-driven path as the normal flow — rather than
+  // requesting permission on load (which browsers refuse to prompt for without a
+  // user gesture). ?remind=test also pushes this device once permission is
+  // granted, the end-to-end delivery check. Bare ?remind just (re)subscribes.
   const remind = new URLSearchParams(location.search).get("remind");
-  if (remind !== null) { forceRemind(remind); return; }
+  if (remind !== null) {
+    delete localStorage.remind_optout;             // reinstall: undo a past "no"
+    showRemindPrompt({ test: remind === "test" });
+    return;
+  }
 
   if (!hasMissedDay()) return;
   if (dayTier(today())) return;
@@ -47,15 +52,19 @@ export function scheduleReminders() {
 }
 
 // In-app opt-in shown before the browser's permission dialog (which can't be
-// previewed or carry a message of our own). Only on "Enable" do we ask, so users
-// who'd reflexively block aren't prompted and the one-shot grant isn't spent;
-// dismissing remembers the choice so we don't nag.
-function showRemindPrompt() {
+// previewed or carry a message of our own). The request happens in the click
+// handler — a user gesture — which is both nicer UX and what browsers require to
+// actually show the prompt. `test` (the ?remind=test path) sends one push once
+// subscribed, to verify delivery.
+function showRemindPrompt({ test = false } = {}) {
   remindprompt.hidden = false;
   remindyes.onclick = async () => {
     remindprompt.hidden = true;
-    try { if (await Notification.requestPermission() === "granted") await subscribe(); }
-    catch { }
+    try {
+      if (await Notification.requestPermission() !== "granted") return;
+      const sub = await subscribe();
+      if (test && sub) await testPush(sub);
+    } catch { }
   };
   remindno.onclick = () => {
     remindprompt.hidden = true;
@@ -85,20 +94,13 @@ async function subscribe() {
   return sub;
 }
 
-async function forceRemind(value) {
-  if (Notification.permission === "default") {
-    try { await Notification.requestPermission(); } catch { }
-  }
-  if (Notification.permission !== "granted") return;
-  delete localStorage.remind_optout;   // reinstall: undo a past "no"
-  const sub = await subscribe();
-  if (value === "test" && sub) {
-    await fetch(STATS_URL + "/v1/push/test", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ endpoint: sub.endpoint }),
-    });
-  }
+// Ask the worker to push this subscription right now (the ?remind=test check).
+async function testPush(sub) {
+  await fetch(STATS_URL + "/v1/push/test", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ endpoint: sub.endpoint }),
+  });
 }
 
 // base64url (the VAPID public key) → Uint8Array, as pushManager.subscribe wants.
