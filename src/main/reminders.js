@@ -79,18 +79,36 @@ async function subscribe() {
   if (Notification.permission !== "granted") return null;
   const reg = await navigator.serviceWorker.register("/sw.js");
   await navigator.serviceWorker.ready;
+  const appKey = urlB64ToBytes(VAPID_PUBLIC_KEY);
+
   let sub = await reg.pushManager.getSubscription();
+  // A subscription is bound to the VAPID key it was made with. If that key has
+  // since rotated, the old sub can't be reused — every push 401s, and the browser
+  // refuses to re-subscribe with a different key while it lives — so drop it
+  // locally + server-side and make a fresh one. We compare against the key we
+  // recorded at subscribe time (localStorage.push_key), not
+  // sub.options.applicationServerKey, which some browsers (e.g. Firefox) don't
+  // expose. A missing tag — any sub predating this code — counts as a mismatch,
+  // so already-stranded devices self-heal on their next visit.
+  if (sub && localStorage.push_key !== VAPID_PUBLIC_KEY) {
+    const stale = sub.endpoint;
+    await sub.unsubscribe();
+    fetch(STATS_URL + "/v1/push/unsubscribe", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ endpoint: stale }),
+    }).catch(() => { });
+    sub = null;
+  }
   if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlB64ToBytes(VAPID_PUBLIC_KEY),
-    });
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
   }
   await fetch(STATS_URL + "/v1/push/subscribe", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ uid, subscription: sub.toJSON(), tzOffset: -new Date().getTimezoneOffset() }),
   });
+  localStorage.push_key = VAPID_PUBLIC_KEY;   // record the key this sub is bound to
   return sub;
 }
 
