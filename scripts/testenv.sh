@@ -41,5 +41,5 @@ echo "testenv: worker on ${BASE} (state: ${PERSIST})"
 if [ "$#" -gt 0 ]; then
   WRANGLER_PERSIST="$PERSIST" BASE="$BASE" "$@"
 else
-  WRANGLER_PERSIST="$PERSIST" BASE="$BASE" node --test test/confusion.test.mjs test/api.test.mjs test/dom.test.mjs
+  WRANGLER_PERSIST="$PERSIST" BASE="$BASE" node --test test/confusion.test.mjs test/push.test.mjs test/api.test.mjs test/dom.test.mjs
 fi

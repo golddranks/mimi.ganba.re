@@ -15,6 +15,8 @@
 import { nameOf } from "./voicemap.js";
 import { MIGRATIONS } from "./migrations.js";
 import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/shared/skill.js";
+import { VAPID_PUBLIC_KEY } from "../../src/shared/vapid.js";
+import { localStamp, dueNudge, vapidAuth, sendPush, START_HOUR, DONE_HOUR } from "./push.js";
 
 // Exclude users tagged as test fixtures so seeded data (worker/seed.sql)
 // doesn't pollute global stats. The seed user is INSERTed with this nickname;
@@ -162,7 +164,44 @@ export default {
     for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
     return res;
   },
+
+  // Hourly cron (wrangler.toml [triggers]) → daily push reminders.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runReminders(env, Date.now()).catch((e) => console.error("reminders:", (e && e.message) || e)));
+  },
 };
+
+// Push a reminder to every subscription whose local time is a nudge hour and
+// whose events say they haven't started (19:00) / aren't done (22:00) today.
+// No-op until VAPID is configured (public key committed + private key secret).
+async function runReminders(env, now) {
+  if (!VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return;
+  await ensureMigrated(env);
+  const privateJwk = JSON.parse(env.VAPID_PRIVATE_KEY);
+  const subs = ((await env.mimi_stats.prepare("SELECT * FROM push_subs").all()).results) || [];
+  const since = now - 48 * 3600 * 1000;   // only today (local) can matter; 48h covers any offset
+
+  for (const sub of subs) {
+    // Skip the events query for the ~22 hours/day this device isn't near a nudge.
+    const { hour } = localStamp(now, sub.tz_offset);
+    if (hour !== START_HOUR && hour !== DONE_HOUR) continue;
+
+    const events = ((await env.mimi_stats.prepare(
+      "SELECT ts, target, picked, ev FROM events WHERE uid = ? AND ts >= ?"
+    ).bind(sub.uid, since).all()).results) || [];
+    const due = dueNudge(sub, events, now);
+    if (!due) continue;
+
+    const auth = await vapidAuth(sub.endpoint, privateJwk, VAPID_PUBLIC_KEY);
+    const status = await sendPush(sub.endpoint, auth);
+    if (status === 404 || status === 410) {
+      await env.mimi_stats.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(sub.endpoint).run();
+    } else {
+      await env.mimi_stats.prepare("UPDATE push_subs SET last_push = ? WHERE endpoint = ?")
+        .bind(due.stamp, sub.endpoint).run();
+    }
+  }
+}
 
 async function handleEvents(req, env) {
   const body = await req.json().catch(() => null);

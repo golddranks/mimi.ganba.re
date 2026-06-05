@@ -6,3 +6,8 @@ compatibility_date = "2025-01-01"
 binding = "mimi_stats"
 database_name = "mimi-stats"
 database_id = "cb06eaa2-5051-4cf5-8626-0d1d0eba5262"
+
+# Hourly: the scheduled() handler sends the daily push reminders (src/push.js).
+# Needs the VAPID_PRIVATE_KEY secret set, else it no-ops.
+[triggers]
+crons = ["0 * * * *"]
