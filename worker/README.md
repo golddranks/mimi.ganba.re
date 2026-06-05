@@ -84,8 +84,8 @@ Both deploys are gated by a shared **`e2e`** job (see below): it snapshots prod,
 builds the site, and runs the full suite, and runs whenever *either* the pages or
 the worker changed — so a frontend-only change is gated too. `deploy-pages` and
 `deploy-worker` run only if it passes. After **both** deploys settle, a **`verify`**
-job (`scripts/verify.sh`) checks the LIVE deployed system — it fetches the
-deployed dashboard from Pages and drives it against the live worker.
+job (`scripts/verify.sh`) checks the LIVE deployed system — it runs the same
+api + dom e2e suites against the deployed Pages site and the live worker.
 
 Manual deploy is still possible:
 
@@ -107,26 +107,25 @@ The suite lives in `worker/test/` and runs on `node:test`:
   surface that bug — the test posts real rows.) Writes under the `TestUser`
   sentinel uid, so the rows stay out of all aggregates. Runs against any worker.
 - **`test/dom.test.mjs`** — a full-stack check in happy-dom (`test/dom.mjs` loads
-  the BUILT `dist/` pages). It drives the app UI through a few questions — the
-  answers POST real events through the worker into D1 — then loads the dashboard
-  and admin pages against those events and asserts the confusion matrix renders.
-  A break anywhere along app → worker → D1 → dashboard surfaces here. **Local
-  only**: it writes non-sentinel rows and pokes the local D1, so it must not run
-  against prod.
-- **`test/verify.test.mjs`** — the post-deploy check of the **live** system,
-  driven by `scripts/verify.sh`. Fetches the *deployed* pages from Pages and runs
-  them in happy-dom; served from `mimi.ganba.re`, their own STATS_URL points at
-  the live worker, so it's a true end-to-end test of what's serving. Two paths:
-  the deployed **app saves** answers to the live worker (the data-collection path
-  — read back to confirm they persist with `opts`), and the deployed **dashboard
-  renders** them. Pinned to the `TestUser` sentinel uid, so it's safe against prod.
+  the pages). It drives the app UI through a few questions — the answers POST real
+  events through the worker into D1 — then loads the dashboard and admin pages
+  against those events and asserts the confusion matrix renders. A break anywhere
+  along app → worker → D1 → dashboard surfaces here. **One suite, two targets**:
+  `openPage()` loads the built `dist/` against a local worker by default, or — with
+  `SITE` set (`scripts/verify.sh`) — fetches the *deployed* pages from Pages and
+  drives them against the live worker, a true post-deploy check of what's serving.
+  Every uid it writes under is registered as `TestUser` (excluded from aggregates)
+  so the exact-count assertions hold against prod too; the admin test, which needs
+  `power_user` via local SQL and its rows *in* the aggregate, self-skips when live.
+- **`test/push.test.mjs`** — pure unit tests for the reminder cron's due-logic and
+  VAPID JWT signing (`src/push.js`); no worker, D1, or DOM.
 
 `scripts/smoke.sh` runs the pre-deploy gate; `scripts/verify.sh` the post-deploy:
 
 ```sh
 ./scripts/smoke.sh                                             # snapshot prod -> build -> boot local -> full e2e
 ./scripts/smoke.sh https://mimi-stats.golddranks.workers.dev   # just the API migration gate, against a running worker
-./scripts/verify.sh                                            # the deployed dashboard against the live worker
+./scripts/verify.sh                                            # api + dom e2e suites against the live deployment
 ```
 
 With no argument it refreshes the local DB from a prod snapshot (`scripts/snapshot.sh`, cached 6h), builds
@@ -169,6 +168,9 @@ worker is on `*.workers.dev`.
 
 - `POST /v1/events`              — body `{uid, events: [{ts, target, idx, picked, cap}, ...]}`
 - `POST /v1/user`                — body `{uid, nickname}`
+- `POST /v1/push/subscribe`      — body `{uid, subscription, tzOffset}` — register a device for reminders
+- `POST /v1/push/unsubscribe`    — body `{endpoint}`
+- `POST /v1/push/test`           — body `{endpoint}` — push this device now (the `?remind=test` check)
 - `GET  /v1/user/:uid/events`    — all events for a single user (no auth; uid is unguessable)
 - `GET  /v1/admin/stats?uid=…`   — sound/aggregate sections; 403 unless `users.power_user >= 1`
 - `GET  /v1/admin/stats/users?uid=…` — overview, per-user histograms, daily activity, uid drilldowns; 403 unless `users.power_user >= 2`
@@ -219,6 +221,48 @@ npx wrangler d1 execute mimi-stats --remote --file=migrate-voices.sql
 first entries in the auto-applied list (see *Schema migrations* below).
 
 Fresh setups via `schema.sql` already include every column.
+
+## Reminders (Web Push)
+
+Opted-in devices get a daily nudge even with the app closed. The client
+registers `/sw.js` and subscribes via the Push API (`src/main/reminders.js`),
+and the subscription is stored in `push_subs`. The worker's **hourly cron**
+(`scheduled()` in `src/index.js`; `[triggers]` in `wrangler.toml`) scans that
+table, derives each device's local time from its stored `tz_offset`, and pushes
+when that device's events show no answers today (19:00 local) or a not-yet-done
+day (22:00 local, via the shared `dayTier`). Pushes are **payloadless** — the
+service worker shows a fixed message — so there's no RFC 8291 payload
+encryption; only VAPID identification (a signed JWT) is needed.
+
+### One-time setup
+
+Generate a VAPID keypair, commit the public half, store the private half as a
+secret:
+
+```sh
+node scripts/vapid-keygen.mjs
+# paste the public key into src/shared/vapid.js (VAPID_PUBLIC_KEY)
+cd worker && npx wrangler secret put VAPID_PRIVATE_KEY   # paste the private JWK
+```
+
+Until both are set the feature is inert: the client skips subscription and the
+cron no-ops. Rotating the keypair invalidates every existing subscription
+(devices re-subscribe on their next visit).
+
+### Testing delivery
+
+`?remind` (bare) re-subscribes the current device; `?remind=test` asks the
+worker (`POST /v1/push/test`) to push it immediately — the end-to-end check that
+works even with the app backgrounded. The cron's due-logic and VAPID signing are
+unit-tested in `test/push.test.mjs` (pure, no worker); real OS delivery is a
+manual device check, since service workers don't run in happy-dom.
+
+### iOS
+
+Web Push on iOS works only for a site **installed to the home screen** as a PWA
+(iOS 16.4+) — Safari/Firefox tabs can't receive it. The `manifest.json` plus the
+apple-touch meta tags make the app installable; Android Firefox/Chrome need no
+install.
 
 ## Schema migrations
 

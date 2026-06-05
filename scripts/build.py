@@ -104,6 +104,7 @@ def bundle_index(voice_counts: dict[str, int]) -> None:
     (DIST / "index.html").write_text(html, encoding="utf-8")
     (DIST / ".nojekyll").write_text("")
     shutil.copy(SRC / "favicon.svg", DIST / "favicon.svg")
+    shutil.copy(src / "manifest.json", DIST / "manifest.json")
 
 
 def bundle_dashboard() -> None:
