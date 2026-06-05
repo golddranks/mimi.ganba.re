@@ -499,8 +499,8 @@ body {
 
 .confgrid th,
 .confgrid td {
-    width: 2.2rem;
-    height: 2.2rem;
+    width: 2.6rem;
+    height: 2.6rem;
     padding: 0;
     text-align: center;
     vertical-align: middle;
@@ -516,7 +516,7 @@ body {
 
 .confgrid td {
     border: 1px solid var(--panel-2);
-    font-size: .8rem;
+    font-size: .72rem;
     color: var(--fg);
 }
 
