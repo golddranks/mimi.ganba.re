@@ -191,13 +191,13 @@ function calendarDays(events, valueFor) {
 // the app's #topbar. `mag(d)` is the bar magnitude (drives the y-axis scale);
 // `bar(d, x, barW, bh, y0)` returns the SVG for one day's bar(s); optional
 // `annotate(max)` adds a corner label.
-function dayBarChart(el, days, h, mag, bar, annotate = () => "") {
+function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = false) {
   const w = 960, innerH = h - 40, y0 = h - 20;
   const max = Math.max(1, ...days.map(mag));
   const binW = Math.min((w - 40) / Math.max(1, days.length), 18);
   const barW = Math.min(binW * 0.8, 14);
   const xRightmost = w - 20 - barW;
-  let bars = "", labels = "", lastMonth = "";
+  let bars = "", labels = "", lastMonth = "", gridlines = "";
   for (let i = 0; i < days.length; i++) {
     const d = days[i];
     const x = xRightmost - (days.length - 1 - i) * binW;
@@ -207,6 +207,17 @@ function dayBarChart(el, days, h, mag, bar, annotate = () => "") {
       lastMonth = month;
       labels += `<text x="${x}" y="${h - 4}" fill="var(--muted)" font-size="10">${month}</text>`;
     }
+    // Date-axis guides at the bin's leading edge, behind the bars: a dim line
+    // each Monday, a stronger one at the first of the month. new Date(k) parses
+    // YYYY-MM-DD as UTC, so getUTCDay() gives the calendar weekday cleanly.
+    if (grid) {
+      const lx = (x - (binW - barW) / 2).toFixed(1);
+      if (d.k.slice(-2) === "01") {
+        gridlines += `<line x1="${lx}" x2="${lx}" y1="0" y2="${y0}" stroke="var(--muted)" stroke-width=".6" stroke-opacity=".5"/>`;
+      } else if (new Date(d.k).getUTCDay() === 1) {
+        gridlines += `<line x1="${lx}" x2="${lx}" y1="0" y2="${y0}" stroke="var(--panel-2)" stroke-width=".5"/>`;
+      }
+    }
   }
   let axis = "";
   for (const t of niceTicks(max)) {
@@ -214,7 +225,7 @@ function dayBarChart(el, days, h, mag, bar, annotate = () => "") {
     axis += `<text x="0" y="${y + 3}" fill="var(--muted)" font-size="10">${t}</text>`;
     axis += `<line x1="20" x2="${w}" y1="${y}" y2="${y}" stroke="var(--panel-2)" stroke-width=".5"/>`;
   }
-  el.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${axis}${bars}${labels}${annotate(max)}</svg>`;
+  el.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${axis}${gridlines}${bars}${labels}${annotate(max)}</svg>`;
 }
 
 function renderDaily(events) {
@@ -235,7 +246,7 @@ function renderDaily(events) {
     const tip = `${d.k}  ${d.correct}/${d.total}`;
     return `<rect x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--bad-bar)"><title>${tip}</title></rect>`
       + `<rect x="${x}" y="${y0 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
-  });
+  }, () => "", true);
 }
 
 // ---------- hourly ----------
