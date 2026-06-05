@@ -146,6 +146,8 @@ export default {
         res = await handlePushSubscribe(req, env);
       } else if (req.method === "POST" && url.pathname === "/v1/push/unsubscribe") {
         res = await handlePushUnsubscribe(req, env);
+      } else if (req.method === "POST" && url.pathname === "/v1/push/test") {
+        res = await handlePushTest(req, env);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+\/events$/)) {
         res = await handleGetEvents(req, env, url);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+$/)) {
@@ -318,6 +320,20 @@ async function handlePushUnsubscribe(req, env) {
   if (!body || typeof body.endpoint !== "string") return new Response("bad request", { status: 400 });
   await env.mimi_stats.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(body.endpoint).run();
   return json({ ok: true });
+}
+
+// Send a push to one subscription right now — the ?remind=test delivery check.
+// Body: { endpoint }. 503 if VAPID isn't configured, 404 if the endpoint isn't a
+// known subscription.
+async function handlePushTest(req, env) {
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body.endpoint !== "string") return new Response("bad request", { status: 400 });
+  if (!VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return new Response("push not configured", { status: 503 });
+  const sub = await env.mimi_stats.prepare("SELECT endpoint FROM push_subs WHERE endpoint = ?").bind(body.endpoint).first();
+  if (!sub) return new Response("unknown subscription", { status: 404 });
+  const auth = await vapidAuth(body.endpoint, JSON.parse(env.VAPID_PRIVATE_KEY), VAPID_PUBLIC_KEY);
+  const status = await sendPush(body.endpoint, auth);
+  return json({ ok: status >= 200 && status < 300, status });
 }
 
 // Sound / aggregate stats — the level-1 admin tier. Auth is "you-know-the-uid":

@@ -173,39 +173,16 @@ test("app: ?morning forces the probe phase even with answers logged today", asyn
   assert.deepEqual([...btns].map((b) => b.dataset.mora).sort(), ["sa", "za"], "?morning probes despite today's stats");
 });
 
-// A granted Notification stub that records every `new Notification(...)`, so the
-// ?remind tests can assert what (if anything) the app fired without a real OS.
-const notifyStub = (sink) => (w) => {
-  w.Notification = function (title, opts) { sink.push({ title, ...opts }); };
-  w.Notification.permission = "granted";
-  w.Notification.requestPermission = async () => "granted";
-};
-
-test("app: ?remind=0 fires a test notification immediately", async (t) => {
-  const fired = [];
-  const { close } = await openPage("/?remind=0", { setup: notifyStub(fired) });
+test("app: ?remind degrades cleanly where push is unsupported (no SW / no VAPID key)", async (t) => {
+  // happy-dom has no serviceWorker/PushManager and VAPID_PUBLIC_KEY is unset, so
+  // pushSupported() is false: ?remind must no-op without throwing, leaving the
+  // opt-in prompt hidden. Real push subscription + delivery are verified manually
+  // on a device — service workers don't run here.
+  const { win, close } = await openPage("/?remind");
   t.after(close);
-
-  await waitFor(() => fired.length || null, WAIT);
-  assert.match(fired[0].body, /Test notification/, "?remind=N delivers a test notification");
-});
-
-test("app: bare ?remind re-installs reminders (clears opt-out, fires nothing now)", async (t) => {
-  const fired = [];
-  const { win, close } = await openPage("/?remind", {
-    setup: (w) => {
-      w.localStorage.setItem("remind_optout", "1");
-      notifyStub(fired)(w);
-      // armReminders schedules the two nudges at hour-scale delays; drop those so
-      // happy-dom's waitUntilComplete doesn't stall hours waiting for them to fire.
-      const real = w.setTimeout.bind(w);
-      w.setTimeout = (fn, ms, ...a) => (ms > 60000 ? 0 : real(fn, ms, ...a));
-    },
-  });
-  t.after(close);
-
-  assert.equal(win.localStorage.getItem("remind_optout"), null, "reinstall undoes a past opt-out");
-  assert.equal(fired.length, 0, "reinstall arms the real 19:00/22:00 schedule, fires nothing immediately");
+  await win.happyDOM.waitUntilComplete();
+  assert.ok(win.primary, "app booted");
+  assert.ok(win.remindprompt.hidden, "no opt-in prompt where push is unsupported");
 });
 
 test("dashboard: confusion matrix renders asked vs shown denominators", async (t) => {

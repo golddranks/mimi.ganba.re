@@ -124,6 +124,12 @@ def bundle_privacy() -> None:
     (out / "index.html").write_text(html, encoding="utf-8")
 
 
+def bundle_sw() -> None:
+    """The push service worker: a standalone file at the site root (/sw.js) so
+    its scope is the whole origin. Minified, not inlined — it must be its own URL."""
+    (DIST / "sw.js").write_text(minify(SRC / "main" / "sw.js"), encoding="utf-8")
+
+
 def bundle_admin(voice_map: dict[str, list[str]]) -> None:
     src = SRC / "admin"
     voice_js = json.dumps(voice_map, ensure_ascii=False, separators=(",", ":"))
@@ -144,6 +150,7 @@ def main() -> None:
     bundle_dashboard()
     bundle_privacy()
     bundle_admin(voice_map)
+    bundle_sw()
 
     pages = list(DIST.rglob("index.html"))
     html_total = sum(f.stat().st_size for f in pages if f.is_file())

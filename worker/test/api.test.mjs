@@ -95,3 +95,12 @@ test("POST /v1/push/subscribe with a malformed body -> 400 (not 500)", async () 
   const bad = await req("POST", "/v1/push/subscribe", { uid: UID });   // no subscription/tzOffset
   assert.equal(bad.status, 400);
 });
+
+test("POST /v1/push/test: 400 on bad body; never sends to an unknown endpoint", async () => {
+  const bad = await req("POST", "/v1/push/test", {});
+  assert.equal(bad.status, 400);
+  // 503 when VAPID isn't configured (local/CI), 404 when it is but the endpoint
+  // is unknown (prod with the secret set) — either way, no push is sent.
+  const unknown = await req("POST", "/v1/push/test", { endpoint: "https://push.example.invalid/x" });
+  assert.ok(unknown.status === 503 || unknown.status === 404, `expected 503|404, got ${unknown.status}`);
+});

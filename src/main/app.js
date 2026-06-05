@@ -54,7 +54,7 @@ const save = () => {
 // ---------- server-side stats ----------
 // When served from localhost (via scripts/dev.sh), talk to the local wrangler
 // dev worker instead of production. Set "" to disable uploads entirely.
-const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+export const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
   ? `http://${location.hostname}:8787`
   : "https://mimi-stats.golddranks.workers.dev";
 
@@ -66,7 +66,7 @@ const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
 // sent back. Refresh without the param to return to your own state.
 const spoofedUid = new URLSearchParams(location.search).get("uid");
 export const viewMode = !!spoofedUid;
-const uid = spoofedUid || (localStorage.uid ||= crypto.randomUUID());
+export const uid = spoofedUid || (localStorage.uid ||= crypto.randomUUID());
 let evQueue = [];
 try { evQueue = JSON.parse(localStorage.ev_queue || "[]"); } catch { }
 
