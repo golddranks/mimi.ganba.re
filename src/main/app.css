@@ -265,7 +265,7 @@ body {
 }
 
 #remindyes {
-    align-self: flex-start;
+    align-self: center;
     font: inherit;
     cursor: pointer;
     border: 0;
