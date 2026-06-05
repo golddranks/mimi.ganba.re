@@ -36,18 +36,24 @@ export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = f
       lastMonth = month;
       labels += `<text x="${x}" y="${h - 4}" fill="var(--muted)" font-size="10">${month}</text>`;
     }
-    // Date-axis guides at the bin's leading edge, behind the bars: a dim line
-    // each Monday, a stronger one at the first of the month. new Date(k) parses
-    // YYYY-MM-DD as UTC, so getUTCDay() gives the calendar weekday cleanly.
-    if (grid) {
-      const lx = (x - (binW - barW) / 2).toFixed(1);
-      // non-scaling-stroke → crisp 1px regardless of the chart's render width
-      // (these charts range from full-width to half-column). --muted, dim for
-      // weeks and stronger for months; --panel-2 was ~invisible on the panel.
-      if (d.k.slice(-2) === "01") {
-        gridlines += `<line x1="${lx}" x2="${lx}" y1="0" y2="${y0}" stroke="var(--muted)" stroke-width="1" stroke-opacity=".5" vector-effect="non-scaling-stroke"/>`;
-      } else if (new Date(d.k).getUTCDay() === 1) {
-        gridlines += `<line x1="${lx}" x2="${lx}" y1="0" y2="${y0}" stroke="var(--muted)" stroke-width="1" stroke-opacity=".18" vector-effect="non-scaling-stroke"/>`;
+  }
+  // Week/month guides across the FULL plot width — not just where bars are. Walk
+  // bin slots from the newest day leftward, extrapolating the calendar, so the
+  // grid reads continuously even over the right-anchor's empty-left margin. (k is
+  // YYYY-MM-DD; parse as UTC so getUTCDay/Date give the calendar weekday cleanly.)
+  // non-scaling-stroke keeps lines 1px at any render width; --muted dim for weeks,
+  // stronger for months (--panel-2 was ~invisible on the panel).
+  if (grid && days.length) {
+    const newest = new Date(days[days.length - 1].k + "T00:00:00Z");
+    for (let j = 0; ; j++) {
+      const lx = xRightmost - j * binW - (binW - barW) / 2;
+      if (lx < 18) break;
+      const sx = lx.toFixed(1);
+      const d = new Date(newest); d.setUTCDate(d.getUTCDate() - j);
+      if (d.getUTCDate() === 1) {
+        gridlines += `<line x1="${sx}" x2="${sx}" y1="0" y2="${y0}" stroke="var(--muted)" stroke-width="1" stroke-opacity=".5" vector-effect="non-scaling-stroke"/>`;
+      } else if (d.getUTCDay() === 1) {
+        gridlines += `<line x1="${sx}" x2="${sx}" y1="0" y2="${y0}" stroke="var(--muted)" stroke-width="1" stroke-opacity=".18" vector-effect="non-scaling-stroke"/>`;
       }
     }
   }
