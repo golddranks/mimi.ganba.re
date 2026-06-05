@@ -173,6 +173,41 @@ test("app: ?morning forces the probe phase even with answers logged today", asyn
   assert.deepEqual([...btns].map((b) => b.dataset.mora).sort(), ["sa", "za"], "?morning probes despite today's stats");
 });
 
+// A granted Notification stub that records every `new Notification(...)`, so the
+// ?remind tests can assert what (if anything) the app fired without a real OS.
+const notifyStub = (sink) => (w) => {
+  w.Notification = function (title, opts) { sink.push({ title, ...opts }); };
+  w.Notification.permission = "granted";
+  w.Notification.requestPermission = async () => "granted";
+};
+
+test("app: ?remind=0 fires a test notification immediately", async (t) => {
+  const fired = [];
+  const { close } = await openPage("/?remind=0", { setup: notifyStub(fired) });
+  t.after(close);
+
+  await waitFor(() => fired.length || null, WAIT);
+  assert.match(fired[0].body, /Test notification/, "?remind=N delivers a test notification");
+});
+
+test("app: bare ?remind re-installs reminders (clears opt-out, fires nothing now)", async (t) => {
+  const fired = [];
+  const { win, close } = await openPage("/?remind", {
+    setup: (w) => {
+      w.localStorage.setItem("remind_optout", "1");
+      notifyStub(fired)(w);
+      // armReminders schedules the two nudges at hour-scale delays; drop those so
+      // happy-dom's waitUntilComplete doesn't stall hours waiting for them to fire.
+      const real = w.setTimeout.bind(w);
+      w.setTimeout = (fn, ms, ...a) => (ms > 60000 ? 0 : real(fn, ms, ...a));
+    },
+  });
+  t.after(close);
+
+  assert.equal(win.localStorage.getItem("remind_optout"), null, "reinstall undoes a past opt-out");
+  assert.equal(fired.length, 0, "reinstall arms the real 19:00/22:00 schedule, fires nothing immediately");
+});
+
 test("dashboard: confusion matrix renders asked vs shown denominators", async (t) => {
   // Per-uid view, so counts are exact. With the sa fixture, za is picked 3x &
   // offered 5x, sya picked 1x & offered 1x. Default "shown" = picked/offered,

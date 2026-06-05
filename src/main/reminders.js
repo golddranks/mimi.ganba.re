@@ -24,12 +24,37 @@ function hasMissedDay() {
 export function scheduleReminders() {
   if (viewMode) return;
   if (typeof Notification === "undefined") return;
+
+  // ?remind testing/recovery hook, bypassing every gate below. Bare ?remind
+  // re-installs the reminders: clears a past opt-out, asks for permission if
+  // needed, and arms the real 19:00/22:00 nudges. ?remind=<seconds> instead
+  // fires one test notification after that delay — the mobile delivery check
+  // (set it, lock the phone, see whether a backgrounded tab's timer still fires).
+  const remind = new URLSearchParams(location.search).get("remind");
+  if (remind !== null) { forceReminders(remind); return; }
+
   if (!hasMissedDay()) return;
   if (dayTier(today())) return;
   if (Notification.permission === "granted") { armReminders(); return; }
   if (Notification.permission !== "default") return;   // denied — can't ask again
   if (localStorage.remind_optout) return;              // dismissed the pre-prompt before
   showRemindPrompt();
+}
+
+async function forceReminders(value) {
+  if (Notification.permission === "default") {
+    try { await Notification.requestPermission(); } catch { }
+  }
+  if (Notification.permission !== "granted") return;   // denied/dismissed — can't fire either way
+  const secs = Number(value);
+  if (value !== "" && Number.isFinite(secs)) {
+    setTimeout(() => {
+      try { new Notification("mimi.ganba.re", { body: `Test notification (?remind=${value}).`, tag: "mimi-test" }); } catch { }
+    }, secs * 1000);
+  } else {
+    delete localStorage.remind_optout;   // reinstall: undo a past "no"
+    armReminders();
+  }
 }
 
 // In-app opt-in shown before the browser's permission dialog (which can't be
