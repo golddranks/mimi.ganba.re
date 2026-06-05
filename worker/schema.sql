@@ -78,6 +78,21 @@ CREATE INDEX IF NOT EXISTS idx_events_uid    ON events(uid);
 CREATE INDEX IF NOT EXISTS idx_events_ts     ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_target ON events(target);
 
+-- Web Push subscriptions for the daily reminder. One row per browser push
+-- subscription (a device that opted in). The hourly cron (scheduled() in
+-- src/index.js) scans this table, derives each device's local time from
+-- tz_offset, and pushes a nudge when it's their reminder hour and today's events
+-- say they haven't started / aren't done yet.
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint  TEXT PRIMARY KEY,                  -- push service URL; unique per subscription
+  uid       TEXT NOT NULL,                     -- device uid, joins to events for the due check
+  p256dh    TEXT NOT NULL,                     -- client public key (base64url); for future payload encryption
+  auth      TEXT NOT NULL,                     -- client auth secret (base64url)
+  tz_offset INTEGER NOT NULL,                  -- minutes to ADD to UTC for the device's local time (JST = 540)
+  last_push TEXT,                              -- 'yyyy-mm-ddThh' (local) of the last nudge sent, for dedupe
+  created   INTEGER NOT NULL                   -- unix ms when first subscribed
+);
+
 -- Applied-migration ledger. The worker creates this on boot and records each
 -- migration from src/migrations.js it runs (see runMigrations in src/index.js),
 -- so a code deploy that needs a new column self-heals the schema instead of

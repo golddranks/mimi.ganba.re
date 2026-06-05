@@ -140,6 +140,10 @@ export default {
         res = await handleEvents(req, env);
       } else if (req.method === "POST" && url.pathname === "/v1/user") {
         res = await handleUser(req, env);
+      } else if (req.method === "POST" && url.pathname === "/v1/push/subscribe") {
+        res = await handlePushSubscribe(req, env);
+      } else if (req.method === "POST" && url.pathname === "/v1/push/unsubscribe") {
+        res = await handlePushUnsubscribe(req, env);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+\/events$/)) {
         res = await handleGetEvents(req, env, url);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+$/)) {
@@ -244,6 +248,36 @@ async function handleUser(req, env) {
     "INSERT INTO users (uid, nickname, first_seen, last_seen) VALUES (?, ?, ?, ?) " +
     "ON CONFLICT(uid) DO UPDATE SET nickname = excluded.nickname, last_seen = excluded.last_seen"
   ).bind(body.uid, nickname, now, now).run();
+  return json({ ok: true });
+}
+
+// Store (or refresh) a browser's Web Push subscription so the reminder cron can
+// nudge it. Body: { uid, subscription: PushSubscription.toJSON(), tzOffset }.
+// Keyed by endpoint — re-subscribing the same device (e.g. after a key rotation)
+// updates the row rather than duplicating it.
+async function handlePushSubscribe(req, env) {
+  const body = await req.json().catch(() => null);
+  const sub = body && body.subscription;
+  const keys = sub && sub.keys;
+  if (!body || typeof body.uid !== "string" || typeof body.tzOffset !== "number"
+    || !sub || typeof sub.endpoint !== "string"
+    || !keys || typeof keys.p256dh !== "string" || typeof keys.auth !== "string") {
+    return new Response("bad request", { status: 400 });
+  }
+  await env.mimi_stats.prepare(
+    "INSERT INTO push_subs (endpoint, uid, p256dh, auth, tz_offset, created) VALUES (?, ?, ?, ?, ?, ?) " +
+    "ON CONFLICT(endpoint) DO UPDATE SET uid = excluded.uid, p256dh = excluded.p256dh, " +
+    "auth = excluded.auth, tz_offset = excluded.tz_offset"
+  ).bind(sub.endpoint, body.uid, keys.p256dh, keys.auth, body.tzOffset, Date.now()).run();
+  return json({ ok: true });
+}
+
+// Drop a subscription (the user turned reminders off, or the browser replaced
+// it). Body: { endpoint }. Idempotent — deleting a missing row is fine.
+async function handlePushUnsubscribe(req, env) {
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body.endpoint !== "string") return new Response("bad request", { status: 400 });
+  await env.mimi_stats.prepare("DELETE FROM push_subs WHERE endpoint = ?").bind(body.endpoint).run();
   return json({ ok: true });
 }
 

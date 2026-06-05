@@ -31,4 +31,11 @@ export const MIGRATIONS = [
     up: "ALTER TABLE events ADD COLUMN skill INTEGER",
     down: "ALTER TABLE events DROP COLUMN skill",
   },
+  {
+    id: 3,
+    up: "CREATE TABLE IF NOT EXISTS push_subs ("
+      + "endpoint TEXT PRIMARY KEY, uid TEXT NOT NULL, p256dh TEXT NOT NULL, "
+      + "auth TEXT NOT NULL, tz_offset INTEGER NOT NULL, last_push TEXT, created INTEGER NOT NULL)",
+    down: "DROP TABLE push_subs",
+  },
 ];

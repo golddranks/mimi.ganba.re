@@ -76,3 +76,22 @@ test("POST /v1/events preserves Y/N event kinds (not coerced to 'a')", async () 
   assert.equal(y?.ev, "y", "y event kind preserved");
   assert.equal(n?.ev, "n", "n event kind preserved");
 });
+
+test("POST /v1/push/subscribe stores a subscription (migration 3 gate), unsubscribe drops it", async () => {
+  // Unique fake endpoint so this never collides with a real device; cleaned up
+  // below. Under the sentinel uid, which always "trained today", so the cron
+  // would never actually push to it even if cleanup were skipped.
+  const endpoint = `https://push.example.invalid/${UID}-${Date.now()}`;
+  const subscription = { endpoint, keys: { p256dh: "BFakeKeyValue", auth: "fakeAuth" } };
+
+  const ok = await req("POST", "/v1/push/subscribe", { uid: UID, subscription, tzOffset: 540 });
+  assert.equal(ok.status, 200, ok.data ? JSON.stringify(ok.data) : "");
+
+  const off = await req("POST", "/v1/push/unsubscribe", { endpoint });
+  assert.equal(off.status, 200);
+});
+
+test("POST /v1/push/subscribe with a malformed body -> 400 (not 500)", async () => {
+  const bad = await req("POST", "/v1/push/subscribe", { uid: UID });   // no subscription/tzOffset
+  assert.equal(bad.status, 400);
+});
