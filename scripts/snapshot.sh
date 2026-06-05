@@ -15,6 +15,13 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../worker"
 
+# Prefer the locally-installed wrangler binary; fall back to npx if deps aren't
+# installed. npx adds ~1.2s of resolution overhead per call.
+wrangler() {
+  if [ -x node_modules/.bin/wrangler ]; then node_modules/.bin/wrangler "$@"
+  else npx wrangler "$@"; fi
+}
+
 SNAP="${TMPDIR:-/tmp}/mimi-stats-snapshot.sql"
 MAX_AGE_MIN=360   # 6 hours
 
@@ -22,7 +29,7 @@ MAX_AGE_MIN=360   # 6 hours
 # `find -mmin +N` is the portable (macOS + Linux) mtime test.
 if [ ! -f "$SNAP" ] || [ -n "$(find "$SNAP" -mmin +$MAX_AGE_MIN 2>/dev/null)" ]; then
   echo "Exporting production D1 -> $SNAP" >&2
-  npx wrangler d1 export mimi-stats --remote --output "$SNAP" >&2
+  wrangler d1 export mimi-stats --remote --output "$SNAP" >&2
   # A failed/empty export must never leave a bad dump cached.
   if [ ! -s "$SNAP" ] || ! grep -q 'CREATE TABLE' "$SNAP"; then
     rm -f "$SNAP"
