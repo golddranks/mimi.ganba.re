@@ -4,6 +4,7 @@
 import { stats, run, today, acc, emptyDay, DAYS, BAR_MAX } from "./app.js";
 import { daysAgo } from "../shared/dates.js";
 import { DONE, dayTier } from "../shared/daytier.js";
+import { dayTip } from "../shared/daychart.js";
 import { inGrindPhase } from "./grind.js";
 
 function mastered() {
@@ -94,7 +95,7 @@ function renderBar() {
       ? `<div class="${stack}" style="height:${Math.min(100, s.total / BAR_MAX * 100)}%;--delay:${-i * 0.37}s">`
       + `<div class="bar-correct" style="height:${s.correct / s.total * 100}%"></div></div>`
       : "";
-    html += `<div class="${cls}" title="${k}  ${s.correct} correct out of ${s.total}">${inner}</div>`;
+    html += `<div class="${cls}" title="${dayTip(k, s.correct, s.total)}">${inner}</div>`;
   }
   topbar.innerHTML = html;
 }
