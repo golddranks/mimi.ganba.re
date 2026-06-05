@@ -8,7 +8,7 @@
 // keeps a tab around in the background.
 import { viewMode, stats, today } from "./app.js";
 import { daysAgo } from "../shared/dates.js";
-import { dayTier } from "./render.js";
+import { dayTier } from "../shared/daytier.js";
 
 function hasMissedDay() {
   const days = Object.keys(stats).filter((k) => stats[k].total > 0).sort();

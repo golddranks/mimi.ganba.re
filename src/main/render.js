@@ -3,12 +3,8 @@
 // colour. Read-only over the session state owned by app.js.
 import { stats, run, today, acc, emptyDay, DAYS, BAR_MAX } from "./app.js";
 import { daysAgo } from "../shared/dates.js";
+import { DONE, dayTier } from "../shared/daytier.js";
 import { inGrindPhase } from "./grind.js";
-
-// A day counts as "done" (gold bar + "enough for today" message) when any of
-// these hold: sheer volume, enough answers at high accuracy, or — once that
-// day — a long correct streak.
-const DONE = { ANSWERS: 100, GOOD_ANSWERS: 50, GOOD_ACC: 0.95, STREAK: 30 };
 
 function mastered() {
   const days = Object.keys(stats).filter((k) => stats[k].total).sort();
@@ -80,19 +76,6 @@ export function render() {
   message.textContent = text;
 
   renderBar();
-}
-
-// Done-day quality tier for the day-bar: "" / done / done90 / done95. A day is
-// "done" per the DONE thresholds; the 90/95 suffixes then grade its accuracy.
-// Exported for reminders.js (the 22:00 nudge fires only on a not-yet-done day).
-export function dayTier(s) {
-  if (!s.total) return "";
-  const a = s.correct / s.total;
-  const done = s.total >= DONE.ANSWERS || (s.total >= DONE.GOOD_ANSWERS && a >= DONE.GOOD_ACC) || (s.maxRun >= DONE.STREAK);
-  if (!done) return "";
-  if (a >= .95) return " done95";
-  if (a >= .90) return " done90";
-  return " done";
 }
 
 function renderBar() {
