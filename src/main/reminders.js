@@ -27,6 +27,19 @@ function hasMissedDay() {
   return false;
 }
 
+// True if the most recent trained day was begun late (first answer at/after
+// 22:00 local) and never finished — a late, abandoned session, which like a
+// skipped day is a cue to offer reminders. `start` is the day's first-answer
+// wall-clock recorded by the app; days saved before it existed lack it and
+// don't qualify. getHours() is the user's own local hour (no tz guesswork — we
+// run in their browser).
+function lateStartUnfinished() {
+  const days = Object.keys(stats).filter((k) => stats[k].total > 0).sort();
+  if (days.length === 0) return false;
+  const last = stats[days[days.length - 1]];
+  return !!last.start && new Date(last.start).getHours() >= 22 && !dayTier(last);
+}
+
 export function scheduleReminders() {
   if (viewMode) return;
   if (!pushSupported()) return;
@@ -43,20 +56,29 @@ export function scheduleReminders() {
     return;
   }
 
-  if (!hasMissedDay()) return;
+  const missed = hasMissedDay();
+  if (!missed && !lateStartUnfinished()) return;
   if (dayTier(today())) return;
   if (Notification.permission === "granted") { subscribe(); return; }
   if (Notification.permission !== "default") return;   // denied — can't ask again
   if (localStorage.remind_optout) return;              // dismissed the pre-prompt before
-  showRemindPrompt();
+  showRemindPrompt({ reason: missed ? "missed" : "unfinished" });
 }
+
+// Opt-in copy per trigger: a skipped day vs a late, unfinished session — same
+// reminder, only the framing differs.
+const REMIND_MSG = {
+  missed: "It seems you missed training yesterday. Want a daily reminder so you can keep up your daily streak?",
+  unfinished: "It seems you didn't finish the training yesterday. Want a daily reminder so you can keep up your daily streak?",
+};
 
 // In-app opt-in shown before the browser's permission dialog (which can't be
 // previewed or carry a message of our own). The request happens in the click
 // handler — a user gesture — which is both nicer UX and what browsers require to
 // actually show the prompt. `test` (the ?remind=test path) sends one push once
 // subscribed, to verify delivery.
-function showRemindPrompt({ test = false } = {}) {
+function showRemindPrompt({ test = false, reason = "missed" } = {}) {
+  remindprompt.querySelector("span").textContent = REMIND_MSG[reason] || REMIND_MSG.missed;
   remindprompt.hidden = false;
   remindyes.onclick = async () => {
     remindprompt.hidden = true;

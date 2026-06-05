@@ -20,7 +20,7 @@ const COUNTS = window.VOICE_COUNTS;
 
 export const DAYS = 30;
 export const BAR_MAX = 50;     // a day with 50+ answers fills the bar to the top
-export const emptyDay = () => ({ correct: 0, total: 0, maxRun: 0 });
+export const emptyDay = () => ({ correct: 0, total: 0, maxRun: 0, start: 0 });
 
 // Elements with id attributes are auto-exposed on window (primary, choices,
 // message, score, streak, audio, topbar).
@@ -131,6 +131,7 @@ function record(correct, vowel) {
   const todayKey = daysAgo(0);
   if (!stats[todayKey] && Object.keys(stats).length > 0) run = 0;
   applyAnswer(todayKey, vowel, correct);
+  stats[todayKey].start ||= Date.now();   // wall-clock of the day's first answer (late-start reminder cue)
   const cutoff = daysAgo(DAYS - 1);
   for (const x of Object.keys(stats)) if (x < cutoff) delete stats[x];
   recordGrindAnswer();
