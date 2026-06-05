@@ -149,6 +149,9 @@ test("app: day-start probing drills the uncertain confusion (released without th
   }, WAIT);
   const morae = [...btns].map((b) => b.dataset.mora).sort();
   assert.deepEqual(morae, ["sa", "za"], "probe drills the sa/za pair as a 2-button question");
+  // Probing presents as an ordinary question: the message is the normal prompt,
+  // not the grind-only "focused training" copy (which stays behind GRIND_ENABLED).
+  assert.equal(win.message.textContent, "Let's train some more today!");
 });
 
 test("app: ?morning forces the probe phase even with answers logged today", async (t) => {

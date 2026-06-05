@@ -88,6 +88,12 @@ export const getGrind = () => {
   return null;
 };
 
+// Are we in the grind phase specifically (not the unflagged probe phase)? The
+// grind phase is only ever entered when GRIND_ENABLED, so this stays false while
+// grind is unreleased — used to gate the grind-only "focused training" message,
+// which probing (which presents as ordinary questions) shouldn't show.
+export const inGrindPhase = () => grind?.phase === "grind";
+
 function startGrindPhase() {
   // Probing is over; enter the grind phase only if it's released, else end
   // (grind = null → normal questions).
