@@ -138,6 +138,7 @@ body {
     display: grid;
     gap: 1rem;
     grid-template-columns: 1fr;
+    align-items: start;   /* cards size to content — don't stretch to match a taller neighbour (e.g. the .tall per-sound card) */
     max-width: 1200px;
     margin: 0 auto;
 }
@@ -151,11 +152,12 @@ body {
         grid-column: 1 / -1;
     }
 
-    /* Per-sound accuracy is the tallest narrow card; let it span two grid
-       rows so the shorter hourly + reaction-time cards stack underneath
-       it in column 1 rather than leaving a big gap below "Hour of day". */
+    /* Per-sound accuracy is the tallest narrow card; let it span the whole
+       column-1 stack beside it (hour-of-day + reaction-time + daily-peak-streak
+       = 3 rows) so those shorter cards sit alongside it rather than leaving a
+       gap — and so it isn't crammed into fewer rows, inflating them. */
     #dash > .tall {
-        grid-row: span 2;
+        grid-row: span 3;
     }
 }
 
