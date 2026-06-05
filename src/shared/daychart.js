@@ -65,3 +65,8 @@ export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = f
   }
   el.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${axis}${gridlines}${bars}${labels}${annotate(max)}</svg>`;
 }
+
+// Tooltip text for a day's activity: "YYYY-MM-DD  correct/total · NN%" (the %
+// dropped when there were no answers). Shared by all three daily views.
+export const dayTip = (k, correct, total) =>
+  `${k}  ${correct}/${total}${total ? ` · ${Math.round(correct / total * 100)}%` : ""}`;

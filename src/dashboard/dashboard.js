@@ -2,7 +2,7 @@ import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../sha
 import { pad2, dateKey, dayKey } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
 import { tallyFromEvents, tallyMaps } from "../shared/tally.js";
-import { dayBarChart } from "../shared/daychart.js";
+import { dayBarChart, dayTip } from "../shared/daychart.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
 // a handful of visualizations. No localStorage writes, no event posts.
@@ -201,7 +201,7 @@ function renderDaily(events) {
   });
   dayBarChart(dailychart, days, 200, (d) => d.total, (d, x, barW, bh, y0) => {
     const cH = d.correct / d.total * bh;
-    const tip = `${d.k}  ${d.correct}/${d.total}`;
+    const tip = dayTip(d.k, d.correct, d.total);
     return `<rect x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--bad-bar)"><title>${tip}</title></rect>`
       + `<rect x="${x}" y="${y0 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
   }, () => "", true);

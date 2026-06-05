@@ -1,6 +1,6 @@
 import { pad2 } from "../shared/dates.js";
 import { aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
-import { dayBarChart } from "../shared/daychart.js";
+import { dayBarChart, dayTip } from "../shared/daychart.js";
 
 // Power-user-only app-wide aggregate dashboard. Fans two endpoints into the
 // static skeleton declared in admin/index.html. Auth is the requester's own
@@ -140,7 +140,7 @@ function renderDaily(daily, uids) {
   // Bars carry data-date so clicking a stack reveals the contributing uids.
   dayBarChart(dailychart, days, 200, (d) => d.n, (d, x, barW, bh, y0) => {
     const cH = d.n ? d.correct / d.n * bh : 0;
-    const tip = `${d.k}  ${d.correct}/${d.n}`;
+    const tip = dayTip(d.k, d.correct, d.n);
     return `<rect data-date="${d.k}" x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--bad-bar)"><title>${tip}</title></rect>`
       + `<rect data-date="${d.k}" x="${x}" y="${y0 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
   }, () => "", true);
