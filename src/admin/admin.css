@@ -488,8 +488,17 @@ body {
     gap: 1.4rem 2rem;
 }
 
+.confgroup {
+    --cell: 2.7rem;   /* single source for cell size; the title offset derives from it */
+}
+
 .confgroup h3 {
     text-align: center;
+    /* Centre the title over the data grid, not the whole table: nudge right by
+       the row-label column (one cell). border-box keeps the pad within the
+       title's own width so it can't widen the group. */
+    padding-left: var(--cell);
+    box-sizing: border-box;
 }
 
 .confgrid {
@@ -500,8 +509,8 @@ body {
 
 .confgrid th,
 .confgrid td {
-    width: 2.7rem;
-    height: 2.7rem;
+    width: var(--cell);
+    height: var(--cell);
     padding: 0;
     text-align: center;
     vertical-align: middle;
@@ -525,7 +534,7 @@ body {
    because the vowel-merged counts are bigger. */
 #conschart { text-align: center; }
 #conschart .confgrid { margin-inline: auto; }
-#conschart .confgrid th, #conschart .confgrid td { width: 2.8rem; height: 2.8rem; }
+#conschart .confgroup { --cell: 2.8rem; }   /* bigger cells (vowel-merged counts); title offset follows */
 
 .confgrid td.diag {
     border-color: color-mix(in srgb, var(--good) 50%, var(--panel-2));
