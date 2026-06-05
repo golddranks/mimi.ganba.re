@@ -50,4 +50,4 @@ if [ "${code:-000}" = "000" ]; then
   exit 1
 fi
 
-BASE="$BASE" node --test test/confusion.test.mjs test/api.test.mjs test/dom.test.mjs
+BASE="$BASE" node --test test/confusion.test.mjs test/push.test.mjs test/api.test.mjs test/dom.test.mjs
