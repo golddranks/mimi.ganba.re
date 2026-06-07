@@ -7,14 +7,7 @@
 import { viewMode, stats, today, uid, STATS_URL } from "./app.js";
 import { daysAgo } from "../shared/dates.js";
 import { dayTier } from "../shared/daytier.js";
-import { VAPID_PUBLIC_KEY } from "../shared/vapid.js";
-
-// Push needs a configured VAPID key and browser support for service workers +
-// the Push API. Absent any of these (older browser, iOS Safari tab, keys not yet
-// set) the whole feature is inert — the app is unaffected.
-const pushSupported = () =>
-  !!VAPID_PUBLIC_KEY && "serviceWorker" in navigator && "PushManager" in window
-  && typeof Notification !== "undefined";
+import { pushSupported, subscribe } from "../shared/push.js";
 
 function hasMissedDay() {
   const days = Object.keys(stats).filter((k) => stats[k].total > 0).sort();
@@ -59,7 +52,7 @@ export function scheduleReminders() {
   const missed = hasMissedDay();
   if (!missed && !lateStartUnfinished()) return;
   if (dayTier(today())) return;
-  if (Notification.permission === "granted") { subscribe(); return; }
+  if (Notification.permission === "granted") { subscribe(uid, STATS_URL); return; }
   if (Notification.permission !== "default") return;   // denied — can't ask again
   if (localStorage.remind_optout) return;              // dismissed the pre-prompt before
   showRemindPrompt({ reason: missed ? "missed" : "unfinished" });
@@ -84,7 +77,7 @@ function showRemindPrompt({ test = false, reason = "missed" } = {}) {
     remindprompt.hidden = true;
     try {
       if (await Notification.requestPermission() !== "granted") return;
-      const sub = await subscribe();
+      const sub = await subscribe(uid, STATS_URL);
       if (test && sub) await testPush(sub);
     } catch { }
   };
@@ -94,46 +87,6 @@ function showRemindPrompt({ test = false, reason = "missed" } = {}) {
   };
 }
 
-// Register the service worker, subscribe to push, and register the subscription
-// with the worker so the cron can reach this device. Idempotent — reuses an
-// existing subscription. Returns the subscription (or null if not granted).
-async function subscribe() {
-  if (Notification.permission !== "granted") return null;
-  const reg = await navigator.serviceWorker.register("/sw.js");
-  await navigator.serviceWorker.ready;
-  const appKey = urlB64ToBytes(VAPID_PUBLIC_KEY);
-
-  let sub = await reg.pushManager.getSubscription();
-  // A subscription is bound to the VAPID key it was made with. If that key has
-  // since rotated, the old sub can't be reused — every push 401s, and the browser
-  // refuses to re-subscribe with a different key while it lives — so drop it
-  // locally + server-side and make a fresh one. We compare against the key we
-  // recorded at subscribe time (localStorage.push_key), not
-  // sub.options.applicationServerKey, which some browsers (e.g. Firefox) don't
-  // expose. A missing tag — any sub predating this code — counts as a mismatch,
-  // so already-stranded devices self-heal on their next visit.
-  if (sub && localStorage.push_key !== VAPID_PUBLIC_KEY) {
-    const stale = sub.endpoint;
-    await sub.unsubscribe();
-    fetch(STATS_URL + "/v1/push/unsubscribe", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ endpoint: stale }),
-    }).catch(() => { });
-    sub = null;
-  }
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
-  }
-  await fetch(STATS_URL + "/v1/push/subscribe", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ uid, subscription: sub.toJSON(), tzOffset: -new Date().getTimezoneOffset() }),
-  });
-  localStorage.push_key = VAPID_PUBLIC_KEY;   // record the key this sub is bound to
-  return sub;
-}
-
 // Ask the worker to push this subscription right now (the ?remind=test check).
 async function testPush(sub) {
   await fetch(STATS_URL + "/v1/push/test", {
@@ -141,11 +94,4 @@ async function testPush(sub) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ endpoint: sub.endpoint }),
   });
-}
-
-// base64url (the VAPID public key) → Uint8Array, as pushManager.subscribe wants.
-function urlB64ToBytes(b64) {
-  const padded = (b64 + "=".repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(padded);
-  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }

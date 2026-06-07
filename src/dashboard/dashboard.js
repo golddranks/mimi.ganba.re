@@ -3,6 +3,7 @@ import { pad2, dateKey, dayKey } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
 import { tallyFromEvents, tallyMaps, confusionRecord } from "../shared/tally.js";
 import { isAnswerEv, answeredRight } from "../shared/events.js";
+import { pushSupported, currentSubscription, subscribe, unsubscribe } from "../shared/push.js";
 import { dayBarChart, dayTip } from "../shared/daychart.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
@@ -55,6 +56,53 @@ if (uid) {
   uidinput.value = uid;
   load(uid);
 }
+
+// ---------- daily-reminder notifications ----------
+// Show this device's push-subscription state and a turn-on/off button. Push subs
+// are per-device and registered under the viewer's own uid, so this is only shown
+// on the viewer's own dashboard — never in a ?uid= view-as of someone else. The
+// subscribe/unsubscribe logic is shared with the app's opt-in (shared/push.js).
+async function renderNotif() {
+  if (!viewerUid || uid !== viewerUid) { notif.hidden = true; return; }
+  notif.hidden = false;
+  notifbtn.hidden = true;
+  if (!pushSupported()) {
+    notifstatus.textContent = "Reminders: not supported in this browser.";
+    return;
+  }
+  if (Notification.permission === "denied") {
+    notifstatus.textContent = "Reminders: blocked in your browser settings.";
+    return;
+  }
+  const sub = await currentSubscription();
+  notifbtn.hidden = false;
+  if (sub) {
+    notifstatus.textContent = "Daily reminders are on for this device.";
+    notifbtn.textContent = "Turn off";
+  } else {
+    notifstatus.textContent = localStorage.remind_optout
+      ? "Daily reminders are off (you dismissed them)."
+      : "Daily reminders are off.";
+    notifbtn.textContent = "Turn on";
+  }
+}
+
+notifbtn.onclick = async () => {
+  notifbtn.disabled = true;
+  try {
+    if (await currentSubscription()) {
+      await unsubscribe(STATS_URL);
+      localStorage.remind_optout = "1";   // explicit off — don't let the app re-nag
+    } else if (await Notification.requestPermission() === "granted") {
+      delete localStorage.remind_optout;
+      await subscribe(viewerUid, STATS_URL);
+    }
+  } catch { /* best-effort */ }
+  notifbtn.disabled = false;
+  renderNotif();
+};
+
+renderNotif();
 
 // Reveal the load-form only for level-2 power users (viewing arbitrary uids
 // is per-user data, the same tier the admin uid-drilldowns sit behind). Level
