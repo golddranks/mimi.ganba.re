@@ -16,6 +16,7 @@ import { nameOf } from "./voicemap.js";
 import { MIGRATIONS } from "./migrations.js";
 import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/shared/skill.js";
 import { confusionRecord } from "../../src/shared/tally.js";
+import { isAnswerEv, answeredRight } from "../../src/shared/events.js";
 import { VAPID_PUBLIC_KEY } from "../../src/shared/vapid.js";
 import { localStamp, dueNudge, vapidAuth, encryptPayload, sendPush, NUDGE_TEXT, START_HOUR, DONE_HOUR } from "./push.js";
 
@@ -24,6 +25,13 @@ import { localStamp, dueNudge, vapidAuth, encryptPayload, sendPush, NUDGE_TEXT, 
 // add more nicknames here if other synthetic users get tagged. SQL-injection
 // note: this fragment is hard-coded, never user-input.
 const EXCLUDE_TEST = "uid NOT IN (SELECT uid FROM users WHERE nickname = 'TestUser')";
+
+// SQL mirror of src/shared/events.js: which events are answers, and the 1/0
+// "answered right" expression (the Y/N "no" inverts — right when picked != target).
+// Kept here as fragments so the answer/accuracy aggregates below stay in step with
+// the JS the dashboard and push use. Hard-coded, never user input.
+const ANSWER_EVS = "ev IN ('a','g','y','n')";
+const CORRECT = "CASE WHEN ev = 'n' THEN picked <> target ELSE picked = target END";
 
 // users.power_user for a uid, 0 if unknown. The admin endpoints gate on this.
 // In local dev (scripts/dev.sh runs `wrangler dev --var DEV:1`) every uid is
@@ -363,15 +371,15 @@ async function handleAdminStats(req, env, url) {
     db.prepare(
       `SELECT CAST(strftime('%H', ts/1000, 'unixepoch') AS INTEGER) AS h,
               COUNT(*) AS n,
-              SUM(CASE WHEN picked = target THEN 1 ELSE 0 END) AS correct
-       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
+              SUM(${CORRECT}) AS correct
+       FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
        GROUP BY h ORDER BY h`
     ).all(),
     db.prepare(
       `SELECT target AS m,
               COUNT(*) AS n,
-              SUM(CASE WHEN picked = target THEN 1 ELSE 0 END) AS correct
-       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
+              SUM(${CORRECT}) AS correct
+       FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
        GROUP BY target`
     ).all(),
     // by_voice — per recording when it was the *question* (i.e. target).
@@ -485,11 +493,11 @@ async function handleAdminUserStats(req, env, url) {
   const [totals, active, daily, skillStream, nicks, dailyUidRows] = await Promise.all([
     db.prepare(
       `SELECT
-         COUNT(*)                                                              AS events,
-         COUNT(DISTINCT uid)                                                   AS users,
-         SUM(CASE WHEN ev IN ('a','g') THEN 1 ELSE 0 END)                      AS answers,
-         SUM(CASE WHEN ev IN ('a','g') AND picked = target THEN 1 ELSE 0 END)  AS correct,
-         SUM(CASE WHEN ev = 'r' THEN 1 ELSE 0 END)                             AS relisten
+         COUNT(*)                                                       AS events,
+         COUNT(DISTINCT uid)                                            AS users,
+         SUM(CASE WHEN ${ANSWER_EVS} THEN 1 ELSE 0 END)                 AS answers,
+         SUM(CASE WHEN ${ANSWER_EVS} AND (${CORRECT}) THEN 1 ELSE 0 END) AS correct,
+         SUM(CASE WHEN ev = 'r' THEN 1 ELSE 0 END)                      AS relisten
        FROM events
        WHERE ${EXCLUDE_TEST}`
     ).first(),
@@ -501,8 +509,8 @@ async function handleAdminUserStats(req, env, url) {
     db.prepare(
       `SELECT date(ts/1000, 'unixepoch') AS d,
               COUNT(*) AS n,
-              SUM(CASE WHEN picked = target THEN 1 ELSE 0 END) AS correct
-       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
+              SUM(${CORRECT}) AS correct
+       FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
        GROUP BY d ORDER BY d`
     ).all(),
     // Raw event stream for per-user skill replay. Cheaper than expressing
@@ -510,7 +518,7 @@ async function handleAdminUserStats(req, env, url) {
     // sequence contiguous so the JS loop below can compute incrementally.
     db.prepare(
       `SELECT uid, ts, target, picked, ev FROM events
-       WHERE ev IN ('a','g','r') AND ${EXCLUDE_TEST}
+       WHERE (${ANSWER_EVS} OR ev = 'r') AND ${EXCLUDE_TEST}
        ORDER BY uid, ts ASC`
     ).all(),
     // User-set nicknames. Emitted as a flat uid→nickname map so the admin
@@ -525,7 +533,7 @@ async function handleAdminUserStats(req, env, url) {
     // map for the popup.
     db.prepare(
       `SELECT date(ts/1000, 'unixepoch') AS d, uid
-       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
+       FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
        GROUP BY d, uid`
     ).all(),
   ]);
@@ -533,17 +541,17 @@ async function handleAdminUserStats(req, env, url) {
   // Replay the skill-state machine per user to derive each user's current
   // per-vowel skill. Rules live in src/shared/skill.js, shared with app + dashboard.
   const perUser = {};
-  const userAnswers = {};   // per-user count of 'a'/'g' events
+  const userAnswers = {};   // per-user count of answer events (a/g/y/n)
   const userDays = {};      // per-user set of YYYY-MM-DD strings (UTC) seen
   for (const e of skillStream.results || []) {
     const v = e.target.slice(-1);
     const cur = perUser[e.uid] || (perUser[e.uid] = {});
     const c = cur[v] || 0;
-    if (e.ev === "a" || e.ev === "g") {
+    if (isAnswerEv(e.ev)) {
       userAnswers[e.uid] = (userAnswers[e.uid] || 0) + 1;
       const day = new Date(e.ts).toISOString().slice(0, 10);
       (userDays[e.uid] = userDays[e.uid] || new Set()).add(day);
-      cur[v] = e.picked === e.target ? onCorrect(c) : onWrong(c);
+      cur[v] = answeredRight(e) ? onCorrect(c) : onWrong(c);
     } else {
       cur[v] = onRelisten(c);   // 'r' — drop to the start of the current level
     }

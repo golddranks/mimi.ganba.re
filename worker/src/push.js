@@ -5,6 +5,7 @@
 // pushes, so a body — not just VAPID identification — is required to reach it.
 import { pad2 } from "../../src/shared/dates.js";
 import { dayTier } from "../../src/shared/daytier.js";
+import { isAnswerEv, answeredRight } from "../../src/shared/events.js";
 
 export const START_HOUR = 19;   // local hour for the "haven't started today" nudge
 export const DONE_HOUR = 22;    // local hour for the "not done yet" nudge
@@ -39,17 +40,13 @@ export function localStamp(nowMs, tzOffset) {
   return { day, hour, stamp: `${day}T${hour}` };
 }
 
-const isAnswer = (ev) => ev === "a" || ev === "g" || ev === "y" || ev === "n";
-// 'n' is the Y/N "no" answer — correct when the kana did NOT match (picked != target).
-const answeredRight = (e) => (e.ev === "n" ? e.picked !== e.target : e.picked === e.target);
-
 // Reconstruct { correct, total, maxRun } for one local day from a user's events.
 // Replays that day's answers in ts order, with relistens ('r') breaking the
 // streak — mirroring applyAnswer / applyRelisten in app.js, so "done" here means
 // what it means in the app.
 export function dayStats(events, day, tzOffset) {
   const todays = events
-    .filter((e) => (isAnswer(e.ev) || e.ev === "r") && localStamp(e.ts, tzOffset).day === day)
+    .filter((e) => (isAnswerEv(e.ev) || e.ev === "r") && localStamp(e.ts, tzOffset).day === day)
     .sort((a, b) => a.ts - b.ts);
   let correct = 0, total = 0, run = 0, maxRun = 0;
   for (const e of todays) {

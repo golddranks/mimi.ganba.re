@@ -292,6 +292,27 @@ test("dashboard: Y/N answers feed the confusion matrix (diagonal + confuser)", a
   assert.deepEqual(r["sa/za"], { picked: 1, offered: 2, asked: 1 });
 });
 
+test("dashboard: Y/N answers count as activity (answers + accuracy)", async (t) => {
+  // y = "yes it matches", n = "no". Correct when: y & picked==target, or n &
+  // picked!=target. Below: right, right, wrong → 3 answers, 2 correct.
+  const uid = await freshTestUser();
+  const t0 = Date.now();
+  const events = [
+    { ts: t0 + 1, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "y" },  // matches → right
+    { ts: t0 + 2, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: "n" },  // rejected → right
+    { ts: t0 + 3, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: "y" },  // wrong "yes"
+  ];
+  assert.equal((await postEvents(uid, events)).status, 200);
+
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`);
+  t.after(close);
+  const overview = win.document.getElementById("overview");
+  const stat = (k) => overview.querySelector(`[data-stat="${k}"]`).textContent;
+
+  await waitFor(() => stat("answers") === "3" || null, WAIT);
+  assert.equal(stat("correct"), "2", "the Y/N 'no' reject counts as correct");
+});
+
 test("admin: confusion matrix uses server-aggregated asked vs shown counts", { skip: LIVE }, async (t) => {
   // Local-only: needs power_user granted via local SQL, and unlike the rest its
   // rows must stay *in* the aggregate (so its uid is NOT a TestUser). The admin

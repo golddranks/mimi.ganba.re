@@ -2,6 +2,7 @@ import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../sha
 import { pad2, dateKey, dayKey } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
 import { tallyFromEvents, tallyMaps, confusionRecord } from "../shared/tally.js";
+import { isAnswerEv, answeredRight } from "../shared/events.js";
 import { dayBarChart, dayTip } from "../shared/daychart.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
@@ -18,9 +19,11 @@ const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
   ? `http://${location.hostname}:8787`
   : "https://mimi-stats.golddranks.workers.dev";
 
-// Event-kind predicates: 'a'/'g' are answers; 'r' is a re-listen; 'p' is an
-// after-play replay (never counted here).
-const isAnswer = (e) => e.ev === "a" || e.ev === "g";
+// Event-kind predicates: a/g and Y/N (y/n) are answers; 'r' is a re-listen; 'p'
+// is an after-play replay (never counted here). isAnswerEv + answeredRight (with
+// the Y/N "no" correctness inversion) are shared with the worker and push, so
+// "activity" and accuracy mean the same thing everywhere.
+const isAnswer = (e) => isAnswerEv(e.ev);
 const isAnswerOrRelisten = (e) => isAnswer(e) || e.ev === "r";
 
 // Two roles:
@@ -108,7 +111,7 @@ function dailyPeakStreaks(events) {
     if (lastDay !== null && d !== lastDay) run = 0;
     lastDay = d;
     if (e.ev === "r") run = 0;
-    else if (e.picked === e.target) run++;
+    else if (answeredRight(e)) run++;
     else run = 0;
     if (run > (peaks.get(d) || 0)) peaks.set(d, run);
   }
@@ -117,7 +120,7 @@ function dailyPeakStreaks(events) {
 
 function renderOverview(uid, events) {
   const ag = events.filter(isAnswer);
-  const correct = ag.filter((e) => e.picked === e.target).length;
+  const correct = ag.filter((e) => answeredRight(e)).length;
   const acc = ag.length ? correct / ag.length : 0;
   const topStreak = Math.max(0, ...dailyPeakStreaks(events).values());
   const days = new Set(ag.map((e) => dayKey(e.ts))).size;
@@ -148,7 +151,7 @@ function renderLevels(events) {
     if (!(v in skill)) continue;
     seen[v] = true;
     if (e.ev === "r") skill[v] = onRelisten(skill[v]);
-    else if (e.picked === e.target) skill[v] = onCorrect(skill[v]);
+    else if (answeredRight(e)) skill[v] = onCorrect(skill[v]);
     else skill[v] = onWrong(skill[v]);
   }
   for (const v of ["a", "i", "u", "o"]) {
@@ -192,7 +195,7 @@ function renderDaily(events) {
     if (!isAnswer(e)) continue;
     const k = dayKey(e.ts);
     const v = map.get(k) || { correct: 0, wrong: 0 };
-    if (e.picked === e.target) v.correct++; else v.wrong++;
+    if (answeredRight(e)) v.correct++; else v.wrong++;
     map.set(k, v);
   }
   const days = calendarDays(events, (k) => {
@@ -213,7 +216,7 @@ function renderHourly(events) {
   const hrs = Array.from({ length: 24 }, () => ({ correct: 0, wrong: 0 }));
   for (const e of ag) {
     const hour = new Date(e.ts).getHours();
-    if (e.picked === e.target) hrs[hour].correct++; else hrs[hour].wrong++;
+    if (answeredRight(e)) hrs[hour].correct++; else hrs[hour].wrong++;
   }
   const max = Math.max(1, ...hrs.map((h) => h.correct + h.wrong));
   const w = 480, h = 180;
@@ -255,7 +258,7 @@ function renderMora(events) {
     if (!isAnswer(e)) continue;
     const c = counts[e.target] || (counts[e.target] = { correct: 0, total: 0 });
     c.total++;
-    if (e.picked === e.target) c.correct++;
+    if (answeredRight(e)) c.correct++;
   }
   moraCounts = counts;
   moraMaxN = Math.max(1, ...Object.values(counts).map((c) => c.total));
@@ -575,7 +578,7 @@ function renderStreak(events) {
 // ---------- reaction time ----------
 function renderRtime(events) {
   const ag = events.filter(
-    (e) => (e.ev === "a" || e.ev === "g") && e.ms != null && e.ms >= 0 && e.ms < 20000
+    (e) => isAnswer(e) && e.ms != null && e.ms >= 0 && e.ms < 20000
   );
   if (ag.length === 0) { rtchart.textContent = "(no timed answers)"; return; }
   const cap = 6000;
@@ -584,7 +587,7 @@ function renderRtime(events) {
   const wb = new Array(buckets).fill(0);
   for (const e of ag) {
     const b = Math.min(buckets - 1, Math.floor(e.ms / (cap / buckets)));
-    if (e.picked === e.target) cb[b]++; else wb[b]++;
+    if (answeredRight(e)) cb[b]++; else wb[b]++;
   }
   const mx = Math.max(1, ...cb, ...wb);
   const w = 900, h = 200;
