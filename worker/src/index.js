@@ -384,7 +384,7 @@ async function handleAdminStats(req, env, url) {
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
-  const [hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, optsConf, ynConf] = await Promise.all([
+  const [hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, optsConf, ynConf, byVoiceOpts] = await Promise.all([
     db.prepare(
       `SELECT CAST(strftime('%H', ts/1000, 'unixepoch') AS INTEGER) AS h,
               COUNT(*) AS n,
@@ -448,6 +448,15 @@ async function handleAdminStats(req, env, url) {
        FROM events WHERE ev IN ('y','n') AND ${EXCLUDE_TEST}
        GROUP BY target, picked, ev`
     ).all(),
+    // Same "when offered" expansion as optsConf, but per recording (target,
+    // voice) — so the sound-file confusion matrix can normalise a confuser by how
+    // often that kana was offered for this recording, not by how often the
+    // recording was asked. Expanded in JS below.
+    db.prepare(
+      `SELECT target AS t, voice AS v, opts AS o, picked AS p, COUNT(*) AS n
+       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND voice IS NOT NULL AND ${EXCLUDE_TEST}
+       GROUP BY target, voice, opts, picked`
+    ).all(),
   ]);
 
   // "asked"-mode counts: raw pick counts per (target, picked) over all answers.
@@ -474,9 +483,22 @@ async function handleAdminStats(req, env, url) {
     for (const k of rec.opts) offered[`${rec.target}/${k}`] = (offered[`${rec.target}/${k}`] || 0) + r.n;
   }
 
+  // Per-recording version of the same: vShown[t/v/p] = picks of p when (t,v) was
+  // the question; vOffered[t/v/k] = times k was offered for it. (Voice names carry
+  // no "/", so the 3-part key splits cleanly.)
+  const vOffered = {}, vShown = {};
+  for (const r of byVoiceOpts.results || []) {
+    vShown[`${r.t}/${r.v}/${r.p}`] = (vShown[`${r.t}/${r.v}/${r.p}`] || 0) + r.n;
+    for (const k of r.o.split(",")) vOffered[`${r.t}/${r.v}/${k}`] = (vOffered[`${r.t}/${r.v}/${k}`] || 0) + r.n;
+  }
+
   const rowsOf = (m, key) => Object.entries(m).map(([pair, n]) => {
     const [t, x] = pair.split("/");
     return { t, [key]: x, n };
+  });
+  const rowsOf3 = (m, key) => Object.entries(m).map(([k, n]) => {
+    const [t, v, x] = k.split("/");
+    return { t, v, [key]: x, n };
   });
 
   return json({
@@ -487,6 +509,8 @@ async function handleAdminStats(req, env, url) {
     confusion_shown:   rowsOf(shown, "p"),
     confusion_offered: rowsOf(offered, "k"),
     by_voice_confusion: byVoiceConf.results   || [],
+    by_voice_shown:     rowsOf3(vShown, "p"),
+    by_voice_offered:   rowsOf3(vOffered, "k"),
     by_voice_played:    byVoicePlayed.results || [],
   });
 }

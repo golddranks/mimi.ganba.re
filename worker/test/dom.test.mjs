@@ -375,6 +375,37 @@ test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, asyn
   assert.equal(nFor(b, "confusion_shown", "p") - nFor(a, "confusion_shown", "p"), 2, "za picked +2");
 });
 
+test("admin: sound-file matrix exposes per-recording shown/offered (vs the kana)", { skip: LIVE }, async () => {
+  // The sound-file confusion matrix normalises a cell by how often that kana was
+  // offered FOR THIS RECORDING (not how often the recording was asked). Assert the
+  // delta a batch adds to one recording's sa/za cell. Global aggregate → delta;
+  // non-TestUser uid so the rows count; power_user for the admin endpoint.
+  const uid = randomUUID();
+  const t0 = Date.now();
+  // Seed one event so the user row exists (for grantPowerUser) and so we can read
+  // back the worker-assigned voice name for the sa recording at idx 0.
+  await postEvents(uid, [{ ts: t0, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }]);
+  grantPowerUser(uid, 1);
+  const voice = (await getEvents(uid)).find((e) => e.target === "sa" && e.idx === 0)?.voice;
+  assert.ok(voice, "worker assigned a voice name to sa#0");
+
+  const stats = async () =>
+    (await fetch(`${WORKER}/v1/admin/stats?uid=${encodeURIComponent(uid)}`)).json();
+  const n = (data, map, col, val) =>
+    (data[map] || []).find((r) => r.t === "sa" && r.v === voice && r[col] === val)?.n || 0;
+  const a = await stats();
+
+  // Two more sa#0 questions with za offered; pick za once.
+  await postEvents(uid, [
+    { ts: t0 + 1, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 },
+    { ts: t0 + 2, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 },
+  ]);
+  const b = await stats();
+
+  assert.equal(n(b, "by_voice_offered", "k", "za") - n(a, "by_voice_offered", "k", "za"), 2, "za offered +2 for sa#0");
+  assert.equal(n(b, "by_voice_shown", "p", "za") - n(a, "by_voice_shown", "p", "za"), 1, "za picked +1 for sa#0");
+});
+
 test("voice-attempts: per-recording answer counts (a/g/y/n), test users excluded", async () => {
   const get = async () => (await fetch(`${WORKER}/v1/voice-attempts`)).json();
   const n = (d) => (d.sa && d.sa["7"]) || 0;   // sa recording #7 — assert the delta

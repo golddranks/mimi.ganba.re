@@ -77,7 +77,7 @@ async function load(uid) {
     renderHourly(data.hourly);
     renderMora(data.by_mora);
     renderVoice(data.by_voice, data.by_voice_played);
-    renderVoiceConfusion(data.by_voice_confusion);
+    renderVoiceConfusion(data.by_voice_confusion, data.by_voice_shown, data.by_voice_offered);
     renderConfusion(data.confusion, data.confusion_shown, data.confusion_offered);
     // Per-user / uid-drilldown sections — only if level-2 authorizes them.
     loadUserStats(uid);
@@ -316,9 +316,9 @@ function hideUidPopup() {
     });
   }
 
-  // Confusion matrix denominator toggle (asked sound vs shown kana) — its own
-  // switch; "when offered" only applies to the confusion matrix, so it alone
-  // redraws. Mirrors the user dashboard.
+  // Confusion-matrix denominator toggle (asked sound vs shown kana). Redraws both
+  // the per-vowel/consonant matrix and the per-recording (sound-file) one, which
+  // now honour it too. Mirrors the user dashboard.
   const denomSwitch = document.getElementById("confdenom");
   denomSwitch.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-denom]");
@@ -328,6 +328,7 @@ function hideUidPopup() {
       b.classList.toggle("active", b.dataset.denom === confDenom);
     }
     drawConfusion();
+    drawVoiceConfusion();
   });
 
   // Click-to-play delegations. Bound on stable parent elements so they
@@ -426,7 +427,9 @@ const VOWEL_GROUPS = {
 const VOWEL_GYO = { a: "あ行", i: "い行", u: "う行", o: "お行" };
 
 let voiceData = [];
-let voiceConfData = [];
+let voiceConfData = [];        // [{t, v, p, n}] — picks per (recording, kana)
+let voiceShownData = [];       // [{t, v, p, n}] — picks among opts-bearing answers
+let voiceOfferedData = [];     // [{t, v, k, n}] — times kana k offered for (recording)
 
 function renderVoice(byVoice, byPlayed) {
   // Merge by_voice_played into voiceData so each row knows both:
@@ -456,8 +459,10 @@ function renderVoice(byVoice, byPlayed) {
 // unclear or wrong recording.
 const listenCount = (r) => (r.relisten || 0) + (r.afterplay || 0);
 
-function renderVoiceConfusion(rows) {
+function renderVoiceConfusion(rows, shownRows, offeredRows) {
   voiceConfData = rows || [];
+  voiceShownData = shownRows || [];
+  voiceOfferedData = offeredRows || [];
   vcmin.oninput = drawVoiceConfusion;
   vcwrong.oninput = drawVoiceConfusion;
   drawVoiceConfusion();
@@ -506,27 +511,61 @@ function drawVoiceConfusion() {
   const minA = Math.max(0, parseInt(vcmin.value, 10) || 0);
   const minW = Math.max(0, parseInt(vcwrong.value, 10) || 0);
   const map = window.VOICE_MAP || {};
-  const counts = {};
-  const totals = {};
+  const counts = {}, totals = {}, shown = {}, offered = {};
   for (const r of voiceConfData) {
     counts[`${r.t}/${r.v}/${r.p}`] = r.n;
     totals[`${r.t}/${r.v}`] = (totals[`${r.t}/${r.v}`] || 0) + r.n;
   }
+  for (const r of voiceShownData) shown[`${r.t}/${r.v}/${r.p}`] = r.n;
+  for (const r of voiceOfferedData) offered[`${r.t}/${r.v}/${r.k}`] = r.n;
 
-  // Worst off-diagonal cell in a row, as a percentage of the row total.
-  // The filter is always pct-based (count thresholds whip wildly with row
-  // popularity); the display-mode toggle only affects how cells are rendered.
+  // One (recording, kana) cell's confusion rate (0..100), honouring the shared
+  // denominator toggle: "shown" = picks ÷ times that kana was offered for this
+  // recording (the pairwise rate the user wants); "asked" = picks ÷ times the
+  // recording was asked. A pure rate, independent of the count/% display mode.
+  const offPct = (m, voice, p) => {
+    if (confDenom === "shown") {
+      const off = offered[`${m}/${voice}/${p}`] || 0;
+      return off > 0 ? (shown[`${m}/${voice}/${p}`] || 0) / off * 100 : 0;
+    }
+    const rt = totals[`${m}/${voice}`] || 0;
+    return rt > 0 ? (counts[`${m}/${voice}/${p}`] || 0) / rt * 100 : 0;
+  };
+
+  // Worst off-diagonal rate in a row — drives the wrong-% filter and orders
+  // recordings hardest-first, so the ones driving a specific confusion surface
+  // first rather than the merely generally-wrong ones.
   const rowMaxOffPct = (m, voice) => {
     const sib = VOWEL_GROUPS[m.slice(-1)] || [];
-    const rt = totals[`${m}/${voice}`] || 0;
-    if (rt === 0) return 0;
     let max = 0;
     for (const p of sib) {
       if (p === m) continue;
-      const pct = (counts[`${m}/${voice}/${p}`] || 0) / rt * 100;
+      const pct = offPct(m, voice, p);
       if (pct > max) max = pct;
     }
     return max;
+  };
+
+  // value{display, mag, raw} — same shape (and shown/asked behaviour) as the main
+  // matrix's confusionValue. mag (the colour magnitude) is the rate, except in
+  // asked + count mode where it's the raw count, matching the main matrix.
+  const valueFor = (m, voice, p) => {
+    const pct = offPct(m, voice, p);
+    if (confDenom === "shown") {
+      const n = shown[`${m}/${voice}/${p}`] || 0;
+      const off = offered[`${m}/${voice}/${p}`] || 0;
+      if (displayMode === "pct") {
+        const display = (off > 0 && n > 0) ? (Math.round(pct) === 0 ? "<1" : String(Math.round(pct))) : "";
+        return { display, mag: pct, raw: off };
+      }
+      return { display: off ? `${n}/${off}` : "", mag: pct, raw: off };
+    }
+    const n = counts[`${m}/${voice}/${p}`] || 0;
+    if (displayMode === "pct") {
+      const display = n > 0 ? (Math.round(pct) === 0 ? "<1" : String(Math.round(pct))) : "";
+      return { display, mag: pct, raw: n };
+    }
+    return { display: n ? String(n) : "", mag: n, raw: n };
   };
 
   const html = [];
@@ -534,10 +573,7 @@ function drawVoiceConfusion() {
     const morae = VOWEL_GROUPS[v];
 
     // Keep the per-sound clustering (morae in fixed order), but within each sound
-    // order its recordings hardest-first by their worst per-kana confusion rate
-    // (wrong ÷ asked for the single most-confused kana — the same metric the
-    // wrong-% filter uses), so the recordings driving a specific confusion surface
-    // first rather than the merely generally-wrong ones.
+    // order its recordings hardest-first by their worst per-kana confusion rate.
     const rowsInGroup = [];
     for (const m of morae) {
       const voices = (map[m] || []).filter((voice) => {
@@ -549,22 +585,6 @@ function drawVoiceConfusion() {
       voices.sort((a, b) => rowMaxOffPct(m, b) - rowMaxOffPct(m, a));
       for (const voice of voices) rowsInGroup.push({ m, voice });
     }
-
-    // value{display, mag, raw} — same shape as drawConfusion's valueFor.
-    const valueFor = (m, voice, p) => {
-      const n = counts[`${m}/${voice}/${p}`] || 0;
-      if (displayMode === "pct") {
-        const rt = totals[`${m}/${voice}`] || 0;
-        const pct = rt > 0 ? n / rt * 100 : 0;
-        let display = "";
-        if (n > 0) {
-          const r = Math.round(pct);
-          display = r === 0 ? "<1" : String(r);
-        }
-        return { display, mag: pct, raw: n };
-      }
-      return { display: n ? String(n) : "", mag: n, raw: n };
-    };
 
     let maxOn = 0, maxOff = 0;
     for (const row of rowsInGroup) {
