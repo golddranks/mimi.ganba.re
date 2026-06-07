@@ -25,12 +25,6 @@ while read -r _lref lsha _rref rsha; do
 done
 $touched || exit 0
 
-# Non-blocking if the local toolchain isn't set up — never wedge a push on it.
-if [ ! -d worker/node_modules ]; then
-  echo "pre-push: worker/node_modules missing; skipping smoke (run 'npm ci' in worker/ to enable). Push continues." >&2
-  exit 0
-fi
-
 echo "pre-push: running the e2e gate (skip with --no-verify)…"
 # Isolated: temp state dir + random port, so it can't clash with a running dev.sh.
 bash scripts/e2e.sh --snapshot
