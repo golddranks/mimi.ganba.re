@@ -97,7 +97,10 @@ trap 'kill 0 2>/dev/null || true' EXIT INT TERM
 # Start the worker now — its ~1.3s miniflare boot is the long pole. Its inputs
 # (voicemap.js + the local D1 state just seeded) are ready and it doesn't need
 # dist/, so the static build runs concurrently and hides under the boot.
-( cd worker && exec "$WRANGLER" dev --local --port 8787 ) &
+# --var DEV:1 is local-dev-only (wrangler deploy never sees it), and makes
+# powerLevel() treat every uid as power_user 2 — so the admin pages and the
+# dashboard's uid-load form are reachable locally without seeding a real tier.
+( cd worker && exec "$WRANGLER" dev --local --port 8787 --var DEV:1 ) &
 
 # Static-site build, overlapping the worker boot above. transcode is a no-op once
 # dist/audio/ exists; build.py minifies+inlines into dist/. Foreground, so a build

@@ -25,7 +25,11 @@ import { localStamp, dueNudge, vapidAuth, encryptPayload, sendPush, NUDGE_TEXT, 
 const EXCLUDE_TEST = "uid NOT IN (SELECT uid FROM users WHERE nickname = 'TestUser')";
 
 // users.power_user for a uid, 0 if unknown. The admin endpoints gate on this.
+// In local dev (scripts/dev.sh runs `wrangler dev --var DEV:1`) every uid is
+// treated as full power_user 2, so admin/dashboard gating doesn't get in the
+// way; the var is dev-only and never present in a deployed worker.
 async function powerLevel(env, uid) {
+  if (env.DEV) return 2;
   const row = await env.mimi_stats.prepare(
     "SELECT power_user FROM users WHERE uid = ?"
   ).bind(uid).first();
