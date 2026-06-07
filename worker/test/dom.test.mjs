@@ -406,6 +406,34 @@ test("admin: sound-file matrix exposes per-recording shown/offered (vs the kana)
   assert.equal(n(b, "by_voice_shown", "p", "za") - n(a, "by_voice_shown", "p", "za"), 1, "za picked +1 for sa#0");
 });
 
+test("admin: minacc filter drops low-accuracy users from the confusion matrices", { skip: LIVE }, async () => {
+  // Robust against the global aggregate by measuring the DELTA that adding ONE
+  // low-accuracy user causes, at two thresholds: counted at minacc=0, excluded at
+  // minacc=90. A separate uid carries power_user for the admin reads.
+  const admin = randomUUID();
+  await postEvents(admin, [{ ts: Date.now(), target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }]);
+  grantPowerUser(admin, 1);
+  const offeredZa = async (minacc) => {
+    const d = await (await fetch(`${WORKER}/v1/admin/stats?uid=${admin}&minacc=${minacc}`)).json();
+    return (d.confusion_offered || []).find((r) => r.t === "sa" && r.k === "za")?.n || 0;
+  };
+
+  const before0 = await offeredZa(0);
+  const before90 = await offeredZa(90);
+
+  // A 10%-accuracy user: 1 correct さ, 9 confused さ→ざ (za offered every time).
+  const low = randomUUID();
+  const t0 = Date.now();
+  const events = [{ ts: t0, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }];
+  for (let i = 1; i <= 9; i++) {
+    events.push({ ts: t0 + i, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 });
+  }
+  await postEvents(low, events);
+
+  assert.equal(await offeredZa(0) - before0, 10, "minacc=0 counts the low-accuracy user (za offered +10)");
+  assert.equal(await offeredZa(90) - before90, 0, "minacc=90 excludes the low-accuracy user");
+});
+
 test("voice-attempts: per-recording answer counts (a/g/y/n), test users excluded", async () => {
   const get = async () => (await fetch(`${WORKER}/v1/voice-attempts`)).json();
   const n = (d) => (d.sa && d.sa["7"]) || 0;   // sa recording #7 — assert the delta

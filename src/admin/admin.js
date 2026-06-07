@@ -86,6 +86,22 @@ async function load(uid) {
   }
 }
 
+// Min-overall-accuracy filter: re-fetch with ?minacc and re-render just the
+// confusion matrices (the only sections it gates server-side). Debounced so
+// typing in the number field doesn't fire a request per keystroke.
+async function reloadConfusion() {
+  const minacc = Math.max(0, Math.min(100, parseInt(confminacc.value, 10) || 0));
+  try {
+    const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid) + "&minacc=" + minacc);
+    if (!res.ok) return;
+    const data = await res.json();
+    renderConfusion(data.confusion, data.confusion_shown, data.confusion_offered);
+    renderVoiceConfusion(data.by_voice_confusion, data.by_voice_shown, data.by_voice_offered);
+  } catch { /* leave the current matrices in place */ }
+}
+let accTimer = null;
+confminacc.oninput = () => { clearTimeout(accTimer); accTimer = setTimeout(reloadConfusion, 400); };
+
 // Second-tier fetch. 403 (level-1 user) or any failure silently leaves the
 // .l2only sections hidden — the page still shows the aggregate sections.
 async function loadUserStats(uid) {

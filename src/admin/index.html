@@ -185,6 +185,10 @@
                 </span>
                 <span class="sub">(all users)</span>
             </h2>
+            <div class="voicefilter">
+                min user accuracy:
+                <input id="confminacc" type="number" min="0" max="100" value="0" inputmode="numeric" title="exclude users whose overall correct rate is below this % from every confusion matrix — this one and the sound-file matrices below">%
+            </div>
             <div id="confchart">
                 <div class="confgroup">
                     <h3>あ行</h3>

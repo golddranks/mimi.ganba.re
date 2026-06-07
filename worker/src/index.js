@@ -381,6 +381,16 @@ async function handleAdminStats(req, env, url) {
 
   const db = env.mimi_stats;
 
+  // ?minacc=N (0..100): drop the confusion matrices' data from users whose overall
+  // correct rate is below N%, so noise from users who answer near-randomly doesn't
+  // muddy the confusion signal. Parsed to a clamped integer, so it's safe to inline.
+  // Only the confusion aggregations honour it (the difficulty/activity ones don't).
+  const minacc = Math.max(0, Math.min(100, parseInt(url.searchParams.get("minacc"), 10) || 0));
+  const ACC_FILTER = minacc > 0
+    ? `AND uid IN (SELECT uid FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
+         GROUP BY uid HAVING SUM(${CORRECT}) * 100.0 / COUNT(*) >= ${minacc})`
+    : "";
+
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
@@ -414,13 +424,13 @@ async function handleAdminStats(req, env, url) {
     ).all(),
     db.prepare(
       `SELECT target AS t, picked AS p, COUNT(*) AS n
-       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST}
+       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST} ${ACC_FILTER}
        GROUP BY target, picked`
     ).all(),
     db.prepare(
       `SELECT target AS t, voice AS v, picked AS p, COUNT(*) AS n
        FROM events
-       WHERE ev IN ('a','g') AND voice IS NOT NULL AND ${EXCLUDE_TEST}
+       WHERE ev IN ('a','g') AND voice IS NOT NULL AND ${EXCLUDE_TEST} ${ACC_FILTER}
        GROUP BY target, voice, picked`
     ).all(),
     // by_voice_played — this recording was the one *played* in some 'p'
@@ -438,14 +448,14 @@ async function handleAdminStats(req, env, url) {
     // so we expand it in JS below. opts is null on pre-migration / 'r' / 'p'.
     db.prepare(
       `SELECT target AS t, opts AS o, picked AS p, COUNT(*) AS n
-       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${EXCLUDE_TEST}
+       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${EXCLUDE_TEST} ${ACC_FILTER}
        GROUP BY target, opts, picked`
     ).all(),
     // Y/N answers have no offered set; we synthesise one per (target, picked, ev)
     // group in JS below (confusionRecord), the same mapping the dashboard uses.
     db.prepare(
       `SELECT target AS t, picked AS p, ev AS e, COUNT(*) AS n
-       FROM events WHERE ev IN ('y','n') AND ${EXCLUDE_TEST}
+       FROM events WHERE ev IN ('y','n') AND ${EXCLUDE_TEST} ${ACC_FILTER}
        GROUP BY target, picked, ev`
     ).all(),
     // Same "when offered" expansion as optsConf, but per recording (target,
@@ -454,7 +464,7 @@ async function handleAdminStats(req, env, url) {
     // recording was asked. Expanded in JS below.
     db.prepare(
       `SELECT target AS t, voice AS v, opts AS o, picked AS p, COUNT(*) AS n
-       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND voice IS NOT NULL AND ${EXCLUDE_TEST}
+       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND voice IS NOT NULL AND ${EXCLUDE_TEST} ${ACC_FILTER}
        GROUP BY target, voice, opts, picked`
     ).all(),
   ]);
