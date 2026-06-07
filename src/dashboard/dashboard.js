@@ -304,6 +304,10 @@ let confDenom = "shown";
 // Opts-bearing answers, kept chronological for the click-to-inspect cell history.
 let confusionEvents = [];
 
+// The currently-shown cell's series (one entry per ○/✕ mark, oldest→newest), so
+// the strip's click handler can map a tapped mark back to its answer event.
+let cellSeries = [];
+
 function renderConfusion(events) {
   const counts = {}, rowTotals = {}, shown = {}, offered = {};
   confusionEvents = events.filter((e) => isAnswer(e) && e.opts).sort((a, b) => a.ts - b.ts);
@@ -419,6 +423,7 @@ function showCellHistory(td) {
 
   const pair = diag ? rowGlyph : `${rowGlyph} → ${colGlyph}`;
   if (outcomes.length === 0) {
+    cellSeries = [];
     confdetail.innerHTML = `<div class="cd-head">${pair} — no answers with ${colGlyph} offered yet</div>`;
     confdetail.hidden = false;
     return;
@@ -430,14 +435,20 @@ function showCellHistory(td) {
   // optional trend line plots P(bad) from the top, so it rises as the cell improves.
   const n = outcomes.length;
   const bad = outcomes.reduce((s, o) => s + o, 0);
-  const CW = 13, BH = 18, W = n * CW, R = 4;
-  // ○ = a stroked circle, ✕ = a stroked cross, both centred on (cx, cy) — drawn
-  // as SVG shapes (not font glyphs, whose baselines differ) so they line up.
+  const S = 22, GAP = 4, CW = S + GAP, BH = S + GAP, W = n * CW, R = 6;
+  // Each mark is a colour-coded box (good/bad fill — the at-a-glance cue) with a
+  // ○/✕ symbol stroked on top in the page background colour, so the outcome reads
+  // by shape too (red-green colourblind support). The whole box is a generous tap
+  // target wrapped in a clickable <g> carrying its series index, so tapping it
+  // replays that question's recording — see the confdetail click handler.
+  // cellSeries lets the handler map index → event.
+  cellSeries = series;
   const marks = outcomes.map((o, i) => {
-    const cx = i * CW + CW / 2, cy = BH / 2, col = `var(--${o ? "bad" : "good"})`;
-    return o
-      ? `<path d="M${cx - R} ${cy - R}l${2 * R} ${2 * R}M${cx + R} ${cy - R}l${-2 * R} ${2 * R}" stroke="${col}" stroke-width="1.6" fill="none"/>`
-      : `<circle cx="${cx}" cy="${cy}" r="${R}" stroke="${col}" stroke-width="1.6" fill="none"/>`;
+    const cx = i * CW + CW / 2, cy = BH / 2, fill = `var(--${o ? "bad" : "good"})`;
+    const sym = o
+      ? `<path d="M${cx - R} ${cy - R}l${2 * R} ${2 * R}M${cx + R} ${cy - R}l${-2 * R} ${2 * R}" stroke="var(--bg)" stroke-width="2.2" fill="none"/>`
+      : `<circle cx="${cx}" cy="${cy}" r="${R}" stroke="var(--bg)" stroke-width="2.2" fill="none"/>`;
+    return `<g class="cd-mark" data-i="${i}"><rect x="${i * CW + GAP / 2}" y="${GAP / 2}" width="${S}" height="${S}" rx="5" fill="${fill}"/>${sym}</g>`;
   }).join("");
 
   // Draw a trend line / call a direction only when the trend is statistically
@@ -454,7 +465,7 @@ function showCellHistory(td) {
       const xpx = x * (n - 1) * CW + CW / 2;
       pts.push(`${xpx.toFixed(1)},${(BH - logisticAt(tr.fit, x) * BH).toFixed(1)}`);
     }
-    curve = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+    curve = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2" pointer-events="none"/>`;
     trend = tr.improving ? "improving ↑" : "worsening ↓";
   } else if (n >= 5 && (rate <= 0.2 || rate >= 0.8)) {
     trend = "consistent";
@@ -465,9 +476,32 @@ function showCellHistory(td) {
   const label = diag ? `${bad}/${n} wrong` : `confused ${bad}/${n}`;
   confdetail.innerHTML =
     `<div class="cd-head">${pair} · ${label} · ${trend}</div>` +
+    `<div class="cd-file" aria-live="polite">tap a ○ / ✕ to replay that question's recording</div>` +
     `<svg class="cd-strip" width="${W}" height="${BH}" role="img" aria-label="${pair} history">${marks}${curve}</svg>`;
   confdetail.hidden = false;
 }
+
+// Click a ○/✕ mark to replay the exact recording that played for that question
+// and surface its filename above the strip. (target vowel, target mora, idx) pin
+// the file: audio/<vowel>/<mora>/<idx>.opus, the same layout the app and admin
+// play from (one level up, since the dashboard lives under /dashboard/). `voice`
+// is the recording's source name; older pre-`voice` events just show the path.
+const cellPlayer = new Audio();
+confdetail.addEventListener("click", (e) => {
+  const g = e.target.closest(".cd-mark");
+  if (!g) return;
+  const ev = cellSeries[+g.dataset.i];
+  if (!ev) return;
+  const file = `audio/${ev.target.slice(-1)}/${ev.target}/${ev.idx}.opus`;
+  cellPlayer.src = "../" + file;
+  cellPlayer.currentTime = 0;
+  cellPlayer.play().catch(() => { });
+  for (const m of confdetail.querySelectorAll(".cd-mark.playing")) m.classList.remove("playing");
+  g.classList.add("playing");
+  cellPlayer.onended = () => { g.classList.remove("playing"); cellPlayer.onended = null; };
+  const fileEl = confdetail.querySelector(".cd-file");
+  if (fileEl) fileEl.textContent = ev.voice || file;
+});
 
 confchart.addEventListener("click", (e) => {
   const td = e.target.closest("td[data-t]");

@@ -525,9 +525,17 @@ body {
 
 #confdetail { margin-top: .6rem; overflow-x: auto; }
 #confdetail .cd-head { font-size: .8rem; color: var(--fg); margin-bottom: .3rem; }
+/* Filename of the last-played mark (click-to-replay). word-break so a long
+   path/voice name wraps instead of forcing the card wider. */
+#confdetail .cd-file { font-size: .72rem; color: var(--muted); margin-bottom: .35rem; word-break: break-all; }
 /* Keep the strip its natural size — the global `.card svg { width: 100% }`
    chart rule would otherwise stretch it to the card width (and ~280px tall). */
 #confdetail .cd-strip { display: block; width: auto; height: auto; }
+/* Each ○/✕ box is a clickable group; outline it on hover, accent the playing one
+   (stroke draws into the inter-box gap, so boxes don't shift). */
+#confdetail .cd-mark { cursor: pointer; }
+#confdetail .cd-mark:hover rect { stroke: var(--fg); stroke-width: 2; }
+#confdetail .cd-mark.playing rect { stroke: var(--accent); stroke-width: 2.5; }
 
 /* Drift notice — shown only when this device's grind_tally disagrees with the
    server's confusion data (see checkTallyDrift). The global
