@@ -325,6 +325,35 @@ test("admin: confusion matrix uses server-aggregated asked vs shown counts", { s
   assert.ok(Number(asked) >= 3, `asked sa/za >= 3 (got ${asked})`);
 });
 
+test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, async () => {
+  // The admin matrix is a global aggregate, so we can't assert absolute counts;
+  // instead assert the *delta* a Y/N batch adds to the sa/za cell — robust against
+  // whatever else is in the aggregate, since only this batch lands between reads.
+  // Needs a non-TestUser uid (so the rows stay in the aggregate) + power_user.
+  const uid = randomUUID();
+  const stats = async () =>
+    (await fetch(`${WORKER}/v1/admin/stats?uid=${encodeURIComponent(uid)}`)).json();
+  const nFor = (data, map, col) =>
+    (data[map] || []).find((x) => x.t === "sa" && x[col] === "za")?.n || 0;
+
+  await postEvents(uid, saFixture(Date.now()));   // a/g baseline (also creates the user row)
+  grantPowerUser(uid, 1);                          // UPDATE, so it must follow the row's creation
+  const a = await stats();
+
+  // Three wrong-kana prompts (ざ shown while さ plays): two wrong "yes" (confused,
+  // picked za) and one correct "no". All three offer za; two pick it.
+  const t0 = Date.now();
+  await postEvents(uid, [
+    { ts: t0 + 1, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: "y" },
+    { ts: t0 + 2, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: "y" },
+    { ts: t0 + 3, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: "n" },
+  ]);
+  const b = await stats();
+
+  assert.equal(nFor(b, "confusion_offered", "k") - nFor(a, "confusion_offered", "k"), 3, "za offered +3");
+  assert.equal(nFor(b, "confusion_shown", "p") - nFor(a, "confusion_shown", "p"), 2, "za picked +2");
+});
+
 test("dashboard: detects local-tally drift and syncs from the server", async (t) => {
   // The viewer's OWN dashboard, but this device's grind_tally is empty while the
   // server has confusion data → drift notice. Sync rebuilds the tally from the

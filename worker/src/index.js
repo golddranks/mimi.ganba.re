@@ -15,6 +15,7 @@
 import { nameOf } from "./voicemap.js";
 import { MIGRATIONS } from "./migrations.js";
 import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/shared/skill.js";
+import { confusionRecord } from "../../src/shared/tally.js";
 import { VAPID_PUBLIC_KEY } from "../../src/shared/vapid.js";
 import { localStamp, dueNudge, vapidAuth, encryptPayload, sendPush, NUDGE_TEXT, START_HOUR, DONE_HOUR } from "./push.js";
 
@@ -358,7 +359,7 @@ async function handleAdminStats(req, env, url) {
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
-  const [hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, optsConf] = await Promise.all([
+  const [hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, optsConf, ynConf] = await Promise.all([
     db.prepare(
       `SELECT CAST(strftime('%H', ts/1000, 'unixepoch') AS INTEGER) AS h,
               COUNT(*) AS n,
@@ -415,7 +416,18 @@ async function handleAdminStats(req, env, url) {
        FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${EXCLUDE_TEST}
        GROUP BY target, opts, picked`
     ).all(),
+    // Y/N answers have no offered set; we synthesise one per (target, picked, ev)
+    // group in JS below (confusionRecord), the same mapping the dashboard uses.
+    db.prepare(
+      `SELECT target AS t, picked AS p, ev AS e, COUNT(*) AS n
+       FROM events WHERE ev IN ('y','n') AND ${EXCLUDE_TEST}
+       GROUP BY target, picked, ev`
+    ).all(),
   ]);
+
+  // "asked"-mode counts: raw pick counts per (target, picked) over all answers.
+  const counts = {};
+  for (const r of confusion.results || []) counts[`${r.t}/${r.p}`] = (counts[`${r.t}/${r.p}`] || 0) + r.n;
 
   // Expand the grouped opts sets into pairwise counts: offered[t/k] = times kana
   // k was on screen when t was asked; shown[t/p] = times p was picked among those
@@ -425,6 +437,18 @@ async function handleAdminStats(req, env, url) {
     shown[`${r.t}/${r.p}`] = (shown[`${r.t}/${r.p}`] || 0) + r.n;
     for (const k of r.o.split(",")) offered[`${r.t}/${k}`] = (offered[`${r.t}/${k}`] || 0) + r.n;
   }
+
+  // Fold Y/N answers in via the shared synthesis (same mapping as the dashboard):
+  // each (target, picked, ev) group lands on the diagonal, and a wrong-kana prompt
+  // also on the confuser. Scales each synthesised pick by the group's row count.
+  for (const r of ynConf.results || []) {
+    const rec = confusionRecord({ ev: r.e, target: r.t, picked: r.p });
+    if (!rec) continue;
+    counts[`${rec.target}/${rec.picked}`] = (counts[`${rec.target}/${rec.picked}`] || 0) + r.n;
+    shown[`${rec.target}/${rec.picked}`] = (shown[`${rec.target}/${rec.picked}`] || 0) + r.n;
+    for (const k of rec.opts) offered[`${rec.target}/${k}`] = (offered[`${rec.target}/${k}`] || 0) + r.n;
+  }
+
   const rowsOf = (m, key) => Object.entries(m).map(([pair, n]) => {
     const [t, x] = pair.split("/");
     return { t, [key]: x, n };
@@ -434,7 +458,7 @@ async function handleAdminStats(req, env, url) {
     hourly:    hourly.results     || [],
     by_mora:   byMora.results     || [],
     by_voice:  byVoice.results    || [],
-    confusion: confusion.results  || [],
+    confusion: rowsOf(counts, "p"),
     confusion_shown:   rowsOf(shown, "p"),
     confusion_offered: rowsOf(offered, "k"),
     by_voice_confusion: byVoiceConf.results   || [],
