@@ -259,7 +259,9 @@ function newYNQuestion(target, v) {
 }
 
 // ○ = "yes, that's the sound" (correct iff shown kana is the target); ✕ = "no".
-function ynSubmit(yes) {
+// asGuess (long-press) mirrors multi-choice guess(): a correct answer stays in
+// review instead of auto-advancing, so the user can replay before moving on.
+function ynSubmit(yes, asGuess = false) {
   if (!current || current.kind !== "yn" || locked) return;
   disarmRelisten();
   relisten.hidden = true;   // answered — nothing to replay until the next question
@@ -271,8 +273,14 @@ function ynSubmit(yes) {
   const btn = yes ? ynyes : ynno;
   if (correct) {
     btn.classList.add("correct");
-    current = null;
-    setTimeout(newQuestion, 650);
+    if (asGuess) {
+      locked = true;   // stay in review so the ○/✕ buttons can replay (see below)
+      primary.textContent = "Next";
+      primary.hidden = false;
+    } else {
+      current = null;
+      setTimeout(newQuestion, 650);
+    }
   } else {
     btn.classList.add("wrong");
     locked = true;
@@ -284,8 +292,21 @@ function ynSubmit(yes) {
     updateTip("review");
   }
 }
-ynyes.onclick = () => ynSubmit(true);
-ynno.onclick = () => ynSubmit(false);
+
+// In Y/N review (locked) the ○/✕ buttons replay the sound instead of answering —
+// the Y/N counterpart to tapping the choice buttons in multi-choice review, so
+// the user can match what they heard to the revealed kana. A short tap replays
+// the same voice; a long-press (random=true) plays a different voice.
+function replayYN(btn, random = false) {
+  if (!current) return;
+  for (const b of [ynyes, ynno]) b.classList.remove("playing");
+  btn.classList.add("playing");
+  audio.onended = () => { btn.classList.remove("playing"); audio.onended = null; };
+  const { target, idx, cap, startTs } = current;
+  const i = random ? rand(target) : idx;
+  play(path(target, i));
+  pushEvent({ ts: Date.now(), target, idx: i, picked: target, cap, ms: Date.now() - startTs, ev: "p" });
+}
 
 // Long-press = "guess": if right, counts as correct but stays in review mode
 // (no auto-advance) so the user can re-listen before moving on.
@@ -321,6 +342,34 @@ choices.onclick = (e) => {
   const m = btn.dataset.mora;
   if (locked) replay(m, btn);
   else submit(m, btn);
+};
+
+// The Y/N ○/✕ buttons share the same press machinery as the choice buttons:
+// short tap = answer (or, in review, replay the same voice); long-press = guess
+// (or, in review, replay a different voice).
+ynbuttons.onpointerdown = (e) => {
+  const btn = e.target.closest(".choice.yn");
+  if (!btn) return;
+  longHandled = false;
+  if (!current) return;
+  const yes = btn === ynyes;
+  pressTimer = setTimeout(() => {
+    pressTimer = null;
+    longHandled = true;
+    if (locked) replayYN(btn, true);   // different voice
+    else ynSubmit(yes, true);          // guess
+  }, LONG_MS);
+};
+ynbuttons.onpointerup = cancelPress;
+ynbuttons.onpointercancel = cancelPress;
+ynbuttons.onpointerleave = cancelPress;
+
+ynbuttons.onclick = (e) => {
+  const btn = e.target.closest(".choice.yn");
+  if (!btn || !current) return;
+  if (longHandled) { longHandled = false; return; }
+  if (locked) replayYN(btn);
+  else ynSubmit(btn === ynyes);
 };
 
 function guess(btn) {
