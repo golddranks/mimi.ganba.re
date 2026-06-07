@@ -2,6 +2,7 @@ import { capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { dateKey, daysAgo } from "../shared/dates.js";
 import { dayTier } from "../shared/daytier.js";
 import { pickTip } from "./tips.js";
+import { confusionRecord } from "../shared/tally.js";
 import { getGrind, tallyAnswer, initGrind, recordGrindAnswer } from "./grind.js";
 import { scheduleReminders } from "./reminders.js";
 import { render } from "./render.js";
@@ -270,6 +271,10 @@ function ynSubmit(yes, asGuess = false) {
   const ms = Date.now() - startTs;
   record(correct, target.slice(-1));
   pushEvent({ ts: Date.now(), target, idx, picked: displayed, cap: 2, ms, ev: yes ? "y" : "n", skill: level });
+  // Feed the day-start probe tally too, so a Y/N confusion drills like a
+  // multi-choice one (same synthesis the dashboard matrix uses).
+  const rec = confusionRecord({ ev: yes ? "y" : "n", target, picked: displayed });
+  tallyAnswer(rec.target, rec.picked, rec.opts);
   const btn = yes ? ynyes : ynno;
   if (correct) {
     btn.classList.add("correct");

@@ -267,6 +267,31 @@ test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", asy
   assert.equal(detail.querySelectorAll("svg polyline").length, 0, "no trend line for a flat cell");
 });
 
+test("dashboard: Y/N answers feed the confusion matrix (diagonal + confuser)", async (t) => {
+  // Y/N events all ask the さ sound (target sa); picked = the kana shown, ev y =
+  // "yes it matches", n = "no". The matrix counts a correct-kana prompt on the
+  // diagonal only, and a wrong-kana prompt on the diagonal AND the confuser.
+  const uid = await freshTestUser();
+  const t0 = Date.now();
+  const yn = (i, ev, picked) => ({ ts: t0 + i, target: "sa", idx: 0, picked, cap: 2, ms: 500, ev });
+  const events = [
+    yn(1, "y", "sa"),   // correct-kana, correct → diagonal hit
+    yn(2, "n", "sa"),   // correct-kana, wrong   → diagonal miss
+    yn(3, "n", "za"),   // wrong-kana, correct   → diagonal hit, za offered
+    yn(4, "y", "za"),   // wrong-kana, wrong     → confused sa→za (za picked)
+  ];
+  assert.equal((await postEvents(uid, events)).status, 200);
+
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`);
+  t.after(close);
+
+  // Diagonal: 2 right of 4 asked. Confuser sa/za: za offered twice (the two
+  // wrong-kana prompts), picked once (the wrong "yes").
+  const r = await readConfusion(win, [["sa", "sa"], ["sa", "za"]]);
+  assert.deepEqual(r["sa/sa"], { picked: 2, offered: 4, asked: 2 });
+  assert.deepEqual(r["sa/za"], { picked: 1, offered: 2, asked: 1 });
+});
+
 test("admin: confusion matrix uses server-aggregated asked vs shown counts", { skip: LIVE }, async (t) => {
   // Local-only: needs power_user granted via local SQL, and unlike the rest its
   // rows must stay *in* the aggregate (so its uid is NOT a TestUser). The admin

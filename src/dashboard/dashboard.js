@@ -1,7 +1,7 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { pad2, dateKey, dayKey } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
-import { tallyFromEvents, tallyMaps } from "../shared/tally.js";
+import { tallyFromEvents, tallyMaps, confusionRecord } from "../shared/tally.js";
 import { dayBarChart, dayTip } from "../shared/daychart.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
@@ -301,7 +301,10 @@ let confusionOffered = null;    // T/P -> times kana P was on screen when T was 
 // Defaults to "shown" (the meaningful metric); "asked" is on its way out.
 let confDenom = "shown";
 
-// Opts-bearing answers, kept chronological for the click-to-inspect cell history.
+// Confusion-bearing answers (multi-choice + the synthesised Y/N picks), kept
+// chronological for the click-to-inspect cell history. Each carries the
+// normalised `picked`/`opts` from confusionRecord, so the strip reads Y/N the
+// same way the matrix counts it.
 let confusionEvents = [];
 
 // The currently-shown cell's series (one entry per ○/✕ mark, oldest→newest), so
@@ -310,21 +313,31 @@ let cellSeries = [];
 
 function renderConfusion(events) {
   const counts = {}, rowTotals = {}, shown = {}, offered = {};
-  confusionEvents = events.filter((e) => isAnswer(e) && e.opts).sort((a, b) => a.ts - b.ts);
+  confusionEvents = [];
   for (const e of events) {
-    if (!isAnswer(e)) continue;
-    counts[`${e.target}/${e.picked}`] = (counts[`${e.target}/${e.picked}`] || 0) + 1;
-    rowTotals[e.target] = (rowTotals[e.target] || 0) + 1;
-    // The "shown" view only counts answers that recorded their offered choices
-    // (opts is null on pre-migration rows and on 'r'/'p'). picked is always one
-    // of opts, so shown[T/P] <= offered[T/P] and the ratio stays in [0,1].
-    if (e.opts) {
-      shown[`${e.target}/${e.picked}`] = (shown[`${e.target}/${e.picked}`] || 0) + 1;
-      for (const k of e.opts.split(",")) {
-        offered[`${e.target}/${k}`] = (offered[`${e.target}/${k}`] || 0) + 1;
-      }
+    // confusionRecord normalises multi-choice (a/g) and Y/N (y/n) into the same
+    // { target, picked, opts } shape — see shared/tally.js. Y/N: a correct
+    // judgement reads as picking the target (diagonal); a wrong one as the
+    // confuser (wrong-kana prompt) or a diagonal miss (correct-kana prompt). The
+    // confuser kana is offered only when it was the one shown, so a wrong-kana
+    // answer lands on both the diagonal and the confuser cell.
+    const r = confusionRecord(e);
+    if (r) {
+      counts[`${r.target}/${r.picked}`] = (counts[`${r.target}/${r.picked}`] || 0) + 1;
+      rowTotals[r.target] = (rowTotals[r.target] || 0) + 1;
+      // picked is always in opts (or "" for a Y/N miss), so shown[T/P] <=
+      // offered[T/P] and the ratio stays in [0,1].
+      shown[`${r.target}/${r.picked}`] = (shown[`${r.target}/${r.picked}`] || 0) + 1;
+      for (const k of r.opts) offered[`${r.target}/${k}`] = (offered[`${r.target}/${k}`] || 0) + 1;
+      confusionEvents.push({ ...e, picked: r.picked, opts: r.opts.join(",") });
+    } else if (isAnswer(e)) {
+      // Pre-migration a/g rows with no offered set: still count toward the
+      // asked-mode totals, just not the shown/offered (pairwise) view.
+      counts[`${e.target}/${e.picked}`] = (counts[`${e.target}/${e.picked}`] || 0) + 1;
+      rowTotals[e.target] = (rowTotals[e.target] || 0) + 1;
     }
   }
+  confusionEvents.sort((a, b) => a.ts - b.ts);
   confusionCounts = counts;
   confusionRowTotals = rowTotals;
   confusionShown = shown;
@@ -533,7 +546,7 @@ function checkTallyDrift(events) {
   try { stored = JSON.parse(localStorage.grind_tally) || {}; } catch { }
   const s = tallyMaps(stored);
   const drift = !sameMap(s.shown, offDiag(confusionShown)) || !sameMap(s.offered, offDiag(confusionOffered));
-  pendingSync = drift ? tallyFromEvents(events, isAnswer) : null;
+  pendingSync = drift ? tallyFromEvents(events) : null;
   syncnotice.hidden = !drift;
 }
 
