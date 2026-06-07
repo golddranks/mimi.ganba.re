@@ -375,6 +375,26 @@ test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, asyn
   assert.equal(nFor(b, "confusion_shown", "p") - nFor(a, "confusion_shown", "p"), 2, "za picked +2");
 });
 
+test("voice-attempts: per-recording answer counts (a/g/y/n), test users excluded", async () => {
+  const get = async () => (await fetch(`${WORKER}/v1/voice-attempts`)).json();
+  const n = (d) => (d.sa && d.sa["7"]) || 0;   // sa recording #7 — assert the delta
+
+  const before = n(await get());
+
+  // Two answers on sa#7 — one multi-choice 'a', one Y/N 'y' — under a real uid.
+  const real = randomUUID();   // not a TestUser → counted
+  const t0 = Date.now();
+  await postEvents(real, [
+    { ts: t0 + 1, target: "sa", idx: 7, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 },
+    { ts: t0 + 2, target: "sa", idx: 7, picked: "za", cap: 2, ms: 500, ev: "y" },
+  ]);
+  // One more on sa#7 under a TestUser — must NOT be counted.
+  await postEvents(await freshTestUser(),
+    [{ ts: t0 + 3, target: "sa", idx: 7, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }]);
+
+  assert.equal(n(await get()) - before, 2, "the two real answers count; the TestUser one is excluded");
+});
+
 test("dashboard: detects local-tally drift and syncs from the server", async (t) => {
   // The viewer's OWN dashboard, but this device's grind_tally is empty while the
   // server has confusion data → drift notice. Sync rebuilds the tally from the

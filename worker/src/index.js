@@ -161,6 +161,8 @@ export default {
         res = await handlePushUnsubscribe(req, env);
       } else if (req.method === "POST" && url.pathname === "/v1/push/test") {
         res = await handlePushTest(req, env);
+      } else if (req.method === "GET" && url.pathname === "/v1/voice-attempts") {
+        res = await handleVoiceAttempts(req, env);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+\/events$/)) {
         res = await handleGetEvents(req, env, url);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+$/)) {
@@ -280,6 +282,21 @@ async function handleGetEvents(req, env, url) {
     "SELECT ts, target, idx, picked, cap, ms, ev, voice, opts FROM events WHERE uid = ? ORDER BY ts ASC"
   ).bind(uid).all();
   return json({ events: rows.results || [] });
+}
+
+// Per-recording answer counts so the app can prefer the least-judged recording
+// of each sound and even out the dataset. Shape: { mora: { idx: n } } over answer
+// events (a/g/y/n), test users excluded. Public + uid-free (just aggregate
+// counts); the client uses it best-effort. Missing (mora, idx) = 0 attempts.
+async function handleVoiceAttempts(req, env) {
+  const rows = ((await env.mimi_stats.prepare(
+    `SELECT target AS m, idx AS i, COUNT(*) AS n
+     FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
+     GROUP BY target, idx`
+  ).all()).results) || [];
+  const out = {};
+  for (const r of rows) (out[r.m] ||= {})[r.i] = r.n;
+  return json(out);
 }
 
 // Minimal per-user metadata. Currently just `power_user` (0/1/2) so the

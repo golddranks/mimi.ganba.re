@@ -181,6 +181,42 @@ const rand = (m) => Math.floor(Math.random() * COUNTS[m]);
 function path(m, i) {
   return `audio/${m.slice(-1)}/${m}/${i}.opus`;
 }
+
+// Per-recording answer counts from the server ({mora:{idx:n}}), fetched once,
+// best-effort, to bias toward the least-judged recordings so the dataset evens
+// out. `voicePlayed` counts this session's own picks per recording.
+let voiceAttempts = {};
+const voicePlayed = {};
+if (STATS_URL) {
+  fetch(STATS_URL + "/v1/voice-attempts")
+    .then((r) => r.ok ? r.json() : null)
+    .then((d) => { if (d) voiceAttempts = d; })
+    .catch(() => { });
+}
+
+// Choose a recording index for mora `m`. Ordered lexicographically:
+//   1. fewest plays THIS session — so we cycle through every recording of the
+//      sound once before repeating any (variety within a session); without this
+//      a freshly-deployed count-0 recording would be replayed on a loop in a
+//      grind session until it caught up to the others' global counts.
+//   2. fewest answers globally (the server count) — within a round, the
+//      under-sampled recordings come first, nudging the dataset even.
+// Random among exact ties. Records the pick so the next call advances the round.
+// Question voice only; distractor/replay samples stay uniform (rand) as they
+// generate no judgement data.
+function pickVoice(m) {
+  const base = voiceAttempts[m] || {};
+  const local = voicePlayed[m] || (voicePlayed[m] = {});
+  let best = [], bestL = Infinity, bestB = Infinity;
+  for (let i = 0; i < COUNTS[m]; i++) {
+    const l = local[i] || 0, b = base[i] || 0;
+    if (l < bestL || (l === bestL && b < bestB)) { bestL = l; bestB = b; best = [i]; }
+    else if (l === bestL && b === bestB) best.push(i);
+  }
+  const i = best[Math.floor(Math.random() * best.length)];
+  local[i] = (local[i] || 0) + 1;
+  return i;
+}
 function play(src) {
   audio.src = src;
   audio.currentTime = 0;
@@ -226,7 +262,7 @@ function newQuestion() {
     const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
     opts = shuffle([target, ...shuffle(sibs).slice(0, cap - 1)]);
   }
-  const idx = rand(target);
+  const idx = pickVoice(target);
   // skill = the target vowel's level (correct-count) at question time — frozen
   // into the event so changing the level rules can't rewrite history.
   current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now(), opts, skill: skill[target.slice(-1)] || 0, kind: "m" };
@@ -248,7 +284,7 @@ function newQuestion() {
 // match. 50/50 the shown kana is the real target vs a random same-vowel sibling.
 // Not fed into the grind tally (no choice set), and excluded from the dashboard.
 function newYNQuestion(target, v) {
-  const idx = rand(target);
+  const idx = pickVoice(target);
   const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
   const displayed = (sibs.length === 0 || Math.random() < 0.5) ? target : pick(sibs);
   current = { target, idx, voice: path(target, idx), displayed, cap: 2, startTs: Date.now(), skill: skill[v] || 0, kind: "yn" };
