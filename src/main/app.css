@@ -555,4 +555,16 @@ body {
         font-size: 2.4rem;
         padding: 1.2rem .4rem;
     }
+
+    /* The ○/✕ glyphs read small in the wide Y/N buttons on a phone — bump them
+       up (they have room: two buttons span the full width). */
+    .choice.yn {
+        font-size: 3.6rem;
+    }
+
+    /* Same for the ○/✕ correct/wrong corner marks on the multi-choice buttons. */
+    .choice.correct::after,
+    .choice.wrong::after {
+        font-size: 2.6rem;
+    }
 }
