@@ -312,26 +312,27 @@ function ynSubmit(yes, asGuess = false) {
   const rec = confusionRecord({ ev: yes ? "y" : "n", target, picked: displayed });
   tallyAnswer(rec.target, rec.picked, rec.opts);
   const btn = yes ? ynyes : ynno;
-  if (correct) {
-    btn.classList.add("correct");
-    if (asGuess) {
-      locked = true;   // stay in review so the ○/✕ buttons can replay (see below)
-      primary.textContent = "Next";
-      primary.hidden = false;
-    } else {
-      current = null;
-      setTimeout(newQuestion, 650);
-    }
-  } else {
-    btn.classList.add("wrong");
-    locked = true;
-    // Reveal what the sound actually was, so the user can connect ear to symbol.
+  btn.classList.add(correct ? "correct" : "wrong");
+  // Auto-advance only a plain correct ⚪︎ tap: the shown kana WAS the sound, so
+  // there's nothing new to learn. Everything else stays in review so the ○/✕
+  // buttons can replay the sound — a wrong answer, a long-press guess, or a
+  // correct ✕ (where the played sound was never shown on screen).
+  if (correct && !asGuess && displayed === target) {
+    current = null;
+    setTimeout(newQuestion, 650);
+    return;
+  }
+  locked = true;
+  // Reveal the actual sound whenever it wasn't the kana shown — every wrong
+  // answer, and a correct ✕ — so the user connects ear to symbol. (A correct ⚪︎
+  // guess that lingers needs no reveal: the kana on screen already was it.)
+  if (!correct || displayed !== target) {
     ynactual.innerHTML = `actually: <strong>${HIRAGANA[target]}</strong>`;
     ynactual.hidden = false;
-    primary.textContent = "Next";
-    primary.hidden = false;
-    updateTip("review");
   }
+  primary.textContent = "Next";
+  primary.hidden = false;
+  if (!correct) updateTip("review");
 }
 
 // In Y/N review (locked) the ○/✕ buttons replay the sound instead of answering —
