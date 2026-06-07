@@ -1,6 +1,7 @@
 import { capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { dateKey, daysAgo } from "../shared/dates.js";
-import { TIPS } from "./tips.js";
+import { dayTier } from "../shared/daytier.js";
+import { pickTip } from "./tips.js";
 import { getGrind, tallyAnswer, initGrind, recordGrindAnswer } from "./grind.js";
 import { scheduleReminders } from "./reminders.js";
 import { render } from "./render.js";
@@ -124,6 +125,29 @@ function applyRelisten(vowel) {
   run = 0;
 }
 
+// ---------- contextual tips ----------
+// The hint under the play area tracks page state so it tends to be relevant (see
+// tips.js). The context is derived from where the user is: a finished day, the
+// early game (before Y/N unlocks at skill 15), or mid-session. "review" isn't
+// derived here — wrong-answer handlers pass it explicitly via updateTip("review").
+function tipContext() {
+  if (dayTier(today())) return "done";
+  if (Math.max(0, ...Object.values(skill)) < 15) return "beginner";
+  return "general";
+}
+
+// Re-roll the tip when the context changes (or when a handler forces one), but
+// leave it alone while the context holds — so it reflects the phase rather than
+// flickering on every answer.
+let tipContextShown = null;
+function updateTip(force) {
+  if (viewMode) return;   // view-as shows the spoofed-uid label instead
+  const ctx = force || tipContext();
+  if (!force && ctx === tipContextShown) return;
+  tipContextShown = ctx;
+  tip.textContent = pickTip(ctx);
+}
+
 function record(correct, vowel) {
   // Midnight rollover: if today's bucket doesn't exist yet but other days
   // do, the streak from the most recent day is stale — same reset rule as
@@ -137,6 +161,7 @@ function record(correct, vowel) {
   recordGrindAnswer();
   save();
   render();
+  updateTip();
 }
 
 // ---------- audio / question flow ----------
@@ -177,6 +202,7 @@ function newQuestion() {
   locked = false;
   disarmRelisten();
   resetQuiz();
+  updateTip();   // back to the phase-appropriate tip after any "review" override
   let target, opts;
   const g = getGrind();
   if (g) {
@@ -255,6 +281,7 @@ function ynSubmit(yes) {
     ynactual.hidden = false;
     primary.textContent = "Next";
     primary.hidden = false;
+    updateTip("review");
   }
 }
 ynyes.onclick = () => ynSubmit(true);
@@ -346,6 +373,7 @@ function submit(picked, btn, wasGuess = false) {
     }
     primary.textContent = "Next";
     primary.hidden = false;
+    updateTip("review");
   }
 }
 
@@ -454,7 +482,7 @@ if (viewMode) {
   stats = t.s || {};
   run = t.k || 0;
   skill = t.x || {};
-  tip.textContent = pick(TIPS);
+  updateTip();
   initGrind();
   render();
   flushEvents();
