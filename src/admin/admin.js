@@ -144,12 +144,15 @@ function renderDaily(daily, uids) {
     const r = map.get(k) || { n: 0, correct: 0 };
     return { n: r.n, correct: r.correct };
   });
-  // Bars carry data-date so clicking a stack reveals the contributing uids.
-  dayBarChart(dailychart, days, 200, (d) => d.n, (d, x, barW, bh, y0) => {
+  // A full-height transparent band over each column (laid on top of the thin
+  // bars) carries data-date, so clicking anywhere in the column reveals that
+  // day's uids — and a CSS hover darkens the whole column as a click cue.
+  dayBarChart(dailychart, days, 200, (d) => d.n, (d, x, barW, bh, y0, bandX, bandW) => {
     const cH = d.n ? d.correct / d.n * bh : 0;
     const tip = dayTip(d.k, d.correct, d.n);
-    return `<rect data-date="${d.k}" x="${x}%" y="${y0 - bh}%" width="${barW}%" height="${bh}%" fill="var(--bad-bar)"><title>${tip}</title></rect>`
-      + `<rect data-date="${d.k}" x="${x}%" y="${y0 - cH}%" width="${barW}%" height="${cH}%" fill="var(--good)"><title>${tip}</title></rect>`;
+    return `<rect x="${x}%" y="${y0 - bh}%" width="${barW}%" height="${bh}%" fill="var(--bad-bar)"></rect>`
+      + `<rect x="${x}%" y="${y0 - cH}%" width="${barW}%" height="${cH}%" fill="var(--good)"></rect>`
+      + `<rect class="dayband" data-date="${d.k}" x="${bandX}%" y="0" width="${bandW}%" height="${y0}%"><title>${tip}</title></rect>`;
   }, () => "", true);
   dailychart.onclick = (e) => {
     const r = e.target.closest("rect[data-date]");

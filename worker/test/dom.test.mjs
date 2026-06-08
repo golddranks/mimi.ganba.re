@@ -134,7 +134,7 @@ test("app: native mode drills forced 2-choice pairs from the ranking", { skip: L
   const uid = win.localStorage.uid;
 
   // Native testers see a thank-you, not the learner-progress message.
-  assert.equal(win.message.textContent, "音声の品質確認・向上にご参加いただき、ありがとうございます！");
+  assert.equal(win.message.textContent, "音声の品質向上にご参加いただき、ありがとうございます！");
 
   win.primary.click();
   const btns = await waitFor(() => {
@@ -555,8 +555,10 @@ test("admin: ?natives switches the confusion matrix between normal and native da
     ((await (await fetch(`${WORKER}/v1/admin/stats?uid=${encodeURIComponent(admin)}${q}`)).json())
       .confusion_shown || []).find((r) => r.t === t && r.p === p)?.n || 0;
 
-  const before = { nSu: await shownN("", "su", "tu"), vSu: await shownN("&natives=1", "su", "tu"),
-                   nSo: await shownN("", "so", "tyo"), vSo: await shownN("&natives=1", "so", "tyo") };
+  const before = {
+    nSu: await shownN("", "su", "tu"), vSu: await shownN("&natives=1", "su", "tu"),
+    nSo: await shownN("", "so", "tyo"), vSo: await shownN("&natives=1", "so", "tyo")
+  };
 
   await postEvents(randomUUID(), [ans("su", "tu"), ans("su", "tu")]);   // role 0
   const native = randomUUID();

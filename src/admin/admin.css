@@ -592,14 +592,27 @@ body {
 /* Bars are interactive (drill down to uids) — give them a hover affordance. */
 #levelhist rect[data-bin],
 #activityhist rect[data-bin],
-#dayshist rect[data-bin],
-#dailychart rect[data-date] {
+#dayshist rect[data-bin] {
     cursor: pointer;
 }
 
 #levelhist rect[data-bin]:hover,
 #activityhist rect[data-bin]:hover,
-#dayshist rect[data-bin]:hover,
-#dailychart rect[data-date]:hover {
+#dayshist rect[data-bin]:hover {
     opacity: .82;
+}
+
+/* Daily chart: a full-height transparent band per day column is the click/hover
+   target, laid over the thin bars — so clicking anywhere in the column opens
+   that day's uids. Invisible at rest; a faint fill on hover darkens the whole
+   column as a cue to which day will open. */
+.dayband {
+    fill: var(--fg);
+    fill-opacity: 0;
+    pointer-events: all;   /* clickable across the column even though transparent */
+    cursor: pointer;
+}
+
+.dayband:hover {
+    fill-opacity: .08;
 }

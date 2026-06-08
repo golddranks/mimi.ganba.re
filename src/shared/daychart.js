@@ -55,7 +55,10 @@ export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = f
   for (let i = 0; i < days.length; i++) {
     const d = days[i];
     const x = xRightmost - (days.length - 1 - i) * binW;
-    if (mag(d) > 0) bars += bar(d, X(x), X(barW), Y(mag(d) / max * innerH), Y(y0));
+    // bandX/bandW give the full-width column lane (centred on the bar) so a
+    // caller can lay a full-height click/hover target over the whole column,
+    // not just the thin bar.
+    if (mag(d) > 0) bars += bar(d, X(x), X(barW), Y(mag(d) / max * innerH), Y(y0), X(x - (binW - barW) / 2), X(binW));
     const month = d.k.slice(0, 7);
     if (month !== lastMonth) {
       lastMonth = month;
