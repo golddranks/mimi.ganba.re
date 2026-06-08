@@ -439,7 +439,7 @@ body {
    because the vowel-merged counts are bigger. */
 #conschart { text-align: center; }
 #conschart .confgrid { margin-inline: auto; }
-#conschart .confgroup { --cell: 2.8rem; }   /* bigger cells (vowel-merged counts); title offset follows */
+#conschart .confgroup { --cell: 3rem; }   /* bigger cells (vowel-merged counts); title offset follows */
 
 .confgrid td.diag {
     border-color: color-mix(in srgb, var(--good) 50%, var(--panel-2));
