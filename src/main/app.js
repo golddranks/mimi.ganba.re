@@ -150,7 +150,7 @@ function tipContext() {
 let tipContextShown = null;
 function updateTip(force) {
   if (viewMode) return;   // view-as shows the spoofed-uid label instead
-  if (nativeMode) { tip.textContent = "ネイティブ検証モード：音声が不自然だったり、自信がないときは、長押しで回答してください"; return; }   // native manages its own status line
+  if (nativeMode) { tip.textContent = "ネイティブ検証モード：発音が変だったり、自信がなかったりするときは、長押しで回答してください"; return; }   // native manages its own status line
   const ctx = force || tipContext();
   if (!force && ctx === tipContextShown) return;
   tipContextShown = ctx;
