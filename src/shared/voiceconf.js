@@ -76,7 +76,10 @@ export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, mi
         return true;
       });
       voices.sort((a, b) => rowMaxOffPct(m, b) - rowMaxOffPct(m, a));
-      for (const voice of voices) rowsInGroup.push({ m, voice });
+      // idx = the recording's position in the current voice set, i.e. its current
+      // file id (audio/<vowel>/<mora>/<idx>.opus) — mutable as voices are
+      // added/reordered, unlike the stable voice name.
+      for (const voice of voices) rowsInGroup.push({ m, voice, idx: (map[m] || []).indexOf(voice) });
     }
 
     let maxOn = 0, maxOff = 0;
@@ -102,7 +105,7 @@ export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, mi
       // is in a span so it can ellipsis-truncate without widening the th.
       if (row.m !== lastMora && body !== "") body += spacer;
       lastMora = row.m;
-      body += `<tr><th class="vmora">${KATAKANA[row.m]}</th><th class="vname" data-mora="${row.m}" data-voice="${row.voice}" title="${row.voice}"><span>${row.voice}</span></th>`;
+      body += `<tr><th class="vmora">${KATAKANA[row.m]}</th><th class="vname" data-mora="${row.m}" data-voice="${row.voice}" title="${row.voice} — current id ${row.idx}"><span>${row.voice}</span></th>`;
       for (const p of morae) {
         const val = valueFor(row.m, row.voice, p);
         const diag = row.m === p;

@@ -558,6 +558,11 @@ test("dashboard: per-user sound-file confusion matrix renders the viewer's recor
     return td && /^\d+\/\d+$/.test(td.textContent) ? td.textContent : null;
   });
   assert.equal(cell, "3/5", "sa recording: za picked 3 of 5 offered");
+
+  // The row header's hover exposes the recording's current file id (its index in
+  // the current voice set). saFixture is idx 0, so its voice is VOICE_MAP[sa][0].
+  const vth = [...win.voiceconf.querySelectorAll("th.vname")].find((th) => th.dataset.voice === voice);
+  assert.equal(vth?.title, `${voice} — current id 0`, "row header hover shows the current file id");
 });
 
 test("admin: sound-file matrix exposes per-recording shown/offered (vs the kana)", { skip: LIVE }, async () => {
