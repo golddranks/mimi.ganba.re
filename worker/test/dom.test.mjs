@@ -336,7 +336,9 @@ test("dashboard: confusion matrix renders the pick-when-offered denominator", as
   const uid = await freshTestUser();
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
 
-  const { win, close } = await openPage(`/dashboard/?uid=${uid}`);
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // this user viewing their own dashboard
+  });
   t.after(close);
 
   const r = await readConfusion(win, [["sa", "za"], ["sa", "sya"]]);
@@ -356,7 +358,9 @@ test("dashboard: confusion matrix marks grind and probe targets", async (t) => {
   events.push(mk(10, "sya", ["sa", "sya"]), mk(11, "sya", ["sa", "sya"]), mk(12, "sa", ["sa", "sya"]));
   assert.equal((await postEvents(uid, events)).status, 200);
 
-  const { win, close } = await openPage(`/dashboard/?uid=${uid}`);
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // this user viewing their own dashboard
+  });
   t.after(close);
   const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
 
@@ -376,7 +380,9 @@ test("dashboard: clicking a confusion cell shows its history strip", async (t) =
   const events = [mk(1, "za"), mk(2, "sa"), mk(3, "za"), mk(4, "sa"), mk(5, "za"), mk(6, "sa")];
   assert.equal((await postEvents(uid, events)).status, 200);
 
-  const { win, close } = await openPage(`/dashboard/?uid=${uid}`);
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // this user viewing their own dashboard
+  });
   t.after(close);
   const cell = () => win.confchart.querySelector('td[data-t="sa"][data-p="za"]');
   const detail = win.document.getElementById("confdetail");
@@ -399,7 +405,9 @@ test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", asy
     ({ ts: t0 + i, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }));
   assert.equal((await postEvents(uid, events)).status, 200);
 
-  const { win, close } = await openPage(`/dashboard/?uid=${uid}`);
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // this user viewing their own dashboard
+  });
   t.after(close);
   const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
   const detail = win.document.getElementById("confdetail");
@@ -426,7 +434,9 @@ test("dashboard: Y/N answers feed the confusion matrix (diagonal + confuser)", a
   ];
   assert.equal((await postEvents(uid, events)).status, 200);
 
-  const { win, close } = await openPage(`/dashboard/?uid=${uid}`);
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // this user viewing their own dashboard
+  });
   t.after(close);
 
   // Diagonal: 2 right of 4 asked. Confuser sa/za: za offered twice (the two
@@ -448,7 +458,9 @@ test("dashboard: Y/N answers count as activity (answers + accuracy)", async (t) 
   ];
   assert.equal((await postEvents(uid, events)).status, 200);
 
-  const { win, close } = await openPage(`/dashboard/?uid=${uid}`);
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // this user viewing their own dashboard
+  });
   t.after(close);
   const overview = win.document.getElementById("overview");
   const stat = (k) => overview.querySelector(`[data-stat="${k}"]`).textContent;
@@ -584,7 +596,9 @@ test("dashboard: per-user sound-file confusion matrix renders the viewer's recor
   const voice = (await getEvents(uid)).find((e) => e.target === "sa" && e.idx === 0)?.voice;
   assert.ok(voice, "worker assigned a voice to sa#0");
 
-  const { win, close } = await openPage(`/dashboard/?uid=${uid}`);
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // this user viewing their own dashboard
+  });
   t.after(close);
 
   const cell = await waitFor(() => {
@@ -723,16 +737,19 @@ test("dashboard: no drift notice when the local tally already matches", async (t
   assert.equal(win.syncnotice.hidden, true, "matching tally → no drift notice");
 });
 
-test("dashboard: no drift notice when viewing someone else's data", async (t) => {
+// skip on LIVE: viewing another uid now needs power (granted via local SQL).
+test("dashboard: no drift notice when viewing someone else's data", { skip: LIVE }, async (t) => {
   // Drift is about THIS device's tally, which only reflects the viewer's own
   // answers — so drilling into another uid never flags it, however stale.
   const other = await freshTestUser();
   assert.equal((await postEvents(other, saFixture(Date.now()))).status, 200);
-  const me = randomUUID();   // viewer writes nothing; only a localStorage identity
+  const me = randomUUID();
+  await postEvents(me, saFixture(Date.now()));   // create me's row, then grant power
+  grantPowerUser(me, 1);                          // viewing another's dashboard is power-gated
 
   const { win, close } = await openPage(`/dashboard/?uid=${other}`, {
     setup: (w) => {
-      w.localStorage.setItem("uid", me);             // viewer is someone else
+      w.localStorage.setItem("uid", me);             // viewer is a (power) someone else
       w.localStorage.setItem("grind_tally", "{}");   // whose empty tally would "drift"
     },
   });
@@ -743,6 +760,20 @@ test("dashboard: no drift notice when viewing someone else's data", async (t) =>
   assert.equal(win.syncnotice.hidden, true, "another user's matrix never flags local drift");
 });
 
+test("dashboard: viewing another user's dashboard is denied without power", async (t) => {
+  const other = randomUUID();   // a uid we don't own
+  const me = randomUUID();      // a normal (non-power) viewer
+  const { win, close } = await openPage(`/dashboard/?uid=${other}`, {
+    setup: (w) => w.localStorage.setItem("uid", me),
+  });
+  t.after(close);
+
+  await waitFor(() => win.msg.textContent.includes("Unauthorized") ? true : null, WAIT);
+  assert.equal(win.dash.style.display, "none", "the dashboard content is hidden");
+  assert.equal(win.confchart.querySelector('td[data-t="sa"][data-p="za"]')?.textContent || "", "",
+    "the other user's data was never loaded");
+});
+
 const subscribePush = (uid) => {
   const endpoint = `https://push.example.invalid/${uid}-${Date.now()}`;
   return fetch(`${WORKER}/v1/push/subscribe`, {
@@ -751,10 +782,10 @@ const subscribePush = (uid) => {
   });
 };
 
-test("admin reminder: reports a uid's push-subscription state, gated at level 2", { skip: LIVE }, async () => {
+test("admin reminder: reports a uid's push-subscription state, gated to power users", { skip: LIVE }, async () => {
   const admin = randomUUID();
   await postEvents(admin, saFixture(Date.now()));   // creates the row for grantPowerUser
-  grantPowerUser(admin, 2);
+  grantPowerUser(admin, 1);
   const target = randomUUID();
   const ask = (asker, t) =>
     fetch(`${WORKER}/v1/admin/reminder?uid=${encodeURIComponent(asker)}&target=${encodeURIComponent(t)}`);

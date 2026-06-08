@@ -365,11 +365,11 @@ async function handleGetUser(req, env, url) {
 }
 
 // Read-only daily-reminder state for a uid: on iff it has any push subscription.
-// Per-user data, so gated at power_user level 2 like the other uid drilldowns —
-// the requester passes their own uid; ?target is the uid being inspected.
+// Gated to power users (>= 1), matching the dashboard view-as it backs — the
+// requester passes their own uid; ?target is the uid being inspected.
 async function handleAdminReminder(req, env, url) {
   const uid = url.searchParams.get("uid") || "";
-  if (await powerLevel(env, uid) < 2) {
+  if (await powerLevel(env, uid) < 1) {
     return new Response("forbidden", { status: 403 });
   }
   const target = url.searchParams.get("target") || "";
