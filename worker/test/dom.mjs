@@ -22,6 +22,10 @@ export const DIST = resolve(here, "../../dist");
 export const LIVE = !!process.env.SITE;
 export const SITE = (process.env.SITE || "http://127.0.0.1:8080").replace(/\/$/, "");
 export const WORKER = (process.env.BASE || "http://127.0.0.1:8787").replace(/\/$/, "");
+// ISOLATED = the worker is backed by a fresh empty-schema DB, so exact
+// global-aggregate assertions (presence/absence in a ranking, total counts)
+// hold. False on a prod snapshot or LIVE, where only deltas are robust.
+export const ISOLATED = !LIVE && process.env.SEED !== "snapshot";
 
 // Load a page from a local dist file (the local DOM tests).
 export async function loadPage(file, opts) {

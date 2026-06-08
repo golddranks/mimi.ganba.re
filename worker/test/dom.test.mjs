@@ -14,7 +14,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { openPage, waitFor, readConfusion, LIVE, WORKER } from "./dom.mjs";
+import { openPage, waitFor, readConfusion, LIVE, ISOLATED, WORKER } from "./dom.mjs";
 import { daysAgo } from "../../src/shared/dates.js";
 
 const getEvents = async (uid) =>
@@ -95,9 +95,11 @@ test("app: ?nativeTester prompts and persists the native-mode flag", { skip: LIV
   assert.equal(win.localStorage.nativeMode, "1", "native-mode flag persisted");
 });
 
-// skip on LIVE: this posts role-0 events (the ranking's input), which would
-// pollute prod. Uses mora 'zo' — untouched by any other test — so the global
-// ranking sees only this scenario for that recording.
+// skip on LIVE: posts role-0 events (the ranking's input), which would pollute
+// prod. The exact presence/absence assertions also need an isolated DB — the
+// global top-200 only reflects this scenario when it's the only data (a prod
+// snapshot adds its own zo pairs and can evict these via the 200-cap) — so those
+// are gated on ISOLATED, while the endpoint itself is exercised on the snapshot.
 test("native pairs: keeps high-wrong recordings, drops expert-vetted ones", { skip: LIVE }, async () => {
   const answer = (uid, confuser, n, correct = false) =>
     postEvents(uid, Array.from({ length: n }, (_, i) => ({
@@ -112,6 +114,9 @@ test("native pairs: keeps high-wrong recordings, drops expert-vetted ones", { sk
   await answer(randomUUID(), "syo", 6, true);
 
   const { pairs } = await (await fetch(`${WORKER}/v1/native/pairs`)).json();
+  assert.ok(Array.isArray(pairs) && pairs.every((p) => p.mora && Number.isInteger(p.idx) && p.confuser),
+    "returns well-formed {mora, idx, confuser} pairs");
+  if (!ISOLATED) return;   // exact ranking membership only holds on a fresh DB
   const has = (c) => pairs.some((p) => p.mora === "zo" && p.confuser === c);
   assert.ok(has("so"), "kept the high-wrong, un-vetted pair");
   assert.ok(!has("syo"), "dropped the pair vetted by ≥5 expert offers");
@@ -138,11 +143,15 @@ test("app: native mode drills forced 2-choice pairs from the ranking", { skip: L
   // The played recording is the target; the other button is the confuser.
   const [, mora, idx] = win.audio.src.match(/audio\/[^/]+\/([^/]+)\/(\d+)\.opus/);
   const confuser = [...btns].map((b) => b.dataset.mora).find((m) => m !== mora);
-  const { pairs } = await (await fetch(`${WORKER}/v1/native/pairs`)).json();
-  assert.ok(
-    pairs.some((p) => p.mora === mora && p.idx === Number(idx) && p.confuser === confuser),
-    "the question is a (recording, confuser) pair drawn from the ranking",
-  );
+  // On an isolated DB the two top-200 rankings agree, so the shown pair is in a
+  // fresh fetch; on a snapshot they can diverge at the cap, so check only there.
+  if (ISOLATED) {
+    const { pairs } = await (await fetch(`${WORKER}/v1/native/pairs`)).json();
+    assert.ok(
+      pairs.some((p) => p.mora === mora && p.idx === Number(idx) && p.confuser === confuser),
+      "the question is a (recording, confuser) pair drawn from the ranking",
+    );
+  }
 
   btns[0].click();
   const answers = await waitFor(async () => {
@@ -500,32 +509,34 @@ test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, asyn
   assert.equal(nFor(b, "confusion_shown", "p") - nFor(a, "confusion_shown", "p"), 2, "za picked +2");
 });
 
+// Delta-based (like the Y/N test) so it's robust against whatever else is in the
+// aggregate: add a normal (role 0) su→tu confusion and a native (role 2) so→tyo,
+// and check each population's view moves only for its own population.
 test("admin: ?natives switches the confusion matrix between normal and native data", { skip: LIVE }, async () => {
   const ans = (target, picked) => ({ ts: Date.now(), target, idx: 0, picked, cap: 2, ms: 500, ev: "a", opts: [target, picked], skill: 0 });
-  // A normal (role 0) listener confuses su→tu; a native (role 2) confuses so→tyo.
-  const normal = randomUUID();
-  await postEvents(normal, [ans("su", "tu"), ans("su", "tu")]);
+  const admin = randomUUID();
+  await postEvents(admin, [ans("sa", "sa")]);   // creates the row for grantPowerUser
+  grantPowerUser(admin, 1);
+
+  const shownN = async (q, t, p) =>
+    ((await (await fetch(`${WORKER}/v1/admin/stats?uid=${encodeURIComponent(admin)}${q}`)).json())
+      .confusion_shown || []).find((r) => r.t === t && r.p === p)?.n || 0;
+
+  const before = { nSu: await shownN("", "su", "tu"), vSu: await shownN("&natives=1", "su", "tu"),
+                   nSo: await shownN("", "so", "tyo"), vSo: await shownN("&natives=1", "so", "tyo") };
+
+  await postEvents(randomUUID(), [ans("su", "tu"), ans("su", "tu")]);   // role 0
   const native = randomUUID();
   await fetch(`${WORKER}/v1/user`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ uid: native, nickname: "Native", role: 2 }),
   });
-  await postEvents(native, [ans("so", "tyo"), ans("so", "tyo")]);
-  const admin = randomUUID();
-  await postEvents(admin, [ans("sa", "sa")]);   // creates the row for grantPowerUser
-  grantPowerUser(admin, 1);
+  await postEvents(native, [ans("so", "tyo"), ans("so", "tyo")]);       // role 2
 
-  const fetchStats = async (q) =>
-    (await fetch(`${WORKER}/v1/admin/stats?uid=${encodeURIComponent(admin)}${q}`)).json();
-  const has = (data, t, p) => (data.confusion_shown || []).some((r) => r.t === t && r.p === p);
-
-  const base = await fetchStats("");
-  assert.ok(has(base, "su", "tu"), "normal view shows a normal user's confusion");
-  assert.ok(!has(base, "so", "tyo"), "normal view excludes native-only confusion");
-
-  const nat = await fetchStats("&natives=1");
-  assert.ok(has(nat, "so", "tyo"), "natives view shows the native confusion");
-  assert.ok(!has(nat, "su", "tu"), "natives view excludes normal-user confusion");
+  assert.equal(await shownN("", "su", "tu") - before.nSu, 2, "normal view counts the normal confusion");
+  assert.equal(await shownN("&natives=1", "su", "tu") - before.vSu, 0, "natives view ignores the normal confusion");
+  assert.equal(await shownN("&natives=1", "so", "tyo") - before.vSo, 2, "natives view counts the native confusion");
+  assert.equal(await shownN("", "so", "tyo") - before.nSo, 0, "normal view ignores the native confusion");
 });
 
 test("dashboard: per-user sound-file confusion matrix renders the viewer's recordings", async (t) => {

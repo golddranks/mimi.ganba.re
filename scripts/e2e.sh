@@ -57,8 +57,10 @@ if [ "${code:-000}" = "000" ]; then
 fi
 
 echo "e2e: worker on ${BASE} (seed: ${SEED}, state: ${PERSIST})"
+# SEED is exported so tests can tell an isolated empty DB (exact global-aggregate
+# assertions hold) from a prod snapshot (only deltas are robust).
 if [ "$#" -gt 0 ]; then
-  WRANGLER_PERSIST="$PERSIST" BASE="$BASE" "$@"
+  WRANGLER_PERSIST="$PERSIST" BASE="$BASE" SEED="$SEED" "$@"
 else
-  WRANGLER_PERSIST="$PERSIST" BASE="$BASE" node --test test/*.test.mjs
+  WRANGLER_PERSIST="$PERSIST" BASE="$BASE" SEED="$SEED" node --test test/*.test.mjs
 fi
