@@ -141,6 +141,7 @@ function tipContext() {
 let tipContextShown = null;
 function updateTip(force) {
   if (viewMode) return;   // view-as shows the spoofed-uid label instead
+  if (nativeMode) { tip.textContent = "ネイティブ検証モード"; return; }   // native manages its own status line
   const ctx = force || tipContext();
   if (!force && ctx === tipContextShown) return;
   tipContextShown = ctx;
@@ -238,6 +239,7 @@ function newQuestion() {
   disarmRelisten();
   resetQuiz();
   updateTip();   // back to the phase-appropriate tip after any "review" override
+  if (nativeMode) { nativeQuestion(); return; }
   let target, opts;
   const g = getGrind();
   if (g) {
@@ -260,9 +262,15 @@ function newQuestion() {
     const sibs = ALL.filter((m) => m !== target && m.endsWith(v));
     opts = shuffle([target, ...shuffle(sibs).slice(0, cap - 1)]);
   }
-  const idx = pickVoice(target);
-  // skill = the target vowel's level (correct-count) at question time — frozen
-  // into the event so changing the level rules can't rewrite history.
+  askChoices(target, pickVoice(target), opts);
+}
+
+// Lay out a multi-choice question for `target` played at recording `idx`, with
+// `opts` (the target plus distractors, pre-shuffled) as the buttons. Shared by
+// the normal generator and native mode — only how (target, idx, opts) are chosen
+// differs. skill is frozen into the event so changing the level rules can't
+// rewrite history.
+function askChoices(target, idx, opts) {
   current = { target, idx, voice: path(target, idx), cap: opts.length, startTs: Date.now(), opts, skill: skill[target.slice(-1)] || 0, kind: "m" };
   primary.hidden = true;
   relisten.hidden = false;   // a sound to replay exists now
@@ -276,6 +284,42 @@ function newQuestion() {
     .join("");
   choices.hidden = false;
   play(current.voice);
+}
+
+// ---------- native-tester mode ----------
+// A native session is a pre-ranked batch of (recording, confuser) pairs from the
+// worker — worst pairwise wrong-rate first (see /v1/native/pairs). We drill them
+// in order as forced 2-choice questions, no grind/probe/Y-N, no repeats within a
+// batch. When the batch is spent we fetch a freshly-ranked one, which by then
+// includes this session's own answers (natives validating natives).
+let nativePairs = [], nativePtr = 0;
+async function loadNativePairs() {
+  try {
+    const r = await fetch(STATS_URL + "/v1/native/pairs");
+    nativePairs = (r.ok && (await r.json()).pairs) || [];
+  } catch { nativePairs = []; }
+  nativePtr = 0;
+}
+// Next still-valid pair, or null when the batch is exhausted. Skips any pair the
+// running build can no longer present (recording index dropped, kana unknown).
+function nextNativePair() {
+  while (nativePtr < nativePairs.length) {
+    const p = nativePairs[nativePtr++];
+    if (p.idx < (COUNTS[p.mora] || 0) && HIRAGANA[p.mora] && HIRAGANA[p.confuser]) return p;
+  }
+  return null;
+}
+function nativeQuestion() {
+  const p = nextNativePair();
+  if (p) { askChoices(p.mora, p.idx, shuffle([p.mora, p.confuser])); return; }
+  // Batch spent (or not loaded yet): pull a fresh ranked batch, then try once more.
+  choices.hidden = true; relisten.hidden = true; primary.hidden = true;
+  tip.textContent = "読み込み中…";
+  loadNativePairs().then(() => {
+    const q = nextNativePair();
+    if (q) askChoices(q.mora, q.idx, shuffle([q.mora, q.confuser]));
+    else { tip.textContent = "検証できるペアがまだありません"; primary.textContent = "再試行"; primary.hidden = false; }
+  });
 }
 
 // Y/N quiz: play one mora, show one hiragana; the user decides whether they
@@ -601,4 +645,5 @@ if (viewMode) {
   render();
   flushEvents();
   scheduleReminders();
+  if (nativeMode) loadNativePairs();   // prefetch the first ranked batch
 }

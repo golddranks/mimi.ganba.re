@@ -117,6 +117,41 @@ test("native pairs: keeps high-wrong recordings, drops expert-vetted ones", { sk
   assert.ok(!has("syo"), "dropped the pair vetted by ≥5 expert offers");
 });
 
+// skip on LIVE: posts role-0 seed data and role-0 native answers.
+test("app: native mode drills forced 2-choice pairs from the ranking", { skip: LIVE }, async (t) => {
+  // Seed a confusable recording so the ranking has a pair to serve.
+  await postEvents(randomUUID(), Array.from({ length: 3 }, (_, i) => ({
+    ts: Date.now() + i, target: "su", idx: 0, picked: "zu", cap: 2, ms: 500, ev: "a", opts: ["su", "zu"], skill: 0,
+  })));
+
+  const { win, close } = await openPage("/", { setup: (w) => { w.localStorage.setItem("nativeMode", "1"); } });
+  t.after(close);
+  const uid = win.localStorage.uid;
+
+  win.primary.click();
+  const btns = await waitFor(() => {
+    const b = win.choices.querySelectorAll("button.choice");
+    return b.length ? b : null;
+  }, WAIT);
+  assert.equal(btns.length, 2, "native questions are always 2-choice (no Y/N, no wider sets)");
+
+  // The played recording is the target; the other button is the confuser.
+  const [, mora, idx] = win.audio.src.match(/audio\/[^/]+\/([^/]+)\/(\d+)\.opus/);
+  const confuser = [...btns].map((b) => b.dataset.mora).find((m) => m !== mora);
+  const { pairs } = await (await fetch(`${WORKER}/v1/native/pairs`)).json();
+  assert.ok(
+    pairs.some((p) => p.mora === mora && p.idx === Number(idx) && p.confuser === confuser),
+    "the question is a (recording, confuser) pair drawn from the ranking",
+  );
+
+  btns[0].click();
+  const answers = await waitFor(async () => {
+    const a = (await getEvents(uid)).filter((e) => e.ev === "a" || e.ev === "g");
+    return a.length ? a : null;
+  }, WAIT);
+  assert.equal(answers[0].opts.split(",").length, 2, "records a normal 2-option answer event");
+});
+
 test("app: answering questions posts events (with opts) to the worker", async (t) => {
   const { win, close } = await openPage("/");
   t.after(close);
