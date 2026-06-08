@@ -129,6 +129,56 @@ test("app: a Y/N question saves a y event end to end", async (t) => {
   assert.equal(yn[0].picked, "sa");
 });
 
+test("app: after a correct ✕ guess in Y/N, tapping ○ replays the sound", async (t) => {
+  const { win, close } = await openPage("/", {
+    setup: (w) => {
+      w.localStorage.setItem("mora", JSON.stringify({ s: {}, k: 0, x: { a: 20 } }));
+    },
+  });
+  t.after(close);
+  const uid = win.localStorage.uid;
+  await registerTestUser(uid);
+
+  // Force a wrong-kana Y/N question for さ: shown kana = ざ (a sibling), so ✕ is
+  // correct. One newQuestion→newYNQuestion consumes five randoms: target pick, the
+  // <YN_RATIO gate, pickVoice, the shown-kana coin flip (>=0.5 → sibling), and the
+  // sibling pick. Set after load so boot's own randoms don't shift the sequence.
+  const seq = [0, 0, 0, 0.9, 0];
+  let i = 0;
+  win.Math.random = () => (i < seq.length ? seq[i++] : 0);
+
+  win.primary.click();
+  await waitFor(() => !win.yn.hidden, WAIT);
+  assert.equal(win.ynprompt.textContent, "ざ", "wrong-kana prompt (ざ shown while さ plays)");
+
+  // Long-press ✕ = guess; correct (ざ ≠ the さ sound), so it stays in review.
+  const fire = (el, type) => el.dispatchEvent(new win.Event(type, { bubbles: true }));
+  fire(win.ynno, "pointerdown");
+  await new Promise((r) => setTimeout(r, 600));   // > LONG_MS (500) → the guess fires
+  fire(win.ynno, "pointerup");
+  assert.ok(win.ynno.classList.contains("correct"), "✕ guess was correct (wrong-kana question)");
+  assert.equal(win.ynactual.hidden, false, "the actual sound is revealed");
+  assert.ok(!win.primary.hidden, "stayed in review (Next shown), didn't auto-advance");
+
+  const plays = async () => (await getEvents(uid)).filter((e) => e.ev === "p");
+  const tap = async (el, want) => {
+    const n = (await plays()).length;
+    fire(el, "pointerdown");   // resets longHandled, as a real tap would
+    fire(el, "pointerup");
+    el.click();
+    const p = await waitFor(async () => {
+      const ps = await plays();
+      return ps.length > n ? ps[ps.length - 1] : null;
+    }, WAIT);
+    assert.equal(p.picked, want, `replayed ${want}`);
+  };
+
+  // ○ replays the kana shown on screen (ざ — the "wrong" one), so the user can
+  // compare it to the さ that actually played; ✕ replays the actual さ.
+  await tap(win.ynyes, "za");
+  await tap(win.ynno, "sa");
+});
+
 test("app: day-start probing drills the uncertain confusion (released without the grind flag)", async (t) => {
   const { win, close } = await openPage("/", {
     setup: (w) => {

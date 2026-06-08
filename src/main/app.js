@@ -335,19 +335,23 @@ function ynSubmit(yes, asGuess = false) {
   if (!correct) updateTip("review");
 }
 
-// In Y/N review (locked) the ○/✕ buttons replay the sound instead of answering —
-// the Y/N counterpart to tapping the choice buttons in multi-choice review, so
-// the user can match what they heard to the revealed kana. A short tap replays
-// the same voice; a long-press (random=true) plays a different voice.
+// In Y/N review (locked) the ○/✕ buttons replay a sound instead of answering, so
+// the user can compare the two kana involved. ○ replays the kana shown on screen
+// (what "yes" claims it is — on a wrong-kana question that's NOT the sound that
+// played); ✕ replays the sound that actually played. For a correct-kana question
+// (shown == target) they're the same. A short tap on ✕ replays the exact recording
+// that played; the shown kana (which was never played) and any long-press play a
+// random recording of their mora.
 function replayYN(btn, random = false) {
   if (!current) return;
   for (const b of [ynyes, ynno]) b.classList.remove("playing");
   btn.classList.add("playing");
   audio.onended = () => { btn.classList.remove("playing"); audio.onended = null; };
-  const { target, idx, cap, startTs } = current;
-  const i = random ? rand(target) : idx;
-  play(path(target, i));
-  pushEvent({ ts: Date.now(), target, idx: i, picked: target, cap, ms: Date.now() - startTs, ev: "p" });
+  const { target, idx, displayed, cap, startTs } = current;
+  const mora = btn === ynyes ? displayed : target;
+  const i = (mora === target && !random) ? idx : rand(mora);
+  play(path(mora, i));
+  pushEvent({ ts: Date.now(), target, idx: i, picked: mora, cap, ms: Date.now() - startTs, ev: "p" });
 }
 
 // Long-press = "guess": if right, counts as correct but stays in review mode
