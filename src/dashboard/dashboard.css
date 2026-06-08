@@ -634,7 +634,7 @@ body {
 
 /* Daily-reminder notifications control in the overview card (own dashboard only).
    Sits under the stats grid; the global [hidden] rule keeps it out of view-as. */
-#notif {
+#reminders {
     display: flex;
     align-items: center;
     gap: .6rem;
@@ -642,7 +642,7 @@ body {
     font-size: .8rem;
     color: var(--muted);
 }
-#notifbtn {
+#reminderbtn {
     background: var(--accent);
     color: #fff;
     border: 0;
@@ -652,7 +652,7 @@ body {
     font: inherit;
     white-space: nowrap;
 }
-#notifbtn:disabled { opacity: .6; cursor: default; }
+#reminderbtn:disabled { opacity: .6; cursor: default; }
 
 /* ---- legend ---- */
 .legend {

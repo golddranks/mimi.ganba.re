@@ -40,15 +40,15 @@ const params = new URLSearchParams(location.search);
 const viewerUid = localStorage.getItem("uid") || "";
 const uid = params.get("uid") || viewerUid;
 
-// Capture the elements that async callbacks (the form reveal, renderNotif, the
+// Capture the elements that async callbacks (the form reveal, renderReminders, the
 // view-as gate) touch after a fetch resolves. Holding the node means a callback
 // that lands after navigation still sets a (now-detached) element instead of
 // throwing on a window global that's gone — which in tests surfaces as an
-// "uidform/notif is not defined" rejection when the page is torn down mid-fetch.
+// "uidform/reminders is not defined" rejection when the page is torn down mid-fetch.
 const uidform = document.getElementById("uidform");
-const notif = document.getElementById("notif");
-const notifstatus = document.getElementById("notifstatus");
-const notifbtn = document.getElementById("notifbtn");
+const reminders = document.getElementById("reminders");
+const reminderstatus = document.getElementById("reminderstatus");
+const reminderbtn = document.getElementById("reminderbtn");
 const msg = document.getElementById("msg");
 const dash = document.getElementById("dash");
 
@@ -117,35 +117,35 @@ const reminderReadout = (on, state) =>
       : state === "offered" ? "Daily reminders: offered, no answer yet."
         : "Daily reminders: not offered to this user yet.";
 
-async function renderNotif() {
-  notifbtn.hidden = true;
+async function renderReminders() {
+  reminderbtn.hidden = true;
   // View-as: the readout is fetched + filled by load() (the dashboard's own data
   // load), since the viewed user's state isn't this device's to cache. Reserve its
   // line here from the cached own power level so it doesn't shift in; a non-power
   // viewer has #dash (and this with it) hidden by the gate.
   if (uid !== viewerUid) {
-    if (+localStorage.dashLevel >= 1) { notifstatus.textContent = "Daily reminders: …"; notif.hidden = false; }
+    if (+localStorage.dashLevel >= 1) { reminderstatus.textContent = "Daily reminders: …"; reminders.hidden = false; }
     return;
   }
-  if (!viewerUid) { notif.hidden = true; return; }
+  if (!viewerUid) { reminders.hidden = true; return; }
 
-  notif.hidden = false;
+  reminders.hidden = false;
   if (!pushSupported()) {
-    notifstatus.textContent = "Reminders: not supported in this browser.";
+    reminderstatus.textContent = "Reminders: not supported in this browser.";
     return;
   }
   if (Notification.permission === "denied") {
-    notifstatus.textContent = "Reminders: blocked in your browser settings.";
+    reminderstatus.textContent = "Reminders: blocked in your browser settings.";
     return;
   }
   const showState = (on) => {
-    notifbtn.hidden = false;
-    notifstatus.textContent = on
+    reminderbtn.hidden = false;
+    reminderstatus.textContent = on
       ? "Daily reminders are on for this device."
       : localStorage.remind_optout
         ? "Daily reminders are off (you dismissed them)."
         : "Daily reminders are off.";
-    notifbtn.textContent = on ? "Turn off" : "Turn on";
+    reminderbtn.textContent = on ? "Turn off" : "Turn on";
   };
   // Render from the remembered state first (synchronous, before first paint), so
   // the status doesn't flash in after the async getSubscription on every refresh;
@@ -156,8 +156,8 @@ async function renderNotif() {
   showState(!!sub);
 }
 
-notifbtn.onclick = async () => {
-  notifbtn.disabled = true;
+reminderbtn.onclick = async () => {
+  reminderbtn.disabled = true;
   try {
     if (await currentSubscription()) {
       await unsubscribe(STATS_URL);
@@ -167,11 +167,11 @@ notifbtn.onclick = async () => {
       await subscribe(viewerUid, STATS_URL);
     }
   } catch { /* best-effort */ }
-  notifbtn.disabled = false;
-  renderNotif();
+  reminderbtn.disabled = false;
+  renderReminders();
 };
 
-renderNotif();
+renderReminders();
 
 // Reveal the load-form only at level 2. View-as itself works at level 1 (so a
 // shared ?uid= link opens), but the form — typing in arbitrary uids — is useless
@@ -201,8 +201,8 @@ async function load(uid) {
     ]);
     if (viewAs && remRes && remRes.ok) {
       const { on, state } = await remRes.json();
-      notifstatus.textContent = reminderReadout(on, state);
-      notif.hidden = false;
+      reminderstatus.textContent = reminderReadout(on, state);
+      reminders.hidden = false;
     }
     if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
     const { events } = await res.json();

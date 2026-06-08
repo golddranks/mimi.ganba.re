@@ -865,9 +865,9 @@ test("dashboard: a power user sees the viewed uid's reminder state, read-only", 
   // Drain the page's async load() (renders the matrix) so it doesn't resolve
   // against a torn-down window after the test — saFixture gives sa/za = 3/5.
   await waitFor(() => win.confchart.querySelector('td[data-t="sa"][data-p="za"]')?.textContent === "3/5", WAIT);
-  await waitFor(() => !win.notif.hidden && win.notifstatus.textContent.includes("Daily reminders") ? true : null, WAIT);
-  assert.match(win.notifstatus.textContent, /Daily reminders: on for this user/);
-  assert.equal(win.notifbtn.hidden, true, "view-as shows no toggle button");
+  await waitFor(() => !win.reminders.hidden && win.reminderstatus.textContent.includes("Daily reminders") ? true : null, WAIT);
+  assert.match(win.reminderstatus.textContent, /Daily reminders: on for this user/);
+  assert.equal(win.reminderbtn.hidden, true, "view-as shows no toggle button");
   assert.equal(win.uidform.hidden, false, "level-2 viewer gets the load-as form");
 });
 
@@ -885,6 +885,6 @@ test("dashboard view-as: shows a declined reminder opt-in (not just on/off)", { 
     setup: (w) => w.localStorage.setItem("uid", admin),
   });
   t.after(close);
-  await waitFor(() => win.notifstatus.textContent.includes("Daily reminders") ? true : null, WAIT);
-  assert.match(win.notifstatus.textContent, /declined by this user/);
+  await waitFor(() => win.reminderstatus.textContent.includes("Daily reminders") ? true : null, WAIT);
+  assert.match(win.reminderstatus.textContent, /declined by this user/);
 });
