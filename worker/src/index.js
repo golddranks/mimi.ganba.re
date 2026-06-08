@@ -177,6 +177,8 @@ export default {
         res = await handleAdminStats(req, env, url);
       } else if (req.method === "GET" && url.pathname === "/v1/admin/stats/users") {
         res = await handleAdminUserStats(req, env, url);
+      } else if (req.method === "GET" && url.pathname === "/v1/admin/reminder") {
+        res = await handleAdminReminder(req, env, url);
       } else {
         res = new Response("not found", { status: 404 });
       }
@@ -360,6 +362,21 @@ async function handleNativePairs(req, env) {
 async function handleGetUser(req, env, url) {
   const uid = decodeURIComponent(url.pathname.split("/")[3]);
   return json({ power_user: await powerLevel(env, uid) });
+}
+
+// Read-only daily-reminder state for a uid: on iff it has any push subscription.
+// Per-user data, so gated at power_user level 2 like the other uid drilldowns —
+// the requester passes their own uid; ?target is the uid being inspected.
+async function handleAdminReminder(req, env, url) {
+  const uid = url.searchParams.get("uid") || "";
+  if (await powerLevel(env, uid) < 2) {
+    return new Response("forbidden", { status: 403 });
+  }
+  const target = url.searchParams.get("target") || "";
+  const row = await env.mimi_stats.prepare(
+    "SELECT 1 FROM push_subs WHERE uid = ? LIMIT 1"
+  ).bind(target).first();
+  return json({ on: !!row });
 }
 
 async function handleUser(req, env) {

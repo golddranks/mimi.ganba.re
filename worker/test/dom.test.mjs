@@ -740,3 +740,46 @@ test("dashboard: no drift notice when viewing someone else's data", async (t) =>
   await waitFor(() => cell("sa", "za")?.textContent === "3/5", WAIT);
   assert.equal(win.syncnotice.hidden, true, "another user's matrix never flags local drift");
 });
+
+const subscribePush = (uid) => {
+  const endpoint = `https://push.example.invalid/${uid}-${Date.now()}`;
+  return fetch(`${WORKER}/v1/push/subscribe`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ uid, subscription: { endpoint, keys: { p256dh: "k", auth: "a" } }, tzOffset: 540 }),
+  });
+};
+
+test("admin reminder: reports a uid's push-subscription state, gated at level 2", { skip: LIVE }, async () => {
+  const admin = randomUUID();
+  await postEvents(admin, saFixture(Date.now()));   // creates the row for grantPowerUser
+  grantPowerUser(admin, 2);
+  const target = randomUUID();
+  const ask = (asker, t) =>
+    fetch(`${WORKER}/v1/admin/reminder?uid=${encodeURIComponent(asker)}&target=${encodeURIComponent(t)}`);
+
+  assert.equal((await ask(target, target)).status, 403, "non-power viewer is forbidden");
+  assert.equal((await (await ask(admin, target)).json()).on, false, "no subscription → off");
+  await subscribePush(target);
+  assert.equal((await (await ask(admin, target)).json()).on, true, "subscribed → on");
+});
+
+test("dashboard: a power user sees the viewed uid's reminder state, read-only", { skip: LIVE }, async (t) => {
+  const admin = randomUUID();
+  await postEvents(admin, saFixture(Date.now()));
+  grantPowerUser(admin, 2);
+  const target = await freshTestUser();
+  await postEvents(target, saFixture(Date.now()));
+  await subscribePush(target);                       // so it reads "on"
+
+  const { win, close } = await openPage(`/dashboard/?uid=${target}`, {
+    setup: (w) => w.localStorage.setItem("uid", admin),   // viewer is the power user
+  });
+  t.after(close);
+
+  // Drain the page's async load() (renders the matrix) so it doesn't resolve
+  // against a torn-down window after the test — saFixture gives sa/za = 3/5.
+  await waitFor(() => win.confchart.querySelector('td[data-t="sa"][data-p="za"]')?.textContent === "3/5", WAIT);
+  await waitFor(() => !win.notif.hidden && win.notifstatus.textContent.includes("Daily reminders") ? true : null, WAIT);
+  assert.match(win.notifstatus.textContent, /Daily reminders: on for this user/);
+  assert.equal(win.notifbtn.hidden, true, "view-as shows no toggle button");
+});

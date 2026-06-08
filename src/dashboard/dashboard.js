@@ -59,15 +59,38 @@ if (uid) {
   load(uid);
 }
 
+// Viewer's power level (cached promise): drives both the uid-load form and the
+// view-as reminder readout — both per-user (level-2) features.
+let viewerLevelP;
+const viewerLevel = () => (viewerLevelP ||= viewerUid
+  ? fetch(STATS_URL + "/v1/user/" + encodeURIComponent(viewerUid))
+      .then((r) => r.ok ? r.json() : null).then((i) => (i && i.power_user) || 0).catch(() => 0)
+  : Promise.resolve(0));
+
 // ---------- daily-reminder notifications ----------
-// Show this device's push-subscription state and a turn-on/off button. Push subs
-// are per-device and registered under the viewer's own uid, so this is only shown
-// on the viewer's own dashboard — never in a ?uid= view-as of someone else. The
-// subscribe/unsubscribe logic is shared with the app's opt-in (shared/push.js).
+// On your own dashboard: this device's push-subscription state and a turn-on/off
+// button (subscribe/unsubscribe shared with the app's opt-in, shared/push.js).
+// In a ?uid= view-as: a read-only "on/off" for that uid (any of their devices
+// subscribed), shown only to a level-2 power user — never a toggle for someone
+// else's reminders.
 async function renderNotif() {
-  if (!viewerUid || uid !== viewerUid) { notif.hidden = true; return; }
-  notif.hidden = false;
   notifbtn.hidden = true;
+  if (!viewerUid) { notif.hidden = true; return; }
+
+  if (uid !== viewerUid) {
+    if (await viewerLevel() < 2) { notif.hidden = true; return; }
+    try {
+      const r = await fetch(STATS_URL + "/v1/admin/reminder?uid=" + encodeURIComponent(viewerUid)
+        + "&target=" + encodeURIComponent(uid));
+      if (!r.ok) { notif.hidden = true; return; }
+      const { on } = await r.json();
+      notifstatus.textContent = `Daily reminders: ${on ? "on" : "off"} for this user.`;
+      notif.hidden = false;
+    } catch { notif.hidden = true; }
+    return;
+  }
+
+  notif.hidden = false;
   if (!pushSupported()) {
     notifstatus.textContent = "Reminders: not supported in this browser.";
     return;
@@ -111,12 +134,7 @@ renderNotif();
 // 1 sees only the aggregate admin sections, not individual users. Failure
 // (no network, no row, 4xx) silently keeps the form hidden — the dashboard
 // still renders the viewed user's data.
-if (viewerUid) {
-  fetch(STATS_URL + "/v1/user/" + encodeURIComponent(viewerUid))
-    .then((r) => r.ok ? r.json() : null)
-    .then((info) => { if (info && info.power_user >= 2) uidform.hidden = false; })
-    .catch(() => { });
-}
+viewerLevel().then((level) => { if (level >= 2) uidform.hidden = false; });
 
 // First paint shows the dash skeleton (zeros + reserved chart space). #msg
 // stays empty (and therefore display:none) during the loading window, so the
