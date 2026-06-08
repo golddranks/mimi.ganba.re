@@ -501,9 +501,14 @@ function showCellHistory(td) {
   td.classList.add("selected");
 
   const pair = diag ? rowGlyph : `${rowGlyph} → ${colGlyph}`;
+  // Mark geometry — also used to reserve the strip's height when there are no
+  // marks yet, so the detail box doesn't change height between cells.
+  const S = 22, GAP = 4, CW = S + GAP, BH = S + GAP, R = 6;
   if (outcomes.length === 0) {
     cellSeries = [];
-    confdetail.innerHTML = `<div class="cd-head">${pair} — no answers with ${colGlyph} offered yet</div>`;
+    confdetail.innerHTML =
+      `<div class="cd-head">${pair} — no answers with ${colGlyph} offered yet</div>` +
+      `<svg class="cd-strip" width="0" height="${BH}" aria-hidden="true"></svg>`;
     confdetail.hidden = false;
     return;
   }
@@ -514,7 +519,7 @@ function showCellHistory(td) {
   // optional trend line plots P(bad) from the top, so it rises as the cell improves.
   const n = outcomes.length;
   const bad = outcomes.reduce((s, o) => s + o, 0);
-  const S = 22, GAP = 4, CW = S + GAP, BH = S + GAP, W = n * CW, R = 6;
+  const W = n * CW;
   // Each mark is a colour-coded box (good/bad fill — the at-a-glance cue) with a
   // ○/✕ symbol stroked on top in the page background colour, so the outcome reads
   // by shape too (red-green colourblind support). The whole box is a generous tap

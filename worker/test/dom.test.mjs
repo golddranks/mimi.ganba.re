@@ -403,6 +403,14 @@ test("dashboard: clicking a confusion cell shows its history strip", async (t) =
   // The replay hint rides inline on the head row as a parenthetical.
   const replayHint = detail.querySelector(".cd-head .cd-file");
   assert.ok(replayHint?.textContent.startsWith("(tap a ○ / ✕"), "replay hint is an inline parenthetical on the head row");
+
+  // A cell with no answers still renders the marks strip (height reserved) so the
+  // detail box doesn't change height between cells.
+  win.confchart.querySelector('td[data-t="za"][data-p="za"]').click();
+  await waitFor(() => detail.querySelector(".cd-head")?.textContent.includes("no answers") ? true : null, WAIT);
+  const emptyStrip = detail.querySelector("svg.cd-strip");
+  assert.ok(emptyStrip, "empty cell still renders a strip");
+  assert.equal(emptyStrip.getAttribute("height"), "26", "the ○/✕ row height stays reserved");
 });
 
 test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", async (t) => {
