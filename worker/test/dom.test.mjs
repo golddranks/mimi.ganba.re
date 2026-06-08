@@ -480,6 +480,36 @@ test("admin: confusion matrix uses server-aggregated pick-when-offered counts", 
   assert.ok(offered >= 5, `offered >= 5 (got ${offered})`);
 });
 
+test("admin: normal/native population toggle defaults to normal and syncs both copies", { skip: LIVE }, async (t) => {
+  const uid = randomUUID();
+  await postEvents(uid, saFixture(Date.now()));
+  grantPowerUser(uid, 1);
+  const { win, close } = await openPage(`/admin/?uid=${uid}`);
+  t.after(close);
+
+  // Let the page's async load() settle (renders the matrix) before asserting, so
+  // its render chain doesn't run against a torn-down window after the test ends.
+  const cellTxt = () => win.confchart.querySelector('td[data-t="sa"][data-p="za"]')?.textContent || "";
+  await waitFor(() => cellTxt().includes("/") ? true : null, WAIT);
+  const normalCell = cellTxt();
+
+  const active = (id) => win.document.getElementById(id).querySelector("button.active").dataset.pop;
+  // Default matches the page's default fetch (normal), so a refresh resets cleanly
+  // — the previous checkbox stayed checked on reload while the data reverted.
+  assert.equal(active("confpop"), "0", "confusion-h2 switch defaults to normal");
+  assert.equal(active("confpop2"), "0", "sound-file filter-row copy defaults to normal");
+
+  // Clicking natives on one copy switches both (one logical group).
+  win.document.getElementById("confpop").querySelector('button[data-pop="2"]').click();
+  assert.equal(active("confpop"), "2", "clicked switch updates");
+  assert.equal(active("confpop2"), "2", "the mirrored copy stays in sync");
+
+  // Drain the population re-fetch the click kicked off: this normal-user uid has
+  // different/no native sa/za data, so the cell changes once it lands. Waiting
+  // keeps the re-render from resolving against a torn-down window after the test.
+  await waitFor(() => cellTxt() !== normalCell ? true : null, WAIT);
+});
+
 test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, async () => {
   // The admin matrix is a global aggregate, so we can't assert absolute counts;
   // instead assert the *delta* a Y/N batch adds to the sa/za cell — robust against

@@ -153,8 +153,10 @@
                 </span>
                 <span class="minaccfilter">min user accuracy:
                     <input id="confminacc" type="number" min="0" max="100" value="0" inputmode="numeric" title="exclude users whose overall correct rate is below this % from every confusion matrix — this one and the sound-file matrix below">%</span>
-                <label class="natfilter" title="show the native testers' confusions (role 2) instead of normal users' — gates both this matrix and the sound-file one"><input id="confnatives" type="checkbox"> natives</label>
-                <span class="sub" id="confpopsub">(normal users)</span>
+                <span class="modeswitch" id="confpop" title="which population's confusions to show — gates both this matrix and the sound-file one">
+                    <button type="button" data-pop="0" class="active">normal users</button>
+                    <button type="button" data-pop="2">natives</button>
+                </span>
             </h2>
             <div id="confchart"><!--include:confusion-vowel-tables.html--></div>
             <div id="conschart"><!--include:confusion-consonant-table.html--></div>
@@ -168,7 +170,7 @@
                 </span>
                 <span class="sub">— per recording; soundfiles grouped by sound within each vowel group</span>
             </h2>
-            <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" minacc="<span class='minaccfilter'>min user accuracy: <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</span>"-->
+            <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" minacc="<span class='minaccfilter'>min user accuracy: <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</span>" pop="<span class='modeswitch' id='confpop2'><button type='button' data-pop='0' class='active'>normal users</button><button type='button' data-pop='2'>natives</button></span>"-->
         </section>
     </main>
 

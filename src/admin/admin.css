@@ -368,19 +368,6 @@ body {
     width: 3.5rem;
 }
 
-/* Native/normal population toggle in the confusion h2 — same inline-filter look
-   as .minaccfilter, switching which population (role 0 vs role 2) both confusion
-   matrices show. */
-.natfilter {
-    text-transform: none;
-    letter-spacing: 0;
-    font-weight: normal;
-    font-size: .8rem;
-    color: var(--muted);
-    margin-left: .6rem;
-    cursor: pointer;
-}
-
 /* ---- level histograms ---- */
 #levelhist {
     display: flex;

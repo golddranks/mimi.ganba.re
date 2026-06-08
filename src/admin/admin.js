@@ -28,6 +28,10 @@ let timezones = {};
 // confusion matrix, sound-file confusion). Clicking any of them updates
 // every switch and re-renders all three sections.
 let displayMode = "count";
+// Confusion population: "0" normal users, "2" native testers. A two-button switch
+// (like the count/% one), mirrored in the sound-file matrix's filter row. Starts
+// at "0" to match the page's default fetch — so a refresh resets cleanly.
+let confpopRole = "0";
 
 // uid resolution mirrors the no-uid head script so first paint matches behaviour.
 // Pulled from localStorage by default (set by the main app); ?uid=… overrides
@@ -63,22 +67,15 @@ async function load(uid) {
 // typing in the number field doesn't fire a request per keystroke.
 async function reloadConfusion() {
   const minacc = Math.max(0, Math.min(100, parseInt(confminacc.value, 10) || 0));
-  const natives = confnatives.checked;
   try {
     const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid)
-      + "&minacc=" + minacc + (natives ? "&natives=1" : ""));
+      + "&minacc=" + minacc + (confpopRole === "2" ? "&natives=1" : ""));
     if (!res.ok) return;
     const data = await res.json();
     renderConfusion(data.confusion_shown, data.confusion_offered);
     renderVoiceConfusion(data.by_voice_shown, data.by_voice_offered);
   } catch { /* leave the current matrices in place */ }
 }
-// Population toggle: normal users (role 0) XOR native testers (role 2). Re-fetches
-// both confusion matrices for the chosen population and relabels the section.
-confnatives.onchange = () => {
-  confpopsub.textContent = confnatives.checked ? "(native testers)" : "(normal users)";
-  reloadConfusion();
-};
 // Two synced copies of the control: one inline in the confusion h2, one in the
 // sound-file matrix's filter row (the filter gates both matrices). Editing either
 // mirrors the value to the other and debounce-reloads.
@@ -315,12 +312,22 @@ function hideUidPopup() {
 
   // Count/per-sound-% toggle — one logical group across every .modeswitch
   // (per-sound, confusion, voiceconf); re-renders the sections that honour it.
+  // The pop switches also carry .modeswitch for styling, but only data-mode
+  // buttons respond here, so they're inert in this group.
   wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
     displayMode = m;
     drawMora();
     drawConsMora();
     drawConfusion();
     drawVoiceConfusion();
+  });
+
+  // Normal-users (role 0) ⊕ natives (role 2) toggle, mirrored in the confusion
+  // h2 and the sound-file matrix's filter row; both copies stay in sync and
+  // re-fetch the confusion matrices for the chosen population.
+  wireSwitchGroup([confpop, confpop2], "pop", (p) => {
+    confpopRole = p;
+    reloadConfusion();
   });
 
   // Click-to-play delegation on the sound-file confusion matrix (its row
