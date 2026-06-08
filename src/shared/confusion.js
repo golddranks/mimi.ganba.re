@@ -197,7 +197,9 @@ export function fillConfusionCells(cells, maps, mode) {
     if (diag) { if (v.mag > maxOn) maxOn = v.mag; } else if (v.mag > maxOff) maxOff = v.mag;
   }
   for (const [td, diag, v] of seen) {
-    td.style.background = confusionBg(v.mag, diag, maxOn, maxOff);
+    // No-data cells (never offered): clear the inline bg so the .empty CSS — a
+    // light grey fill — shows, instead of pinning transparent over it.
+    td.style.background = v.raw === 0 ? "" : confusionBg(v.mag, diag, maxOn, maxOff);
     td.textContent = v.display;
     td.classList.toggle("empty", v.raw === 0);
   }
