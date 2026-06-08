@@ -77,6 +77,12 @@ let displayMode = wireSwitchGroup(document.querySelectorAll('[data-switch="mode"
   drawVoiceConf();
 });
 
+// Remember the sound-file matrix's open/closed fold across refreshes — browsers
+// don't restore <details> state. Restore synchronously (before first paint, so
+// it doesn't flash open/closed) and save on every toggle.
+if (localStorage.sfMatrixOpen === "1") voiceconfdetails.open = true;
+voiceconfdetails.ontoggle = () => { localStorage.sfMatrixOpen = voiceconfdetails.open ? "1" : "0"; };
+
 if (uid) {
   uidinput.value = uid;
   if (uid === viewerUid) {

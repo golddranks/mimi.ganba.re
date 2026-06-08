@@ -616,6 +616,23 @@ test("dashboard: per-user sound-file confusion matrix renders the viewer's recor
   assert.equal(vth?.title, `${voice} — current id 0`, "row header hover shows the current file id");
 });
 
+test("dashboard: the sound-file matrix remembers its open/closed fold across loads", async (t) => {
+  const uid = await freshTestUser();
+  assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => { w.localStorage.setItem("uid", uid); w.localStorage.setItem("sfMatrixOpen", "1"); },
+  });
+  t.after(close);
+  // Drain the page's async load() before asserting (avoids post-teardown work).
+  await waitFor(() => win.confchart.querySelector('td[data-t="sa"][data-p="za"]')?.textContent === "3/5", WAIT);
+
+  assert.equal(win.voiceconfdetails.open, true, "restored open from the saved state");
+  // Closing it persists the new state.
+  win.voiceconfdetails.open = false;
+  win.voiceconfdetails.dispatchEvent(new win.Event("toggle"));
+  assert.equal(win.localStorage.getItem("sfMatrixOpen"), "0", "saved closed on toggle");
+});
+
 test("admin: sound-file matrix exposes per-recording shown/offered (vs the kana)", { skip: LIVE }, async () => {
   // The sound-file confusion matrix normalises a cell by how often that kana was
   // offered FOR THIS RECORDING (not how often the recording was asked). Assert the
