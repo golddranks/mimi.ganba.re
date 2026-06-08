@@ -119,28 +119,26 @@
         </section>
 
         <section class="card span2 l2only" hidden>
-            <h2>Days trained <span class="sub">— users by number of distinct days with answers (last bucket = 31+)</span></h2>
-            <div id="dayshist"><svg viewBox="0 0 800 200"></svg></div>
-        </section>
-
-        <section class="card span2 l2only" hidden>
-            <h2>Activity distribution <span class="sub">— users by total answers</span></h2>
-            <div id="activityhist"><svg viewBox="0 0 600 200"></svg></div>
-        </section>
-
-        <section class="card span2 l2only" hidden>
             <h2>Daily activity</h2>
             <div id="dailychart"></div>
-            <div class="legend">
-                <span><span class="sw" style="background:var(--good)"></span>correct</span>
-                <span><span class="sw" style="background:var(--bad)"></span>wrong</span>
-            </div>
         </section>
 
-        <section class="card">
-            <h2>Hour of day <span class="sub">(UTC)</span></h2>
-            <div id="hourlychart"></div>
-        </section>
+        <div class="stack">
+            <section class="card">
+                <h2>Hour of day <span class="sub">(UTC)</span></h2>
+                <div id="hourlychart"></div>
+            </section>
+
+            <section class="card l2only" hidden>
+                <h2>Days trained <span class="sub">— users by number of distinct days with answers (last bucket = 31+)</span></h2>
+                <div id="dayshist"><svg></svg></div>
+            </section>
+
+            <section class="card l2only" hidden>
+                <h2>Activity distribution <span class="sub">— users by total answers</span></h2>
+                <div id="activityhist"><svg></svg></div>
+            </section>
+        </div>
 
         <section class="card">
             <h2>Per-sound difficulty

@@ -253,8 +253,8 @@ function renderDaily(events) {
   dayBarChart(dailychart, days, 200, (d) => d.total, (d, x, barW, bh, y0) => {
     const cH = d.correct / d.total * bh;
     const tip = dayTip(d.k, d.correct, d.total);
-    return `<rect x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--bad-bar)"><title>${tip}</title></rect>`
-      + `<rect x="${x}" y="${y0 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+    return `<rect x="${x}%" y="${y0 - bh}%" width="${barW}%" height="${bh}%" fill="var(--bad-bar)"><title>${tip}</title></rect>`
+      + `<rect x="${x}%" y="${y0 - cH}%" width="${barW}%" height="${cH}%" fill="var(--good)"><title>${tip}</title></rect>`;
   }, () => "", true);
 }
 
@@ -267,9 +267,14 @@ function renderHourly(events) {
     if (answeredRight(e)) hrs[hour].correct++; else hrs[hour].wrong++;
   }
   const max = Math.max(1, ...hrs.map((h) => h.correct + h.wrong));
+  // Geometry is computed in a logical 480×180 box but emitted as percentages
+  // (no viewBox), so the SVG stretches to fill its container — taller box ⇒
+  // taller bars — while font-size stays in crisp, non-scaling px. X% spans the
+  // logical width, Y% the logical height.
   const w = 480, h = 180;
   const innerH = h - 40;
   const bw = (w - 40) / 24;
+  const X = (v) => (v / w * 100).toFixed(2), Y = (v) => (v / h * 100).toFixed(2);
   let bars = "", labels = "";
   for (let i = 0; i < 24; i++) {
     const x = 20 + i * bw;
@@ -278,14 +283,14 @@ function renderHourly(events) {
     const cH = tot ? hrs[i].correct / tot * totH : 0;
     const tip = `${pad2(i)}:00  ${hrs[i].correct}/${tot}`;
     if (tot) {
-      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad-bar)"><title>${tip}</title></rect>`;
-      bars += `<rect x="${x}" y="${h - 20 - cH}" width="${bw * 0.8}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+      bars += `<rect x="${X(x)}%" y="${Y(h - 20 - totH)}%" width="${X(bw * 0.8)}%" height="${Y(totH)}%" fill="var(--bad-bar)"><title>${tip}</title></rect>`;
+      bars += `<rect x="${X(x)}%" y="${Y(h - 20 - cH)}%" width="${X(bw * 0.8)}%" height="${Y(cH)}%" fill="var(--good)"><title>${tip}</title></rect>`;
     }
     if (i % 3 === 0) {
-      labels += `<text x="${x + bw * 0.4}" y="${h - 4}" fill="var(--muted)" font-size="10" text-anchor="middle">${i}</text>`;
+      labels += `<text x="${X(x + bw * 0.4)}%" y="${Y(h - 4)}%" fill="var(--muted)" font-size="10" text-anchor="middle">${i}</text>`;
     }
   }
-  hourlychart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${bars}${labels}</svg>`;
+  hourlychart.innerHTML = `<svg>${bars}${labels}</svg>`;
 }
 
 // ---------- display mode (shared) ----------
@@ -619,8 +624,8 @@ function renderStreak(events) {
   const days = calendarDays(events, (k) => ({ run: peaks.get(k) || 0 }));
   dayBarChart(streakchart, days, 160, (d) => d.run,
     (d, x, barW, bh, y0) =>
-      `<rect x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--accent)"><title>${d.k}  peak streak ${d.run}</title></rect>`,
-    (max) => `<text x="940" y="14" fill="var(--muted)" font-size="11" text-anchor="end">peak: ${max}</text>`, true);
+      `<rect x="${x}%" y="${y0 - bh}%" width="${barW}%" height="${bh}%" fill="var(--accent)"><title>${d.k}  peak streak ${d.run}</title></rect>`,
+    (max, X, Y) => `<text x="${X(940)}%" y="${Y(14)}%" fill="var(--muted)" font-size="11" text-anchor="end">peak: ${max}</text>`, true);
 }
 
 // ---------- reaction time ----------
@@ -638,9 +643,11 @@ function renderRtime(events) {
     if (answeredRight(e)) cb[b]++; else wb[b]++;
   }
   const mx = Math.max(1, ...cb, ...wb);
+  // Logical 900×200 box emitted as percentages (no viewBox) — see renderHourly.
   const w = 900, h = 200;
   const innerH = h - 40;
   const bw = (w - 40) / buckets;
+  const X = (v) => (v / w * 100).toFixed(2), Y = (v) => (v / h * 100).toFixed(2);
   let bars = "";
   for (let i = 0; i < buckets; i++) {
     const x = 20 + i * bw;
@@ -648,15 +655,15 @@ function renderRtime(events) {
     const wh = wb[i] / mx * innerH;
     const lo = Math.round(i * cap / buckets);
     const hi = Math.round((i + 1) * cap / buckets);
-    bars += `<rect x="${x}" y="${h - 20 - ch}" width="${bw * 0.45}" height="${ch}" fill="var(--good)"><title>${lo}-${hi}ms: ${cb[i]} correct</title></rect>`;
-    bars += `<rect x="${x + bw * 0.5}" y="${h - 20 - wh}" width="${bw * 0.45}" height="${wh}" fill="var(--bad-bar)"><title>${lo}-${hi}ms: ${wb[i]} wrong</title></rect>`;
+    bars += `<rect x="${X(x)}%" y="${Y(h - 20 - ch)}%" width="${X(bw * 0.45)}%" height="${Y(ch)}%" fill="var(--good)"><title>${lo}-${hi}ms: ${cb[i]} correct</title></rect>`;
+    bars += `<rect x="${X(x + bw * 0.5)}%" y="${Y(h - 20 - wh)}%" width="${X(bw * 0.45)}%" height="${Y(wh)}%" fill="var(--bad-bar)"><title>${lo}-${hi}ms: ${wb[i]} wrong</title></rect>`;
   }
   let axis = "";
   for (let t = 0; t <= cap; t += 1000) {
     const x = 20 + (t / cap) * (w - 40);
-    axis += `<text x="${x}" y="${h - 4}" fill="var(--muted)" font-size="10" text-anchor="middle">${t / 1000}s</text>`;
+    axis += `<text x="${X(x)}%" y="${Y(h - 4)}%" fill="var(--muted)" font-size="10" text-anchor="middle">${t / 1000}s</text>`;
   }
-  rtchart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${bars}${axis}</svg>`;
+  rtchart.innerHTML = `<svg>${bars}${axis}</svg>`;
 }
 
 // ---------- helpers ----------

@@ -138,7 +138,7 @@ body {
     display: grid;
     gap: 1rem;
     grid-template-columns: 1fr;
-    align-items: start;   /* cards size to content — don't stretch to match a taller neighbour (e.g. the .tall per-sound card) */
+    align-items: start;   /* cards size to content — don't stretch to match a taller neighbour (the per-sound card); the .stack opts back into stretch */
     max-width: 1200px;
     margin: 0 auto;
 }
@@ -152,13 +152,33 @@ body {
         grid-column: 1 / -1;
     }
 
-    /* Per-sound accuracy is the tallest narrow card; let it span the whole
-       column-1 stack beside it (hour-of-day + reaction-time + daily-peak-streak
-       = 3 rows) so those shorter cards sit alongside it rather than leaving a
-       gap — and so it isn't crammed into fewer rows, inflating them. */
-    #dash > .tall {
-        grid-row: span 3;
+    /* The .stack (hour-of-day + reaction-time + daily-peak-streak) sits in
+       column 1 beside the tall per-sound card. Stretch it to the per-sound
+       card's height (the row's natural height) so it doesn't leave a gap
+       below. */
+    #dash > .stack {
+        align-self: stretch;
     }
+}
+
+/* Equal-height cards that together fill the per-sound card's height.
+   align-self: stretch (above) sets the stack's height from the taller per-sound
+   neighbour; minmax(0, 1fr) auto-rows split that height evenly across however
+   many cards are visible — the 0 minimum is what stops the cards' own content
+   from inflating the shared grid row (a bare 1fr would size to the tallest). */
+.stack {
+    display: grid;
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 1rem;
+    min-width: 0;
+    min-height: 0;
+}
+
+.stack > .card {
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .card {
@@ -229,7 +249,9 @@ body {
 
 .card svg {
     width: 100%;
-    height: auto;
+    height: 100%;   /* fill the container; charts are authored viewBox-less with %
+                       geometry, so they stretch to whatever box the container gives
+                       them (an aspect-ratio box for daily, a flex box in .stack) */
     display: block;
     overflow: visible;
 }
@@ -296,22 +318,31 @@ body {
 }
 
 /* ---- chart container sizes ----
-   aspect-ratio matches each chart's SVG viewBox so the container reserves
-   its final size before the SVG is injected. No layout shift on render. */
+   Daily activity is full-width and sets its own height via aspect-ratio so the
+   container reserves its size before the SVG is injected (no layout shift). */
 #dailychart {
     aspect-ratio: 960 / 200;
 }
 
-#hourlychart {
-    aspect-ratio: 480 / 180;
-}
-
-#streakchart {
-    aspect-ratio: 960 / 160;
-}
-
+/* The three stacked charts instead fill their flex card — the .stack sizes each
+   card to a third of the per-sound card's height, and the chart grows into it
+   (it's a stretchy, viewBox-less SVG, so the bars get taller, not distorted). */
+#hourlychart,
+#streakchart,
 #rtchart {
-    aspect-ratio: 900 / 200;
+    flex: 1;
+    min-height: 0;
+    position: relative;   /* the SVG fills via absolute inset:0 (below), so the
+                             chart contributes no intrinsic height — the stack
+                             takes its height from the per-sound card, never from
+                             the SVG's 300×150 default replaced-element size */
+}
+
+#hourlychart svg,
+#streakchart svg,
+#rtchart svg {
+    position: absolute;
+    inset: 0;
 }
 
 /* ---- skill levels ---- */

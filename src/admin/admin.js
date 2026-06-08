@@ -157,8 +157,8 @@ function renderDaily(daily, uids) {
   dayBarChart(dailychart, days, 200, (d) => d.n, (d, x, barW, bh, y0) => {
     const cH = d.n ? d.correct / d.n * bh : 0;
     const tip = dayTip(d.k, d.correct, d.n);
-    return `<rect data-date="${d.k}" x="${x}" y="${y0 - bh}" width="${barW}" height="${bh}" fill="var(--bad-bar)"><title>${tip}</title></rect>`
-      + `<rect data-date="${d.k}" x="${x}" y="${y0 - cH}" width="${barW}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+    return `<rect data-date="${d.k}" x="${x}%" y="${y0 - bh}%" width="${barW}%" height="${bh}%" fill="var(--bad-bar)"><title>${tip}</title></rect>`
+      + `<rect data-date="${d.k}" x="${x}%" y="${y0 - cH}%" width="${barW}%" height="${cH}%" fill="var(--good)"><title>${tip}</title></rect>`;
   }, () => "", true);
   dailychart.onclick = (e) => {
     const r = e.target.closest("rect[data-date]");
@@ -199,34 +199,35 @@ function renderLevelHist(hist, uids) {
 }
 
 // ---------- distribution histograms (activity / days) ----------
-// Generic painter for an N-bin histogram. The outer `<svg>` (with its
-// viewBox) lives statically in admin/index.html so the section reserves
-// its layout; this function fills in the bars + axis labels on data load.
+// Generic painter for an N-bin histogram. The outer `<svg>` lives statically in
+// admin/index.html so the section reserves its layout; this fills in the bars +
+// axis labels on data load. Geometry is computed in a logical `w`×`h` box but
+// emitted as percentages (no viewBox) so the SVG stretches to fill its
+// container with crisp px text (`w` still sets the bar/padding proportions).
 // `labels[i]` is shown under bar i (use "" to suppress for crowded x-axes).
 // `tooltipFn(i, n)` builds the SVG <title> (hover text incl. count).
 // If `uids` + `titleFn(i)` are provided, every bar gets a click handler
 // that pops up the contributing device IDs as links to the per-user
 // dashboard. `titleFn` returns the bucket name *without* a count — the
 // popup appends it.
-function paintHist(svgEl, bins, labels, tooltipFn, uids, titleFn) {
-  const vb = svgEl.getAttribute("viewBox").split(" ").map(Number);
-  const vbw = vb[2], vbh = vb[3];
+function paintHist(svgEl, w, h, bins, labels, tooltipFn, uids, titleFn) {
   const padL = 14, padR = 14;
-  const baseY = vbh - 22, innerH = baseY - 14;
+  const baseY = h - 22, innerH = baseY - 14;
   const n = bins.length;
-  const bw = (vbw - padL - padR) / n;
+  const bw = (w - padL - padR) / n;
   const barW = Math.max(2, bw * 0.78);
   const max = Math.max(1, ...bins);
+  const X = (v) => (v / w * 100).toFixed(2), Y = (v) => (v / h * 100).toFixed(2);
   let html = "";
   for (let i = 0; i < n; i++) {
     const cx = padL + (i + 0.5) * bw;
     const bh = bins[i] / max * innerH;
-    html += `<rect data-bin="${i}" x="${cx - barW / 2}" y="${baseY - bh}" width="${barW}" height="${bh}" fill="var(--accent)"><title>${tooltipFn(i, bins[i])}</title></rect>`;
+    html += `<rect data-bin="${i}" x="${X(cx - barW / 2)}%" y="${Y(baseY - bh)}%" width="${X(barW)}%" height="${Y(bh)}%" fill="var(--accent)"><title>${tooltipFn(i, bins[i])}</title></rect>`;
     if (bins[i] > 0) {
-      html += `<text x="${cx}" y="${baseY - bh - 4}" fill="var(--muted)" font-size="11" text-anchor="middle">${bins[i]}</text>`;
+      html += `<text x="${X(cx)}%" y="${Y(baseY - bh - 4)}%" fill="var(--muted)" font-size="11" text-anchor="middle">${bins[i]}</text>`;
     }
     if (labels[i]) {
-      html += `<text x="${cx}" y="${vbh - 6}" fill="var(--muted)" font-size="11" text-anchor="middle">${labels[i]}</text>`;
+      html += `<text x="${X(cx)}%" y="${Y(h - 6)}%" fill="var(--muted)" font-size="11" text-anchor="middle">${labels[i]}</text>`;
     }
   }
   svgEl.innerHTML = html;
@@ -247,6 +248,7 @@ const ACTIVITY_LABELS = ["1-3", "4-9", "10-29", "30-99", "100-299", "300-999", "
 function renderActivityHist(bins, uids) {
   paintHist(
     activityhist.querySelector("svg"),
+    600, 200,
     bins || new Array(8).fill(0),
     ACTIVITY_LABELS,
     (i, n) => `${ACTIVITY_LABELS[i]} answers: ${n} users`,
@@ -266,6 +268,7 @@ const daysLabelFor = (i) => i === 30 ? "31+ days" : `${i + 1} day${i === 0 ? "" 
 function renderDaysHist(bins, uids) {
   paintHist(
     dayshist.querySelector("svg"),
+    800, 200,
     bins || new Array(31).fill(0),
     DAYS_LABELS,
     (i, n) => `${daysLabelFor(i)}: ${n} users`,
@@ -366,9 +369,12 @@ function renderHourly(hourly) {
   const hrs = Array.from({ length: 24 }, () => ({ n: 0, correct: 0 }));
   for (const r of hourly || []) hrs[r.h] = { n: r.n, correct: r.correct };
   const max = Math.max(1, ...hrs.map((h) => h.n));
+  // Logical 480×180 box emitted as percentages (no viewBox) so the SVG fills
+  // its (stretchy, in-stack) container with crisp px text. See dayBarChart.
   const w = 480, h = 180;
   const innerH = h - 40;
   const bw = (w - 40) / 24;
+  const X = (v) => (v / w * 100).toFixed(2), Y = (v) => (v / h * 100).toFixed(2);
   let bars = "", labels = "";
   for (let i = 0; i < 24; i++) {
     const x = 20 + i * bw;
@@ -376,14 +382,14 @@ function renderHourly(hourly) {
     const cH = hrs[i].n ? hrs[i].correct / hrs[i].n * totH : 0;
     const tip = `${pad2(i)}:00 UTC  ${hrs[i].correct}/${hrs[i].n}`;
     if (hrs[i].n) {
-      bars += `<rect x="${x}" y="${h - 20 - totH}" width="${bw * 0.8}" height="${totH}" fill="var(--bad-bar)"><title>${tip}</title></rect>`;
-      bars += `<rect x="${x}" y="${h - 20 - cH}" width="${bw * 0.8}" height="${cH}" fill="var(--good)"><title>${tip}</title></rect>`;
+      bars += `<rect x="${X(x)}%" y="${Y(h - 20 - totH)}%" width="${X(bw * 0.8)}%" height="${Y(totH)}%" fill="var(--bad-bar)"><title>${tip}</title></rect>`;
+      bars += `<rect x="${X(x)}%" y="${Y(h - 20 - cH)}%" width="${X(bw * 0.8)}%" height="${Y(cH)}%" fill="var(--good)"><title>${tip}</title></rect>`;
     }
     if (i % 3 === 0) {
-      labels += `<text x="${x + bw * 0.4}" y="${h - 4}" fill="var(--muted)" font-size="10" text-anchor="middle">${i}</text>`;
+      labels += `<text x="${X(x + bw * 0.4)}%" y="${Y(h - 4)}%" fill="var(--muted)" font-size="10" text-anchor="middle">${i}</text>`;
     }
   }
-  hourlychart.innerHTML = `<svg viewBox="0 0 ${w} ${h}">${bars}${labels}</svg>`;
+  hourlychart.innerHTML = `<svg>${bars}${labels}</svg>`;
 }
 
 // ---------- per-sound difficulty ----------

@@ -95,6 +95,7 @@ body {
     display: grid;
     gap: 1rem;
     grid-template-columns: 1fr;
+    align-items: start;   /* cards size to content — don't stretch to match a taller neighbour (the per-sound card); the .stack opts back into stretch */
     /* Wider than the user dashboard (1200px) so the four sound-file
        confusion vowel groups fit side-by-side on a typical workstation. */
     max-width: 1400px;
@@ -109,6 +110,33 @@ body {
     #dash>.span2 {
         grid-column: 1 / -1;
     }
+
+    /* The .stack (hour-of-day + the two cross-user histograms) sits in column 1
+       beside the tall per-sound card; stretch it to that card's height so it
+       fills the column instead of leaving dead space below hour-of-day. */
+    #dash>.stack {
+        align-self: stretch;
+    }
+}
+
+/* Equal-height cards that together fill the per-sound card's height.
+   align-self: stretch (above) sets the stack's height from the taller per-sound
+   neighbour; minmax(0, 1fr) auto-rows split that height evenly across however
+   many cards are visible (level-1 viewers see only hour-of-day here) — the 0
+   minimum stops the cards' own content from inflating the shared grid row. */
+.stack {
+    display: grid;
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 1rem;
+    min-width: 0;
+    min-height: 0;
+}
+
+.stack > .card {
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .card {
@@ -232,8 +260,34 @@ body {
     aspect-ratio: 960 / 200;
 }
 
-#hourlychart {
-    aspect-ratio: 480 / 180;
+/* Daily activity is drawn by the shared dayBarChart, which is now viewBox-less
+   (% geometry); fill the aspect-ratio box above, since height:auto would
+   collapse a viewBox-less SVG to zero. */
+#dailychart svg {
+    height: 100%;
+}
+
+/* The three stacked charts (hour-of-day + the two cross-user histograms) fill
+   their flex card — the .stack sizes each to a third of the per-sound card's
+   height and these viewBox-less SVGs stretch into it (bars grow, text stays
+   px-crisp). */
+#hourlychart,
+#dayshist,
+#activityhist {
+    flex: 1;
+    min-height: 0;
+    position: relative;   /* the SVG fills via absolute inset:0 (below), so the
+                             chart contributes no intrinsic height — the stack
+                             takes its height from the per-sound card, never from
+                             the SVG's 300×150 default replaced-element size */
+}
+
+#hourlychart svg,
+#dayshist svg,
+#activityhist svg {
+    position: absolute;
+    inset: 0;
+    height: 100%;
 }
 
 /* ---- per-mora ---- */
