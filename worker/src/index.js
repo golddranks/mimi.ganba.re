@@ -165,6 +165,11 @@ export default {
         res = await handlePushUnsubscribe(req, env);
       } else if (req.method === "POST" && url.pathname === "/v1/push/test") {
         res = await handlePushTest(req, env);
+      } else if (req.method === "GET" && url.pathname === "/v1/version") {
+        // The git SHA this worker was deployed from (set via `--var GIT_SHA` at
+        // deploy; "dev" locally). CI reads it to decide whether the live worker is
+        // behind HEAD on worker code, and to assert it caught up after a deploy.
+        res = json({ sha: env.GIT_SHA || "dev" });
       } else if (req.method === "GET" && url.pathname === "/v1/voice-attempts") {
         res = await handleVoiceAttempts(req, env);
       } else if (req.method === "GET" && url.pathname === "/v1/native/pairs") {

@@ -35,6 +35,12 @@ async function req(method, path, body, tries = 5) {
   }
 }
 
+test("GET /v1/version reports the deploy SHA (or 'dev' locally)", async () => {
+  const v = await req("GET", "/v1/version");
+  assert.equal(v.status, 200);
+  assert.ok(typeof v.data?.sha === "string" && v.data.sha.length > 0, "returns a non-empty sha");
+});
+
 test("POST /v1/user tags the sentinel user", async () => {
   const u = await req("POST", "/v1/user", { uid: UID, nickname: "TestUser", role: 1 });
   assert.equal(u.status, 200);

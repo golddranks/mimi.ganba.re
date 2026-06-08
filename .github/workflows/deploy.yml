@@ -26,9 +26,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       pages:  ${{ steps.filter.outputs.pages }}
-      worker: ${{ steps.filter.outputs.worker }}
+      worker: ${{ steps.workerdrift.outputs.deploy }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 0                        # full history: diff HEAD against the live worker's commit
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
         id: filter
         with:
@@ -41,12 +43,23 @@ jobs:
               - 'scripts/build.py'
               - 'shell.nix'
               - '.github/workflows/deploy.yml'
-            worker:
-              - 'worker/**'
-              - 'src/shared/**'               # bundled into the worker via import (skill, vapid, daytier, dates, …)
-              - 'data/phonetic_training/morae/good/**'
-              - 'scripts/voicemap.py'
-              - '.github/workflows/deploy.yml'
+      # Decide the worker deploy from what's actually LIVE, not from this push's
+      # diff: compare HEAD to the commit the running worker reports (/v1/version)
+      # over the worker-relevant paths. So a worker change that landed while CI was
+      # red still ships on the next green run, even if that push didn't touch
+      # worker/ (the stranding bug). Unknown/unreachable live version → deploy.
+      - id: workerdrift
+        run: |
+          set -uo pipefail
+          paths='worker src/shared data/phonetic_training/morae/good scripts/voicemap.py .github/workflows/deploy.yml'
+          live=$(curl -fsS https://mimi-stats.golddranks.workers.dev/v1/version 2>/dev/null | jq -r '.sha // empty' 2>/dev/null || true)
+          if [ -n "$live" ] && git cat-file -e "${live}^{commit}" 2>/dev/null && git diff --quiet "$live" "$GITHUB_SHA" -- $paths; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "worker up to date at ${live}"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "worker deploy needed (live=${live:-unknown})"
+          fi
 
   transcode:
     needs: changes
@@ -182,6 +195,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: worker
           wranglerVersion: '4.93.0'
+          command: deploy --var GIT_SHA:${{ github.sha }}   # stamp it so /v1/version reports this commit
 
   # Post-deploy verification of the LIVE system: runs after both deploys settle
   # and drives the *deployed* dashboard (fetched from Pages) against the *live*
@@ -198,6 +212,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 0                        # full history: diff HEAD against the live worker's commit
+      # Drift guard: the live worker must reflect HEAD's worker code. Catches a
+      # deploy that was skipped or silently didn't take — the bug that shipped a
+      # stale worker. (A worker that was legitimately not redeployed has no
+      # worker-relevant diff vs HEAD, so this passes.) Retries while the fresh
+      # deploy propagates.
+      - name: live worker is current on worker code
+        run: |
+          set -uo pipefail
+          paths='worker src/shared data/phonetic_training/morae/good scripts/voicemap.py .github/workflows/deploy.yml'
+          for i in $(seq 1 10); do
+            live=$(curl -fsS https://mimi-stats.golddranks.workers.dev/v1/version 2>/dev/null | jq -r '.sha // empty' 2>/dev/null || true)
+            if [ -n "$live" ] && git cat-file -e "${live}^{commit}" 2>/dev/null && git diff --quiet "$live" "$GITHUB_SHA" -- $paths; then
+              echo "live worker ${live} is current"; exit 0
+            fi
+            echo "attempt ${i}: live=${live:-unknown} not current yet; retrying"; sleep 5
+          done
+          echo "::error::live worker (${live:-unknown}) is behind HEAD on worker code after deploy"; exit 1
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
         with:
           node-version: '22.22.3'
