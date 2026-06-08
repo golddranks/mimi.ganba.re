@@ -99,48 +99,8 @@
         </div>
 
         <div class="rstack">
-        <section class="card">
-            <h2>Per-sound accuracy
-                <span class="modeswitch" id="moramode">
-                    <button type="button" data-mode="count" class="active">counts</button>
-                    <button type="button" data-mode="pct">per-sound %</button>
-                </span>
-                <span class="sub">(hardest first)</span>
-            </h2>
-            <div id="morachart">
-                <div class="mrow" data-mora="sa"><div class="mname">サ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="za"><div class="mname">ザ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="sya"><div class="mname">シャ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zya"><div class="mname">ジャ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="tya"><div class="mname">チャ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="si"><div class="mname">シ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zi"><div class="mname">ジ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="ti"><div class="mname">チ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="su"><div class="mname">ス</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zu"><div class="mname">ズ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="tu"><div class="mname">ツ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="syu"><div class="mname">シュ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zyu"><div class="mname">ジュ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="tyu"><div class="mname">チュ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="so"><div class="mname">ソ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zo"><div class="mname">ゾ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="syo"><div class="mname">ショ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="zyo"><div class="mname">ジョ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="tyo"><div class="mname">チョ</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-            </div>
-        </section>
-
-        <section class="card">
-            <h2>By consonant <span class="sub">(hardest first · s / z / ts / sh / j / ch)</span></h2>
-            <div id="consmorachart">
-                <div class="mrow" data-mora="s"><div class="mname">s</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="z"><div class="mname">z</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="ts"><div class="mname">ts</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="sh"><div class="mname">sh</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="j"><div class="mname">j</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-                <div class="mrow" data-mora="ch"><div class="mname">ch</div><div class="mbar"><div class="mbar-total"><div class="mbar-correct"></div></div></div><div class="mtxt">0/0</div></div>
-            </div>
-        </section>
+            <!--include:per-sound-card.html noun="accuracy"-->
+            <!--include:by-consonant-card.html-->
         </div>
 
         <section class="card span2">

@@ -73,10 +73,30 @@ def read_voices_json() -> dict[str, dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+PARTIALS = SRC / "_partials"
+INCLUDE_RE = re.compile(r'<!--\s*include:([\w./-]+)((?:\s+\w+="[^"]*")*)\s*-->')
+
+
+def expand_includes(html: str) -> str:
+    """Replace `<!--include:name.html-->` with src/_partials/name.html, so a
+    component shared across pages (e.g. the per-sound card, which the dashboard
+    and admin both render) lives in one file, not hand-copied. Optional
+    `key="value"` args fill `{{key}}` placeholders in the partial — e.g. the
+    per-sound heading noun (accuracy vs difficulty), the pages' only difference."""
+    def repl(m):
+        body = (PARTIALS / m.group(1)).read_text(encoding="utf-8")
+        body = re.sub(r"<!--.*?-->", "", body, flags=re.S)   # drop the partial's doc comment
+        for k, v in re.findall(r'(\w+)="([^"]*)"', m.group(2)):
+            body = body.replace(f"{{{{{k}}}}}", v)
+        return body.strip()
+    return INCLUDE_RE.sub(repl, html)
+
+
 def inline(html: str, src_dir: Path, css_name: str | None,
            js_name: str | None, js_prelude: str = "") -> str:
-    """Minify the page's referenced CSS/JS (esbuild) and inline them in place
-    of its <link rel=stylesheet> / <script src> tags."""
+    """Expand partial-includes, then minify the page's referenced CSS/JS
+    (esbuild) and inline them in place of its <link>/<script src> tags."""
+    html = expand_includes(html)
     if css_name:
         css = minify(src_dir / css_name)
         html = re.sub(
