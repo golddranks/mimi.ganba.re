@@ -76,7 +76,6 @@ async function load(uid) {
     // Aggregate sections — available to every power user (level 1+).
     renderHourly(data.hourly);
     renderMora(data.by_mora);
-    renderVoice(data.by_voice, data.by_voice_played);
     renderVoiceConfusion(data.by_voice_confusion, data.by_voice_shown, data.by_voice_offered);
     renderConfusion(data.confusion, data.confusion_shown, data.confusion_offered);
     // Per-user / uid-drilldown sections — only if level-2 authorizes them.
@@ -330,13 +329,9 @@ function hideUidPopup() {
     drawVoiceConfusion();
   });
 
-  // Click-to-play delegations. Bound on stable parent elements so they
-  // survive each redraw (which replaces only the inner HTML).
-  voicetable.querySelector("tbody").addEventListener("click", (e) => {
-    const td = e.target.closest("td.voice");
-    if (!td) return;
-    playVoice(td.dataset.mora, td.dataset.voice);
-  });
+  // Click-to-play delegation on the sound-file confusion matrix (its row
+  // headers play the recording). Bound on the stable parent so it survives each
+  // redraw (which replaces only the inner HTML).
   voiceconf.addEventListener("click", (e) => {
     const th = e.target.closest("th.vname");
     if (!th) return;
@@ -389,38 +384,9 @@ const VOWEL_GROUPS = {
 // "<row-head>行" — Japanese for "<vowel>-row in the 50-sound chart"
 const VOWEL_GYO = { a: "あ行", i: "い行", u: "う行", o: "お行" };
 
-let voiceData = [];
 let voiceConfData = [];        // [{t, v, p, n}] — picks per (recording, kana)
 let voiceShownData = [];       // [{t, v, p, n}] — picks among opts-bearing answers
 let voiceOfferedData = [];     // [{t, v, k, n}] — times kana k offered for (recording)
-
-function renderVoice(byVoice, byPlayed) {
-  // Merge by_voice_played into voiceData so each row knows both:
-  //   relisten   — 'r' events for this recording (it was the question's voice)
-  //   afterplay  — this recording was the played voice in some 'p' event
-  // by_voice doesn't include recordings that only appear as a played file
-  // (e.g. never asked as a question), so start from the union of sources.
-  const idx = new Map();
-  for (const r of byVoice || []) {
-    idx.set(r.m + "/" + r.v, { ...r, afterplay: 0 });
-  }
-  for (const r of byPlayed || []) {
-    const key = r.m + "/" + r.v;
-    const cur = idx.get(key);
-    if (cur) cur.afterplay = r.n;
-    else idx.set(key, { m: r.m, v: r.v, n: 0, correct: 0, relisten: 0, afterplay: r.n });
-  }
-  voiceData = [...idx.values()];
-  vmin.oninput = drawVoiceTable;
-  vlisten.oninput = drawVoiceTable;
-  vtop.oninput = drawVoiceTable;
-  drawVoiceTable();
-}
-
-// Sum of re-listens + after-plays — the "uncertainty after hearing this
-// recording" signal. High values at low attempt counts often indicate an
-// unclear or wrong recording.
-const listenCount = (r) => (r.relisten || 0) + (r.afterplay || 0);
 
 function renderVoiceConfusion(rows, shownRows, offeredRows) {
   voiceConfData = rows || [];
@@ -429,39 +395,6 @@ function renderVoiceConfusion(rows, shownRows, offeredRows) {
   vcmin.oninput = drawVoiceConfusion;
   vcwrong.oninput = drawVoiceConfusion;
   drawVoiceConfusion();
-}
-
-function drawVoiceTable() {
-  const min = Math.max(1, parseInt(vmin.value, 10) || 1);
-  const minL = Math.max(0, parseInt(vlisten.value, 10) || 0);
-  const top = Math.max(1, parseInt(vtop.value, 10) || 1);
-  // OR semantic: keep a recording if it crosses either threshold. Lets a
-  // 1-attempt recording with many post-error listens still surface.
-  const filtered = voiceData
-    .filter((r) => r.n >= min || listenCount(r) >= minL)
-    .map((r) => ({ ...r, acc: r.n ? r.correct / r.n : 0 }))
-    .sort((a, b) => a.acc - b.acc);
-  const rows = filtered.slice(0, top);
-  vcount.textContent = `(${filtered.length} match attempts≥${min} or listens≥${minL}; showing top ${rows.length})`;
-  const tbody = voicetable.querySelector("tbody");
-  // Voice cell is clickable (plays the recording). Sound column shows
-  // katakana — that's the heard side.
-  tbody.innerHTML = rows.map((r) => {
-    const accPct = r.n ? (r.acc * 100).toFixed(1) + "%" : "—";
-    const cls = r.n === 0 ? "" : r.acc < 0.6 ? "bad" : r.acc < 0.85 ? "mid" : "";
-    const voiceCell = r.v
-      ? `<td class="voice" data-mora="${r.m}" data-voice="${r.v}">${r.v}</td>`
-      : `<td>?</td>`;
-    return `<tr>
-      <td>${KATAKANA[r.m] || r.m}</td>
-      ${voiceCell}
-      <td>${r.n}</td>
-      <td>${r.correct}</td>
-      <td class="acc ${cls}">${accPct}</td>
-      <td>${r.relisten || 0}</td>
-      <td>${r.afterplay || 0}</td>
-    </tr>`;
-  }).join("");
 }
 
 // Per-vowel-group, per-recording confusion. Rows = (mora, voice) recordings

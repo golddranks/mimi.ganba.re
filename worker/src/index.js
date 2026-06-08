@@ -394,7 +394,7 @@ async function handleAdminStats(req, env, url) {
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
-  const [hourly, byMora, byVoice, confusion, byVoiceConf, byVoicePlayed, optsConf, ynConf, byVoiceOpts] = await Promise.all([
+  const [hourly, byMora, confusion, byVoiceConf, optsConf, ynConf, byVoiceOpts] = await Promise.all([
     db.prepare(
       `SELECT CAST(strftime('%H', ts/1000, 'unixepoch') AS INTEGER) AS h,
               COUNT(*) AS n,
@@ -409,19 +409,6 @@ async function handleAdminStats(req, env, url) {
        FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
        GROUP BY target`
     ).all(),
-    // by_voice — per recording when it was the *question* (i.e. target).
-    // 'a'/'g'/'r' all have voice = target's voice, so they aggregate
-    // naturally; 'p' events are excluded because there voice = picked's
-    // voice and they belong to the after-played stream below.
-    db.prepare(
-      `SELECT target AS m, voice AS v,
-              SUM(CASE WHEN ev IN ('a','g') THEN 1 ELSE 0 END)                            AS n,
-              SUM(CASE WHEN ev IN ('a','g') AND picked = target THEN 1 ELSE 0 END)        AS correct,
-              SUM(CASE WHEN ev = 'r' THEN 1 ELSE 0 END)                                   AS relisten
-       FROM events
-       WHERE voice IS NOT NULL AND ev IN ('a','g','r') AND ${EXCLUDE_TEST}
-       GROUP BY target, voice`
-    ).all(),
     db.prepare(
       `SELECT target AS t, picked AS p, COUNT(*) AS n
        FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST} ${ACC_FILTER}
@@ -432,15 +419,6 @@ async function handleAdminStats(req, env, url) {
        FROM events
        WHERE ev IN ('a','g') AND voice IS NOT NULL AND ${EXCLUDE_TEST} ${ACC_FILTER}
        GROUP BY target, voice, picked`
-    ).all(),
-    // by_voice_played — this recording was the one *played* in some 'p'
-    // event (regardless of which question prompted it). For 'p' events,
-    // voice = picked's voice, so the direct GROUP BY does the right thing.
-    db.prepare(
-      `SELECT picked AS m, voice AS v, COUNT(*) AS n
-       FROM events
-       WHERE ev = 'p' AND voice IS NOT NULL AND ${EXCLUDE_TEST}
-       GROUP BY picked, voice`
     ).all(),
     // Pairwise "when offered" confusion source: group by the choice set so we
     // can normalise a confuser by how often it was actually on screen, not by
@@ -514,14 +492,12 @@ async function handleAdminStats(req, env, url) {
   return json({
     hourly:    hourly.results     || [],
     by_mora:   byMora.results     || [],
-    by_voice:  byVoice.results    || [],
     confusion: rowsOf(counts, "p"),
     confusion_shown:   rowsOf(shown, "p"),
     confusion_offered: rowsOf(offered, "k"),
     by_voice_confusion: byVoiceConf.results   || [],
     by_voice_shown:     rowsOf3(vShown, "p"),
     by_voice_offered:   rowsOf3(vOffered, "k"),
-    by_voice_played:    byVoicePlayed.results || [],
   });
 }
 
