@@ -546,19 +546,31 @@ async function loadAsUser(targetUid) {
   render();
 }
 
-// ?nick=Foo sets your own nickname (sends to /v1/user, persists locally).
-// Ignored in view-as mode so you can't accidentally rename someone else.
-const nickParam = new URLSearchParams(location.search).get("nick");
-if (!viewMode && STATS_URL && nickParam !== null) {
-  const nick = nickParam.trim().slice(0, 64);
-  localStorage.nick = nick;
-  if (nick) {
+// Nickname: prompt for one (unless already set) and persist it locally + to
+// /v1/user. `extra` carries optional fields (e.g. role for the native-tester
+// opt-in). Returns the nickname now in effect. Ignored in view-as mode so you
+// can't rename someone you're inspecting. Reused by the ?nativeTester flow.
+function promptForNick(message, extra) {
+  if (viewMode || !STATS_URL) return localStorage.nick || null;
+  if (!localStorage.nick) {
+    const nick = (prompt(message) || "").trim().slice(0, 64);
+    if (nick) localStorage.nick = nick;
+  }
+  // POST when there's a nickname to record or an extra field (role) to apply —
+  // a returning native tester keeps their nick but still needs the role set.
+  if (localStorage.nick || extra) {
     fetch(STATS_URL + "/v1/user", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ uid, nickname: nick }),
+      body: JSON.stringify({ uid, nickname: localStorage.nick || "", ...extra }),
     }).catch(() => { });
   }
+  return localStorage.nick || null;
+}
+
+// ?nick opens a one-time prompt to set your nickname (unless one is already set).
+if (new URLSearchParams(location.search).has("nick")) {
+  promptForNick("Set a nickname (shown to the site admin):");
 }
 
 // ---------- boot ----------

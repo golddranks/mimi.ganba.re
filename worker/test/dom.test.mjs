@@ -70,6 +70,22 @@ const saFixture = (base) => {
   ];
 };
 
+// skip on LIVE: a fresh-device nick POST would write a role-0 user to prod.
+test("app: ?nick prompts for a nickname once, then not again", { skip: LIVE }, async (t) => {
+  let asked = 0;
+  const fresh = await openPage("/?nick", { setup: (w) => { w.prompt = () => { asked++; return "Pingu"; }; } });
+  t.after(fresh.close);
+  assert.equal(asked, 1, "prompted on a fresh device");
+  assert.equal(fresh.win.localStorage.nick, "Pingu", "stored the nickname locally");
+
+  // Already set → ?nick must not prompt again.
+  const again = await openPage("/?nick", {
+    setup: (w) => { w.localStorage.setItem("nick", "Keep"); w.prompt = () => { throw new Error("re-prompted"); }; },
+  });
+  t.after(again.close);
+  assert.equal(again.win.localStorage.nick, "Keep");
+});
+
 test("app: answering questions posts events (with opts) to the worker", async (t) => {
   const { win, close } = await openPage("/");
   t.after(close);
