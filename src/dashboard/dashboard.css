@@ -141,7 +141,9 @@ body {
     gap: 1rem;
     grid-template-columns: 1fr;
     align-items: start;   /* cards size to content — don't stretch to match a taller neighbour (the per-sound card); the .stack opts back into stretch */
-    max-width: 1200px;
+    /* Matches admin: wide enough for the sound-file confusion matrix's four
+       vowel-group tables to sit side-by-side in one row. */
+    max-width: 1400px;
     margin: 0 auto;
 }
 
