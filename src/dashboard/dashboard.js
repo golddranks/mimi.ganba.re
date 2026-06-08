@@ -55,11 +55,14 @@ uidform.onsubmit = (e) => {
 };
 
 // Viewer's power level (cached promise): drives the view-as gate, the uid-load
-// form, and the reminder readout.
+// form, and the reminder readout. The resolved level is also remembered in
+// localStorage so the form can reveal synchronously next time (see below).
 let viewerLevelP;
 const viewerLevel = () => (viewerLevelP ||= viewerUid
   ? fetch(STATS_URL + "/v1/user/" + encodeURIComponent(viewerUid))
-      .then((r) => r.ok ? r.json() : null).then((i) => (i && i.power_user) || 0).catch(() => 0)
+      .then((r) => r.ok ? r.json() : null)
+      .then((i) => { const l = (i && i.power_user) || 0; localStorage.dashLevel = l; return l; })
+      .catch(() => 0)
   : Promise.resolve(0));
 
 // Seed the count/% toggle from its restored-or-default state and wire changes —
@@ -155,8 +158,12 @@ renderNotif();
 // shared ?uid= link opens), but the form — typing in arbitrary uids — is useless
 // below level 2: uids are only obtainable from the DB or the level-2 admin page.
 // Showing it to level-1 users would just invite snooping with uids they can't get.
-// Failure (no network, no row, 4xx) silently keeps the form hidden.
-viewerLevel().then((level) => { if (level >= 2) uidform.hidden = false; });
+//
+// Reveal it synchronously from the remembered level first (this script runs
+// before first paint), so it doesn't flash in after the async check on every
+// refresh; the check then confirms or corrects (and records the level).
+if (viewerUid && +localStorage.dashLevel >= 2) uidform.hidden = false;
+viewerLevel().then((level) => { uidform.hidden = level < 2; });
 
 // First paint shows the dash skeleton (zeros + reserved chart space). #msg
 // stays empty (and therefore display:none) during the loading window, so the
