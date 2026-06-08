@@ -6,6 +6,7 @@ import { isAnswerEv, answeredRight } from "../shared/events.js";
 import { pushSupported, currentSubscription, subscribe, unsubscribe } from "../shared/push.js";
 import { dayBarChart, dayTip, calendarSpan } from "../shared/daychart.js";
 import { drawBars, drawHourly, wireSwitchGroup } from "../shared/charts.js";
+import { drawVoiceConfusion as renderVoiceConf, playVoice } from "../shared/voiceconf.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
 // a handful of visualizations. No localStorage writes, no event posts.
@@ -137,6 +138,7 @@ async function load(uid) {
     renderHourly(events);
     renderMora(events);
     renderConfusion(events);
+    renderVoiceConfusion(events);
     checkTallyDrift(events);
     renderStreak(events);
     renderRtime(events);
@@ -379,6 +381,47 @@ function drawConsonantConfusion() {
   fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, displayMode);
 }
 
+// ---------- per-recording (sound-file) confusion ----------
+// The viewer's own version of the admin matrix: which recordings they confuse
+// with which kana. Computed from the same opts-bearing a/g answers as the main
+// matrix, but keyed by the question's recording (e.voice) too — matching the
+// server's by_voice_shown/offered. Y/N answers carry no recording, so excluded.
+let voiceShownRows = [], voiceOfferedRows = [];
+
+function renderVoiceConfusion(events) {
+  const shown = {}, offered = {};
+  for (const e of events) {
+    if ((e.ev !== "a" && e.ev !== "g") || !e.voice) continue;
+    const r = confusionRecord(e);
+    if (!r) continue;   // no offered set
+    shown[`${r.target}/${e.voice}/${r.picked}`] = (shown[`${r.target}/${e.voice}/${r.picked}`] || 0) + 1;
+    for (const k of r.opts) offered[`${r.target}/${e.voice}/${k}`] = (offered[`${r.target}/${e.voice}/${k}`] || 0) + 1;
+  }
+  const rows = (m, key) => Object.entries(m).map(([s, n]) => {
+    const [t, v, x] = s.split("/");
+    return { t, v, [key]: x, n };
+  });
+  voiceShownRows = rows(shown, "p");
+  voiceOfferedRows = rows(offered, "k");
+  vcmin.oninput = drawVoiceConf;
+  vcwrong.oninput = drawVoiceConf;
+  drawVoiceConf();
+}
+
+function drawVoiceConf() {
+  renderVoiceConf(voiceconf, voiceShownRows, voiceOfferedRows, {
+    mode: displayMode,
+    minA: Math.max(0, parseInt(vcmin.value, 10) || 0),
+    minW: Math.max(0, parseInt(vcwrong.value, 10) || 0),
+  });
+}
+
+// Click a recording's row header to play it (delegated; survives re-renders).
+voiceconf.addEventListener("click", (e) => {
+  const th = e.target.closest("th.vname");
+  if (th) playVoice(th.dataset.mora, th.dataset.voice);
+});
+
 // The count/pct toggle: one logical group across every .modeswitch in the page;
 // flipping it re-renders the sections that honour the mode.
 wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
@@ -386,6 +429,7 @@ wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
   drawConfusion();
   drawMora();
   drawConsMora();
+  drawVoiceConf();
 });
 
 // ---------- confusion cell history ----------

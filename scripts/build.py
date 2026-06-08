@@ -98,7 +98,7 @@ def inline(html: str, src_dir: Path, css_name: str | None,
     (esbuild) and inline them in place of its <link>/<script src> tags."""
     html = expand_includes(html)
     if css_name:
-        css = minify(src_dir / css_name)
+        css = minify(src_dir / css_name, "--bundle")   # --bundle resolves @import (shared CSS)
         html = re.sub(
             rf'<link\s+rel="stylesheet"\s+href="{re.escape(css_name)}"\s*/?>',
             lambda _m: f"<style>{css}</style>",
@@ -127,10 +127,12 @@ def bundle_index(voice_counts: dict[str, int]) -> None:
     shutil.copy(src / "manifest.json", DIST / "manifest.json")
 
 
-def bundle_dashboard() -> None:
+def bundle_dashboard(voice_map: dict[str, list[str]]) -> None:
     src = SRC / "dashboard"
+    voice_js = json.dumps(voice_map, ensure_ascii=False, separators=(",", ":"))
     html = inline((src / "index.html").read_text(encoding="utf-8"),
-                  src, "dashboard.css", "dashboard.js")
+                  src, "dashboard.css", "dashboard.js",
+                  js_prelude=f"window.VOICE_MAP={voice_js};")
     out = DIST / "dashboard"
     out.mkdir(parents=True, exist_ok=True)
     (out / "index.html").write_text(html, encoding="utf-8")
@@ -168,7 +170,7 @@ def main() -> None:
     voice_map = {mora: info["voices"] for mora, info in voices.items()}
 
     bundle_index(voice_counts)
-    bundle_dashboard()
+    bundle_dashboard(voice_map)
     bundle_privacy()
     bundle_admin(voice_map)
     bundle_sw()

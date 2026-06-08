@@ -417,6 +417,27 @@ test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, asyn
   assert.equal(nFor(b, "confusion_shown", "p") - nFor(a, "confusion_shown", "p"), 2, "za picked +2");
 });
 
+test("dashboard: per-user sound-file confusion matrix renders the viewer's recordings", async (t) => {
+  // Per-uid, exact counts. saFixture is all idx 0, so every answer is the same
+  // sa recording; the worker assigns its voice at ingest. For that recording, za
+  // is picked 3× of 5 offered. The matrix lives in a collapsed <details> but is
+  // rendered into the DOM regardless.
+  const uid = await freshTestUser();
+  assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
+  const voice = (await getEvents(uid)).find((e) => e.target === "sa" && e.idx === 0)?.voice;
+  assert.ok(voice, "worker assigned a voice to sa#0");
+
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`);
+  t.after(close);
+
+  const cell = await waitFor(() => {
+    const td = [...win.voiceconf.querySelectorAll("td")]
+      .find((d) => d.title.startsWith(`sa (${voice}) → za`));
+    return td && /^\d+\/\d+$/.test(td.textContent) ? td.textContent : null;
+  });
+  assert.equal(cell, "3/5", "sa recording: za picked 3 of 5 offered");
+});
+
 test("admin: sound-file matrix exposes per-recording shown/offered (vs the kana)", { skip: LIVE }, async () => {
   // The sound-file confusion matrix normalises a cell by how often that kana was
   // offered FOR THIS RECORDING (not how often the recording was asked). Assert the
