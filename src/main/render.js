@@ -1,7 +1,7 @@
 // Display layer: paints the score / streak / message readouts and the 30-day
 // bar, plus the done-day + mastery assessments that drive their text and
 // colour. Read-only over the session state owned by app.js.
-import { stats, run, today, acc, emptyDay, DAYS, BAR_MAX } from "./app.js";
+import { stats, run, today, acc, emptyDay, DAYS, BAR_MAX, nativeMode } from "./app.js";
 import { daysAgo } from "../shared/dates.js";
 import { DONE, dayTier } from "../shared/daytier.js";
 import { dayTip } from "../shared/daychart.js";
@@ -58,7 +58,11 @@ export function render() {
   daystreak.textContent = `days streak: ${ds}`;
 
   let cls = "", text = "Let's train some more today!";
-  if (mastered()) {
+  if (nativeMode) {
+    // Native testers aren't learning — they're validating audio — so the
+    // learner-progress messaging doesn't apply; thank them instead.
+    text = "音声の品質確認・向上にご参加いただき、ありがとうございます！";
+  } else if (mastered()) {
     cls = "mastered";
     text = "You mastered this. Maybe try learning something else?";
   } else {

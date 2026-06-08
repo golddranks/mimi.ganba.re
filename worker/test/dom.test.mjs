@@ -133,6 +133,9 @@ test("app: native mode drills forced 2-choice pairs from the ranking", { skip: L
   t.after(close);
   const uid = win.localStorage.uid;
 
+  // Native testers see a thank-you, not the learner-progress message.
+  assert.equal(win.message.textContent, "音声の品質確認・向上にご参加いただき、ありがとうございます！");
+
   win.primary.click();
   const btns = await waitFor(() => {
     const b = win.choices.querySelectorAll("button.choice");

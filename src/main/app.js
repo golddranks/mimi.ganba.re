@@ -66,7 +66,7 @@ export const viewMode = !!spoofedUid;
 export const uid = spoofedUid || (localStorage.uid ||= crypto.randomUUID());
 // Native-tester mode (role 2): forced-pair confusion drilling, no grind/probe,
 // 2-choice only. Persisted once opted in via ?nativeTester (set below).
-let nativeMode = !viewMode && localStorage.nativeMode === "1";
+export let nativeMode = !viewMode && localStorage.nativeMode === "1";
 let evQueue = [];
 try { evQueue = JSON.parse(localStorage.ev_queue || "[]"); } catch { }
 
