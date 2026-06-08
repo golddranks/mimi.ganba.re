@@ -83,6 +83,10 @@ let displayMode = wireSwitchGroup(document.querySelectorAll('[data-switch="mode"
 if (localStorage.sfMatrixOpen === "1") voiceconfdetails.open = true;
 voiceconfdetails.ontoggle = () => { localStorage.sfMatrixOpen = voiceconfdetails.open ? "1" : "0"; };
 
+// The "tap a cell" hint is just discovery: once the user has ever tapped a cell
+// (set in showCellHistory), drop it for good. Restored synchronously before paint.
+if (localStorage.confHintSeen === "1") confhint.hidden = true;
+
 if (uid) {
   uidinput.value = uid;
   if (uid === viewerUid) {
@@ -482,6 +486,8 @@ voiceconf.addEventListener("click", (e) => {
 // diagonal → the user got it wrong. Only opts-bearing answers where the column
 // kana was actually offered count (same data as the shown/grind metrics).
 function showCellHistory(td) {
+  confhint.hidden = true;                 // discovery hint done its job — drop it for good
+  localStorage.confHintSeen = "1";
   const t = td.dataset.t, p = td.dataset.p, diag = t === p;
   const series = confusionEvents.filter((e) => e.target === t && e.opts.split(",").includes(p));
   const outcomes = series.map((e) => ((diag ? e.picked !== t : e.picked === p) ? 1 : 0)); // 1 = red/bad
@@ -547,9 +553,10 @@ function showCellHistory(td) {
   }
 
   const label = diag ? `${bad}/${n} wrong` : `confused ${bad}/${n}`;
+  // The replay hint rides on the head row as a muted parenthetical; tapping a
+  // mark swaps it for that recording's name (see the confdetail click handler).
   confdetail.innerHTML =
-    `<div class="cd-head">${pair} · ${label} · ${trend}</div>` +
-    `<div class="cd-file" aria-live="polite">tap a ○ / ✕ to replay that question's recording</div>` +
+    `<div class="cd-head">${pair} · ${label} · ${trend} <span class="cd-file" aria-live="polite">(tap a ○ / ✕ to replay that question's recording)</span></div>` +
     `<svg class="cd-strip" width="${W}" height="${BH}" role="img" aria-label="${pair} history">${marks}${curve}</svg>`;
   confdetail.hidden = false;
 }
@@ -573,7 +580,7 @@ confdetail.addEventListener("click", (e) => {
   g.classList.add("playing");
   cellPlayer.onended = () => { g.classList.remove("playing"); cellPlayer.onended = null; };
   const fileEl = confdetail.querySelector(".cd-file");
-  if (fileEl) fileEl.textContent = ev.voice || file;
+  if (fileEl) fileEl.textContent = `(${ev.voice || file})`;
 });
 
 confchart.addEventListener("click", (e) => {

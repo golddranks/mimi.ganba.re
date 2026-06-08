@@ -389,12 +389,20 @@ test("dashboard: clicking a confusion cell shows its history strip", async (t) =
 
   await waitFor(() => cell()?.textContent === "3/6", WAIT);   // matrix rendered (shown: za picked 3 of 6 offered)
   assert.ok(detail.hidden, "history hidden until a cell is clicked");
+  assert.equal(win.confhint.hidden, false, "the 'tap a cell' hint shows until the first tap");
   cell().click();
 
   await waitFor(() => !detail.hidden && detail.querySelectorAll("svg circle, svg path").length > 0, WAIT);
   assert.equal(detail.querySelectorAll("svg circle, svg path").length, 6, "one ○/✕ mark per offered event");
   assert.match(detail.querySelector(".cd-head").textContent, /→ ざ · confused 3\/6/);
   assert.ok(cell().classList.contains("selected"), "clicked cell is marked selected");
+
+  // The discovery hint drops for good once a cell has been tapped.
+  assert.equal(win.confhint.hidden, true, "the 'tap a cell' hint hides after the first tap");
+  assert.equal(win.localStorage.getItem("confHintSeen"), "1", "and stays hidden on future loads");
+  // The replay hint rides inline on the head row as a parenthetical.
+  const replayHint = detail.querySelector(".cd-head .cd-file");
+  assert.ok(replayHint?.textContent.startsWith("(tap a ○ / ✕"), "replay hint is an inline parenthetical on the head row");
 });
 
 test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", async (t) => {
