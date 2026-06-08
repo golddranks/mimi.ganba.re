@@ -150,7 +150,7 @@ function tipContext() {
 let tipContextShown = null;
 function updateTip(force) {
   if (viewMode) return;   // view-as shows the spoofed-uid label instead
-  if (nativeMode) { tip.textContent = "ネイティブ検証モード"; return; }   // native manages its own status line
+  if (nativeMode) { tip.textContent = "ネイティブ検証モード：音声が不自然だったり、自信がないときは、長押しで回答してください"; return; }   // native manages its own status line
   const ctx = force || tipContext();
   if (!force && ctx === tipContextShown) return;
   tipContextShown = ctx;
@@ -326,7 +326,7 @@ function nativeQuestion() {
   tip.textContent = "読み込み中…";
   loadNativePairs().then(() => {
     const q = nextNativePair();
-    if (q) askChoices(q.mora, q.idx, shuffle([q.mora, q.confuser]));
+    if (q) { askChoices(q.mora, q.idx, shuffle([q.mora, q.confuser])); updateTip(); }   // restore the always-on advice after "読み込み中…"
     else { tip.textContent = "検証できるペアがまだありません"; primary.textContent = "再試行"; primary.hidden = false; }
   });
 }
