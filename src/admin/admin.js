@@ -1,6 +1,7 @@
 import { aggregateByConsonant, consonantCounts, fillConfusionCells } from "../shared/confusion.js";
 import { dayBarChart, dayTip, calendarSpan } from "../shared/daychart.js";
 import { drawBars, drawHourly, wireSwitchGroup } from "../shared/charts.js";
+import { playVoice, drawVoiceConfusion as renderVoiceConf } from "../shared/voiceconf.js";
 
 // Power-user-only app-wide aggregate dashboard. Fans two endpoints into the
 // static skeleton declared in admin/index.html. Auth is the requester's own
@@ -25,36 +26,6 @@ let nicknames = {};
 // confusion matrix, sound-file confusion). Clicking any of them updates
 // every switch and re-renders all three sections.
 let displayMode = "count";
-
-// Hiragana for the kana the user picks (button-side); katakana for the
-// sound the user heard (row-side). Same convention as the user dashboard.
-const HIRAGANA = {
-  sa: "さ", za: "ざ", sya: "しゃ", zya: "じゃ", tya: "ちゃ",
-  si: "し", zi: "じ", ti: "ち",
-  su: "す", zu: "ず", tu: "つ", syu: "しゅ", zyu: "じゅ", tyu: "ちゅ",
-  so: "そ", zo: "ぞ", syo: "しょ", zyo: "じょ", tyo: "ちょ",
-};
-const KATAKANA = {
-  sa: "サ", za: "ザ", sya: "シャ", zya: "ジャ", tya: "チャ",
-  si: "シ", zi: "ジ", ti: "チ",
-  su: "ス", zu: "ズ", tu: "ツ", syu: "シュ", zyu: "ジュ", tyu: "チュ",
-  so: "ソ", zo: "ゾ", syo: "ショ", zyo: "ジョ", tyo: "チョ",
-};
-
-// Click-to-play for voice file names in the difficulty table and the
-// sound-file confusion grid. Looks up the recording's index in the current
-// VOICE_MAP (injected by build) and plays the bundled .opus relative to
-// the admin page. Reuses one Audio instance so a second click cancels the
-// previous playback.
-const voiceAudio = new Audio();
-function playVoice(mora, voice) {
-  const list = (window.VOICE_MAP || {})[mora] || [];
-  const idx = list.indexOf(voice);
-  if (idx < 0) return;
-  voiceAudio.src = `../audio/${mora.slice(-1)}/${mora}/${idx}.opus`;
-  voiceAudio.currentTime = 0;
-  voiceAudio.play().catch(() => { });
-}
 
 // uid resolution mirrors the no-uid head script so first paint matches behaviour.
 // Pulled from localStorage by default (set by the main app); ?uid=… overrides
@@ -367,16 +338,7 @@ function drawConsMora() {
   drawBars(consmorachart, cc, maxN, displayMode);
 }
 
-// ---------- sound-file difficulty ----------
-const VOWEL_GROUPS = {
-  a: ["sa", "za", "sya", "zya", "tya"],
-  i: ["si", "zi", "ti"],
-  u: ["su", "zu", "tu", "syu", "zyu", "tyu"],
-  o: ["so", "zo", "syo", "zyo", "tyo"],
-};
-// "<row-head>行" — Japanese for "<vowel>-row in the 50-sound chart"
-const VOWEL_GYO = { a: "あ行", i: "い行", u: "う行", o: "お行" };
-
+// ---------- sound-file confusion matrix (per recording) ----------
 let voiceShownData = [];       // [{t, v, p, n}] — picks among opts-bearing answers
 let voiceOfferedData = [];     // [{t, v, k, n}] — times kana k offered for (recording)
 
@@ -388,127 +350,13 @@ function renderVoiceConfusion(shownRows, offeredRows) {
   drawVoiceConfusion();
 }
 
-// Per-vowel-group, per-recording confusion. Rows = (mora, voice) recordings
-// grouped by mora; columns = picked mora within the vowel group. The row
-// list iterates the current build's VOICE_MAP so newly-added recordings
-// appear immediately; recordings that have been removed from VOICE_MAP but
-// still have history in the DB silently disappear (acceptable for an admin
-// view of current files).
+// Thin wrapper over the shared renderer — reads the page's filter inputs + mode.
 function drawVoiceConfusion() {
-  const minA = Math.max(0, parseInt(vcmin.value, 10) || 0);
-  const minW = Math.max(0, parseInt(vcwrong.value, 10) || 0);
-  const map = window.VOICE_MAP || {};
-  const shown = {}, offered = {};
-  for (const r of voiceShownData) shown[`${r.t}/${r.v}/${r.p}`] = r.n;
-  for (const r of voiceOfferedData) offered[`${r.t}/${r.v}/${r.k}`] = r.n;
-
-  // One (recording, kana) cell's confusion rate (0..100): picks ÷ times that kana
-  // was offered for this recording (the pairwise rate). Independent of the
-  // count/% display mode.
-  const offPct = (m, voice, p) => {
-    const off = offered[`${m}/${voice}/${p}`] || 0;
-    return off > 0 ? (shown[`${m}/${voice}/${p}`] || 0) / off * 100 : 0;
-  };
-
-  // Worst off-diagonal rate in a row — drives the wrong-% filter and orders
-  // recordings hardest-first, so the ones driving a specific confusion surface
-  // first rather than the merely generally-wrong ones.
-  const rowMaxOffPct = (m, voice) => {
-    const sib = VOWEL_GROUPS[m.slice(-1)] || [];
-    let max = 0;
-    for (const p of sib) {
-      if (p === m) continue;
-      const pct = offPct(m, voice, p);
-      if (pct > max) max = pct;
-    }
-    return max;
-  };
-
-  // value{display, mag, raw} — same shape as the main matrix's confusionValue.
-  const valueFor = (m, voice, p) => {
-    const pct = offPct(m, voice, p);
-    const n = shown[`${m}/${voice}/${p}`] || 0;
-    const off = offered[`${m}/${voice}/${p}`] || 0;
-    if (displayMode === "pct") {
-      const display = (off > 0 && n > 0) ? (Math.round(pct) === 0 ? "<1" : String(Math.round(pct))) : "";
-      return { display, mag: pct, raw: off };
-    }
-    return { display: off ? `${n}/${off}` : "", mag: pct, raw: off };
-  };
-
-  const html = [];
-  for (const v of ["a", "i", "u", "o"]) {
-    const morae = VOWEL_GROUPS[v];
-
-    // Keep the per-sound clustering (morae in fixed order), but within each sound
-    // order its recordings hardest-first by their worst per-kana confusion rate.
-    const rowsInGroup = [];
-    for (const m of morae) {
-      const voices = (map[m] || []).filter((voice) => {
-        // Times this recording was asked = times its own kana was offered (the
-        // target is always an option), read off the offered map.
-        const attempts = offered[`${m}/${voice}/${m}`] || 0;
-        if (attempts < minA) return false;
-        if (minW > 0 && rowMaxOffPct(m, voice) < minW) return false;
-        return true;
-      });
-      voices.sort((a, b) => rowMaxOffPct(m, b) - rowMaxOffPct(m, a));
-      for (const voice of voices) rowsInGroup.push({ m, voice });
-    }
-
-    let maxOn = 0, maxOff = 0;
-    for (const row of rowsInGroup) {
-      for (const p of morae) {
-        const val = valueFor(row.m, row.voice, p);
-        if (row.m === p) maxOn = Math.max(maxOn, val.mag);
-        else maxOff = Math.max(maxOff, val.mag);
-      }
-    }
-
-    let header = `<tr><th></th><th></th>`;
-    for (const p of morae) header += `<th>${HIRAGANA[p]}</th>`;
-    header += `</tr>`;
-
-    let body = "";
-    let lastMora = null;
-    const spacer = `<tr class="moragap" aria-hidden="true"><td colspan="${2 + morae.length}"></td></tr>`;
-    for (const row of rowsInGroup) {
-      // Insert an empty spacer row when the mora changes. (Padding/border on
-      // the cluster's first row gets eaten by the fixed td height under
-      // box-sizing: border-box, so an explicit row is the only reliable way
-      // to get visible whitespace between sound clusters.)
-      if (row.m !== lastMora && body !== "") body += spacer;
-      lastMora = row.m;
-      // vname carries data-mora/data-voice for the click-to-play delegation
-      // attached once at module load; vmora is katakana (heard side). The
-      // voice name lives inside a span so it can ellipsis-truncate without
-      // making the th itself wider than its max-width — table cells don't
-      // honour text-overflow on their own.
-      body += `<tr><th class="vmora">${KATAKANA[row.m]}</th><th class="vname" data-mora="${row.m}" data-voice="${row.voice}" title="${row.voice}"><span>${row.voice}</span></th>`;
-      for (const p of morae) {
-        const val = valueFor(row.m, row.voice, p);
-        const diag = row.m === p;
-        let bg = "transparent";
-        if (val.mag > 0) {
-          const a = diag ? (maxOn ? val.mag / maxOn : 0) : (maxOff ? val.mag / maxOff : 0);
-          const base = diag ? "var(--good)" : "var(--bad)";
-          const pct = Math.round((diag ? 15 : 20) + a * (diag ? 55 : 60));
-          bg = `color-mix(in srgb, ${base} ${pct}%, transparent)`;
-        }
-        const cls = ((diag ? "diag" : "") + (val.raw === 0 ? " empty" : "")).trim();
-        body += `<td class="${cls}" style="background:${bg}" title="${row.m} (${row.voice}) → ${p}: ${val.raw}">${val.display}</td>`;
-      }
-      body += `</tr>`;
-    }
-
-    html.push(`<div class="confgroup">
-      <table class="vconfgrid">
-        <thead>${header}</thead>
-        <tbody>${body || `<tr><td colspan="${2 + morae.length}" style="text-align:left;color:var(--muted);padding:.4rem 0">no recordings meet the filters</td></tr>`}</tbody>
-      </table>
-    </div>`);
-  }
-  voiceconf.innerHTML = html.join("");
+  renderVoiceConf(voiceconf, voiceShownData, voiceOfferedData, {
+    mode: displayMode,
+    minA: Math.max(0, parseInt(vcmin.value, 10) || 0),
+    minW: Math.max(0, parseInt(vcwrong.value, 10) || 0),
+  });
 }
 
 // ---------- confusion (same shape as user dashboard, server-side counts) ----------

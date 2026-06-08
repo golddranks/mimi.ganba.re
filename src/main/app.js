@@ -1,5 +1,6 @@
 import { capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { dateKey, daysAgo } from "../shared/dates.js";
+import { HIRAGANA } from "../shared/kana.js";
 import { dayTier } from "../shared/daytier.js";
 import { pickTip } from "./tips.js";
 import { confusionRecord } from "../shared/tally.js";
@@ -7,16 +8,10 @@ import { getGrind, tallyAnswer, initGrind, recordGrindAnswer } from "./grind.js"
 import { scheduleReminders } from "./reminders.js";
 import { render } from "./render.js";
 
-// Mora identifiers are kunrei-shiki (ASCII) so audio URLs stay plain ASCII;
-// the vowel is just the last letter (sa→a, sya→a, ti→i). HIRAGANA maps each
-// id to its hiragana for the buttons; ALL is just its key list. The build
-// injects window.VOICE_COUNTS = {mora: n}; audio lives at audio/<vowel>/<mora>/<i>.opus.
-const HIRAGANA = {
-  sa: "さ", za: "ざ", sya: "しゃ", zya: "じゃ", tya: "ちゃ",
-  si: "し", zi: "じ", ti: "ち",
-  su: "す", zu: "ず", tu: "つ", syu: "しゅ", zyu: "じゅ", tyu: "ちゅ",
-  so: "そ", zo: "ぞ", syo: "しょ", zyo: "じょ", tyo: "ちょ",
-};
+// Mora identifiers are kunrei-shiki (ASCII) so audio URLs stay plain ASCII; the
+// vowel is just the last letter (sa→a, sya→a, ti→i). HIRAGANA (shared) maps each
+// id to its hiragana for the buttons; ALL is its key list. The build injects
+// window.VOICE_COUNTS = {mora: n}; audio lives at audio/<vowel>/<mora>/<i>.opus.
 const ALL = Object.keys(HIRAGANA);
 const COUNTS = window.VOICE_COUNTS;
 
