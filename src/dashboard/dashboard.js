@@ -225,11 +225,14 @@ function renderLevels(events) {
 }
 
 // ---------- day-bar charts (daily activity + peak streak) ----------
-// Calendar-uniform list of days from the first event to the last (inclusive),
-// each as { k, ...valueFor(k) }.
+// Calendar-uniform list of days from the first event up to today (inclusive),
+// each as { k, ...valueFor(k) }. The axis runs to *today*, not the last event,
+// so the current day's slot — and this week's/month's gridline — show even
+// before today's first answer (otherwise the latest week line is missing until
+// you train, while admin, aggregating all users, already reaches today).
 function calendarDays(events, valueFor) {
   const first = new Date(events[0].ts); first.setHours(0, 0, 0, 0);
-  const last = new Date(events[events.length - 1].ts); last.setHours(0, 0, 0, 0);
+  const last = new Date(Math.max(Date.now(), events[events.length - 1].ts)); last.setHours(0, 0, 0, 0);
   const days = [];
   for (const d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
     const k = dateKey(d);
