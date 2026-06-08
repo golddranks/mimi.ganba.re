@@ -4,7 +4,7 @@ import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, fill
 import { tallyFromEvents, tallyMaps, confusionRecord } from "../shared/tally.js";
 import { isAnswerEv, answeredRight } from "../shared/events.js";
 import { pushSupported, currentSubscription, subscribe, unsubscribe } from "../shared/push.js";
-import { dayBarChart, dayTip } from "../shared/daychart.js";
+import { dayBarChart, dayTip, calendarSpan } from "../shared/daychart.js";
 import { drawBars, drawHourly, wireSwitchGroup } from "../shared/charts.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
@@ -225,20 +225,14 @@ function renderLevels(events) {
 }
 
 // ---------- day-bar charts (daily activity + peak streak) ----------
-// Calendar-uniform list of days from the first event up to today (inclusive),
-// each as { k, ...valueFor(k) }. The axis runs to *today*, not the last event,
-// so the current day's slot — and this week's/month's gridline — show even
-// before today's first answer (otherwise the latest week line is missing until
-// you train, while admin, aggregating all users, already reaches today).
+// Calendar-uniform days (in the viewer's local zone) from the first event up to
+// *today* — not the last event — so the current day's slot and this week's/
+// month's gridline show even before today's first answer (otherwise the latest
+// week line is missing until you train). max() guards a future-dated event.
 function calendarDays(events, valueFor) {
-  const first = new Date(events[0].ts); first.setHours(0, 0, 0, 0);
-  const last = new Date(Math.max(Date.now(), events[events.length - 1].ts)); last.setHours(0, 0, 0, 0);
-  const days = [];
-  for (const d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
-    const k = dateKey(d);
-    days.push({ k, ...valueFor(k) });
-  }
-  return days;
+  const firstKey = dayKey(events[0].ts);
+  const lastKey = [dayKey(events[events.length - 1].ts), dateKey(new Date())].sort().pop();
+  return calendarSpan(firstKey, lastKey, valueFor);
 }
 
 function renderDaily(events) {

@@ -1,6 +1,5 @@
-import { pad2 } from "../shared/dates.js";
 import { aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
-import { dayBarChart, dayTip } from "../shared/daychart.js";
+import { dayBarChart, dayTip, calendarSpan } from "../shared/daychart.js";
 import { drawBars, drawHourly, wireSwitchGroup } from "../shared/charts.js";
 
 // Power-user-only app-wide aggregate dashboard. Fans two endpoints into the
@@ -144,16 +143,14 @@ function renderOverview(data) {
 // stack reveals the contributing uids — same pattern as the histograms.
 function renderDaily(daily, uids) {
   if (!daily || daily.length === 0) { dailychart.textContent = "(no data)"; return; }
-  // Fill any missing days between first and last so the x-axis is calendar-uniform.
+  // Calendar-uniform across the server's day range (it already reaches "today"
+  // via cross-user activity, so — unlike the per-user dashboard — there's no
+  // missing-current-week issue to extend past it).
   const map = new Map(daily.map((r) => [r.d, r]));
-  const first = new Date(daily[0].d + "T00:00:00Z");
-  const last = new Date(daily[daily.length - 1].d + "T00:00:00Z");
-  const days = [];
-  for (const d = new Date(first); d <= last; d.setUTCDate(d.getUTCDate() + 1)) {
-    const k = `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+  const days = calendarSpan(daily[0].d, daily[daily.length - 1].d, (k) => {
     const r = map.get(k) || { n: 0, correct: 0 };
-    days.push({ k, n: r.n, correct: r.correct });
-  }
+    return { n: r.n, correct: r.correct };
+  });
   // Bars carry data-date so clicking a stack reveals the contributing uids.
   dayBarChart(dailychart, days, 200, (d) => d.n, (d, x, barW, bh, y0) => {
     const cH = d.n ? d.correct / d.n * bh : 0;

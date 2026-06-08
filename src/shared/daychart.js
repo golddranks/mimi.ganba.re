@@ -1,8 +1,27 @@
 // The daily-history bar chart, shared by the dashboard (activity + peak streak)
 // and admin (activity) so the three day-charts are one component, not three
 // hand-copied SVG builders. DOM-touching but frontend-only (the worker never
-// imports this). Each caller builds its own calendar-uniform `days` array (the
-// source differs: events vs server rows) and passes a `bar` callback.
+// imports this). Callers turn their source (events vs server rows) into a
+// calendar-uniform `days` array via calendarSpan, then pass a `bar` callback.
+
+import { pad2 } from "./dates.js";
+
+// Calendar-uniform day buckets from firstKey to lastKey inclusive (both
+// "YYYY-MM-DD"), each as { k, ...valueFor(k) }. Steps by calendar date via UTC
+// arithmetic — the keys are plain dates, so this is timezone-agnostic: whichever
+// zone the caller bucketed in (the viewer's local day for the per-user
+// dashboard, the server's day for admin) is already baked into the endpoints.
+// Callers pick the endpoints, so "extend the axis to today" is their choice.
+export function calendarSpan(firstKey, lastKey, valueFor) {
+  const days = [];
+  const d = new Date(firstKey + "T00:00:00Z");
+  const end = new Date(lastKey + "T00:00:00Z");
+  for (; d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    const k = `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+    days.push({ k, ...valueFor(k) });
+  }
+  return days;
+}
 
 // "Nice" y-axis tick values up to `max` (0.5/1/2 × power-of-ten steps).
 export function niceTicks(max) {
