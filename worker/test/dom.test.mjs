@@ -760,6 +760,7 @@ test("dashboard: no drift notice when viewing someone else's data", { skip: LIVE
 
   await waitFor(() => cell("sa", "za")?.textContent === "3/5", WAIT);
   assert.equal(win.syncnotice.hidden, true, "another user's matrix never flags local drift");
+  assert.equal(win.uidform.hidden, true, "level-1 viewer can view a shared link but gets no load-as form");
 });
 
 test("dashboard: viewing another user's dashboard is denied without power", async (t) => {
@@ -817,4 +818,5 @@ test("dashboard: a power user sees the viewed uid's reminder state, read-only", 
   await waitFor(() => !win.notif.hidden && win.notifstatus.textContent.includes("Daily reminders") ? true : null, WAIT);
   assert.match(win.notifstatus.textContent, /Daily reminders: on for this user/);
   assert.equal(win.notifbtn.hidden, true, "view-as shows no toggle button");
+  assert.equal(win.uidform.hidden, false, "level-2 viewer gets the load-as form");
 });

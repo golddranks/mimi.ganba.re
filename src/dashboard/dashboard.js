@@ -151,10 +151,12 @@ notifbtn.onclick = async () => {
 
 renderNotif();
 
-// Reveal the load-form for power users (>= 1), the same floor the view-as gate
-// above enforces — so the form only appears to those who can actually use it.
+// Reveal the load-form only at level 2. View-as itself works at level 1 (so a
+// shared ?uid= link opens), but the form — typing in arbitrary uids — is useless
+// below level 2: uids are only obtainable from the DB or the level-2 admin page.
+// Showing it to level-1 users would just invite snooping with uids they can't get.
 // Failure (no network, no row, 4xx) silently keeps the form hidden.
-viewerLevel().then((level) => { if (level >= 1) uidform.hidden = false; });
+viewerLevel().then((level) => { if (level >= 2) uidform.hidden = false; });
 
 // First paint shows the dash skeleton (zeros + reserved chart space). #msg
 // stays empty (and therefore display:none) during the loading window, so the
