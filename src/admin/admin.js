@@ -68,7 +68,15 @@ async function load(uid) {
   try {
     const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid) + confusionParams());
     if (res.status === 403) {
-      msg.textContent = "Unauthorized.";
+      msg.replaceChildren(
+        `Your Device ID (${uid}) is unauthorized to view the admin page. `,
+        "Ask the administrator for the rights, or use the personal ",
+        Object.assign(document.createElement("a"), {
+          href: "https://mimi.ganba.re/dashboard/",
+          textContent: "Dashboard",
+        }),
+        " instead.",
+      );
       dash.style.display = "none";
       return;
     }
