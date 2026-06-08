@@ -20,11 +20,15 @@ import { isAnswerEv, answeredRight } from "../../src/shared/events.js";
 import { VAPID_PUBLIC_KEY } from "../../src/shared/vapid.js";
 import { localStamp, dueNudge, vapidAuth, encryptPayload, sendPush, NUDGE_TEXT, START_HOUR, DONE_HOUR } from "./push.js";
 
-// Exclude users tagged as test fixtures so seeded data (worker/seed.sql)
-// doesn't pollute global stats. The seed user is INSERTed with this nickname;
-// add more nicknames here if other synthetic users get tagged. SQL-injection
-// note: this fragment is hard-coded, never user-input.
-const EXCLUDE_TEST = "uid NOT IN (SELECT uid FROM users WHERE nickname = 'TestUser')";
+// Production aggregates show only normal users (role 0): non-normal roles —
+// 1 = automatic (e2e/seed) test users, 2 = native test users (forced-pair
+// drilling, which would skew normal stats) — are excluded. uids with no users
+// row (shouldn't happen; every event POST upserts one) count as normal.
+// SQL-injection note: hard-coded fragment, never user-input. Two other role
+// predicates exist for their own contexts: roleFilter() for the confusion
+// matrices (role 0 XOR role 2 via the admin toggle) and the native pair-ranking
+// (role != 1).
+const EXCLUDE_TEST = "uid NOT IN (SELECT uid FROM users WHERE role != 0)";
 
 // SQL mirror of src/shared/events.js: which events are answers, and the 1/0
 // "answered right" expression (the Y/N "no" inverts — right when picked != target).
@@ -315,11 +319,16 @@ async function handleUser(req, env) {
     return new Response("bad request", { status: 400 });
   }
   const nickname = body.nickname.trim().slice(0, 64);
+  // Optional role: 2 = native tester (self-assigned via ?nativeTester), 1 =
+  // automatic test user (the e2e harness). Self-assignable — it only excludes
+  // the caller's own data / changes their own mode. null = leave role unchanged
+  // (a plain nickname update mustn't reset a native tester back to normal).
+  const role = [0, 1, 2].includes(body.role) ? body.role : null;
   const now = Date.now();
   await env.mimi_stats.prepare(
-    "INSERT INTO users (uid, nickname, first_seen, last_seen) VALUES (?, ?, ?, ?) " +
-    "ON CONFLICT(uid) DO UPDATE SET nickname = excluded.nickname, last_seen = excluded.last_seen"
-  ).bind(body.uid, nickname, now, now).run();
+    "INSERT INTO users (uid, nickname, role, first_seen, last_seen) VALUES (?, ?, COALESCE(?, 0), ?, ?) " +
+    "ON CONFLICT(uid) DO UPDATE SET nickname = excluded.nickname, role = COALESCE(?, role), last_seen = excluded.last_seen"
+  ).bind(body.uid, nickname, role, now, now, role).run();
   return json({ ok: true });
 }
 

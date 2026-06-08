@@ -6,11 +6,11 @@
 DELETE FROM events WHERE uid = '00000000-0000-4000-8000-000000000000';
 DELETE FROM users  WHERE uid = '00000000-0000-4000-8000-000000000000';
 
--- nickname='TestUser' is a sentinel: the admin endpoint excludes any uid
--- with this nickname from its aggregates, so seeded fixtures don't pollute
--- global stats even if this file gets applied to the remote DB.
-INSERT INTO users (uid, first_seen, last_seen, nickname) VALUES
-  ('00000000-0000-4000-8000-000000000000', 1778857200000, 1779289200000, 'TestUser');
+-- role=1 (automatic test user) is the exclusion key: the worker keeps any
+-- non-normal role out of production aggregates (EXCLUDE_TEST), so seeded
+-- fixtures don't pollute global stats even if this file hits the remote DB.
+INSERT INTO users (uid, first_seen, last_seen, nickname, role) VALUES
+  ('00000000-0000-4000-8000-000000000000', 1778857200000, 1779289200000, 'TestUser', 1);
 
 -- All days seeded at JST midnight + i seconds.
 -- Today (JST) midnight = 2026-05-21 00:00 JST = 1779289200000 ms.

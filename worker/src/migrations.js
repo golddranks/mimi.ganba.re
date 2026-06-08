@@ -38,4 +38,17 @@ export const MIGRATIONS = [
       + "auth TEXT NOT NULL, tz_offset INTEGER NOT NULL, last_push TEXT, created INTEGER NOT NULL)",
     down: "DROP TABLE push_subs",
   },
+  {
+    // User role: 0 normal, 1 automatic (e2e) test user, 2 native test user.
+    // Replaces nickname='TestUser' as the production-aggregate exclusion key.
+    id: 4,
+    up: "ALTER TABLE users ADD COLUMN role INTEGER NOT NULL DEFAULT 0",
+    down: "ALTER TABLE users DROP COLUMN role",
+  },
+  {
+    // Carry the old marker forward: existing TestUser rows become role 1.
+    id: 5,
+    up: "UPDATE users SET role = 1 WHERE nickname = 'TestUser'",
+    down: "UPDATE users SET role = 0 WHERE nickname = 'TestUser'",
+  },
 ];

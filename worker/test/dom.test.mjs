@@ -27,15 +27,16 @@ const postEvents = (uid, events) =>
     body: JSON.stringify({ uid, events }),
   });
 
-// Register a uid with nickname "TestUser" so the worker excludes its rows from
-// production aggregates (EXCLUDE_TEST). Every uid the suite writes under goes
-// through this — keeping writes prod-safe and isolated (a fresh uid sees only
-// its own events, so exact counts hold live as well as local).
+// Register a uid as an automatic test user (role 1) so the worker excludes its
+// rows from production aggregates (EXCLUDE_TEST = role 0). Every uid the suite
+// writes under goes through this — keeping writes prod-safe and isolated (a
+// fresh uid sees only its own events, so exact counts hold live as well as
+// local).
 const registerTestUser = (uid) =>
   fetch(`${WORKER}/v1/user`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ uid, nickname: "TestUser" }),
+    body: JSON.stringify({ uid, nickname: "TestUser", role: 1 }),
   });
 
 const freshTestUser = async () => {

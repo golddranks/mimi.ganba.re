@@ -36,7 +36,7 @@ async function req(method, path, body, tries = 5) {
 }
 
 test("POST /v1/user tags the sentinel user", async () => {
-  const u = await req("POST", "/v1/user", { uid: UID, nickname: "TestUser" });
+  const u = await req("POST", "/v1/user", { uid: UID, nickname: "TestUser", role: 1 });
   assert.equal(u.status, 200);
 });
 
