@@ -563,7 +563,7 @@ function showCellHistory(td) {
     for (let s = 0; s <= 24; s++) {
       const x = s / 24;
       const xpx = x * (n - 1) * CW + CW / 2;
-      pts.push(`${xpx.toFixed(1)},${(BH - logisticAt(tr.fit, x) * BH).toFixed(1)}`);
+      pts.push(`${xpx.toFixed(1)},${(logisticAt(tr.fit, x) * BH).toFixed(1)}`);
     }
     curve = `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2" pointer-events="none"/>`;
     trend = tr.improving ? "improving ↑" : "worsening ↓";
