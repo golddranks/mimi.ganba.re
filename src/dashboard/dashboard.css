@@ -558,13 +558,17 @@ body {
 }
 
 /* Grind target (confidently >20% wrong) gets a fat solid ring; every still-
-   uncertain case (probe target) a dashed one — solid vs dashed tells them apart.
-   The ring is --fg (high contrast on any tint) rather than --bad, so it isn't
-   lost on an orange cell. Neither box-shadow nor outline shifts layout; .selected
-   (below) overrides probe's outline when a probe cell is clicked. See
-   shared/confusion.js. */
+   uncertain case (probe target) a faint dashed one — solid vs dashed tells them
+   apart. --fg (high contrast on any tint, vs --bad which an orange cell would
+   swallow), but thin + half-transparent so it stays quiet, and inset 4px so
+   adjacent probe cells' dashes keep a visible gutter instead of merging into one
+   strong line. Neither box-shadow nor outline shifts layout; .selected (below)
+   overrides probe's outline when a probe cell is clicked. See shared/confusion.js. */
 .confgrid td.grind { box-shadow: inset 0 0 0 3px var(--fg); }
-.confgrid td.probe { outline: 2px dashed var(--fg); outline-offset: -2px; }
+.confgrid td.probe {
+    outline: 1px dashed color-mix(in srgb, var(--fg) 45%, transparent);
+    outline-offset: -4px;
+}
 
 /* Clicked cell + its history strip (red/green per-answer boxes + trend line). */
 .confgrid td { cursor: pointer; }
