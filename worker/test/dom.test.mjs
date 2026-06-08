@@ -829,6 +829,26 @@ test("admin: a user's timezone is recorded from events, not just subscriptions",
   assert.equal(data.timezones?.[uid], 540, "tz from the events POST shows in admin (no subscription needed)");
 });
 
+test("admin reminder: reports the opt-in engagement state (declined / offered / none)", { skip: LIVE }, async () => {
+  const admin = randomUUID();
+  await postEvents(admin, saFixture(Date.now()));
+  grantPowerUser(admin, 1);
+  const evt = { ts: Date.now(), target: "sa", idx: 0, picked: "sa", cap: 2, ms: 100, ev: "a", opts: ["sa", "za"], skill: 0 };
+  const post = (uid, remind_state) => fetch(`${WORKER}/v1/events`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ uid, remind_state, events: [evt] }),
+  });
+  const stateOf = (t) => fetch(`${WORKER}/v1/admin/reminder?uid=${encodeURIComponent(admin)}&target=${encodeURIComponent(t)}`)
+    .then((r) => r.json()).then((d) => d.state);
+
+  const decliner = randomUUID(); await post(decliner, "declined");
+  const offered = randomUUID(); await post(offered, "offered");
+  const fresh = randomUUID(); await post(fresh, null);   // no opt-in signal
+  assert.equal(await stateOf(decliner), "declined");
+  assert.equal(await stateOf(offered), "offered");
+  assert.equal(await stateOf(fresh), null, "no signal → not-shown");
+});
+
 test("dashboard: a power user sees the viewed uid's reminder state, read-only", { skip: LIVE }, async (t) => {
   const admin = randomUUID();
   await postEvents(admin, saFixture(Date.now()));
@@ -849,4 +869,22 @@ test("dashboard: a power user sees the viewed uid's reminder state, read-only", 
   assert.match(win.notifstatus.textContent, /Daily reminders: on for this user/);
   assert.equal(win.notifbtn.hidden, true, "view-as shows no toggle button");
   assert.equal(win.uidform.hidden, false, "level-2 viewer gets the load-as form");
+});
+
+test("dashboard view-as: shows a declined reminder opt-in (not just on/off)", { skip: LIVE }, async (t) => {
+  const admin = randomUUID();
+  await postEvents(admin, saFixture(Date.now()));
+  grantPowerUser(admin, 1);
+  const decliner = randomUUID();
+  await fetch(`${WORKER}/v1/events`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ uid: decliner, remind_state: "declined", events: saFixture(Date.now()) }),
+  });
+
+  const { win, close } = await openPage(`/dashboard/?uid=${decliner}`, {
+    setup: (w) => w.localStorage.setItem("uid", admin),
+  });
+  t.after(close);
+  await waitFor(() => win.notifstatus.textContent.includes("Daily reminders") ? true : null, WAIT);
+  assert.match(win.notifstatus.textContent, /declined by this user/);
 });

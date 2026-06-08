@@ -77,6 +77,15 @@ function pushEvent(ev) {
   flushEvents();
 }
 
+// The user's reminder opt-in engagement, reported so the admin/dashboard can see
+// it (the subscription itself lives server-side in push_subs): "declined" (said no
+// or blocked the browser prompt) > "offered" (prompt shown, no answer) > null
+// (never shown). Synchronous read of local + browser state.
+const remindState = () =>
+  (localStorage.remind_optout || (typeof Notification !== "undefined" && Notification.permission === "denied")) ? "declined"
+    : localStorage.remind_shown ? "offered"
+      : null;
+
 let flushing = false;
 async function flushEvents() {
   if (!STATS_URL || flushing || evQueue.length === 0) return;
@@ -86,7 +95,7 @@ async function flushEvents() {
     const res = await fetch(STATS_URL + "/v1/events", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ uid, events: batch, tz: -new Date().getTimezoneOffset() }),
+      body: JSON.stringify({ uid, events: batch, tz: -new Date().getTimezoneOffset(), remind_state: remindState() }),
     });
     if (res.ok) {
       evQueue.splice(0, batch.length);

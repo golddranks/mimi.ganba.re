@@ -115,21 +115,27 @@ async function renderNotif() {
   if (!viewerUid) { notif.hidden = true; return; }
 
   if (uid !== viewerUid) {
-    const readout = (on) => { notifstatus.textContent = `Daily reminders: ${on ? "on" : "off"} for this user.`; notif.hidden = false; };
+    const readout = (on, state) => {
+      notifstatus.textContent = on ? "Daily reminders: on for this user."
+        : state === "declined" ? "Daily reminders: declined by this user."
+          : state === "offered" ? "Daily reminders: offered, no answer yet."
+            : "Daily reminders: not offered to this user yet.";
+      notif.hidden = false;
+    };
     // Render the remembered state for this uid first (synchronous, before paint),
     // so the readout doesn't flash in after the async power + reminder fetches.
     // Only a remembered power viewer gets it; the fetch below confirms/corrects.
     let cached = null;
     try { cached = JSON.parse(localStorage.viewAsRemind || "null"); } catch { /* ignore */ }
-    if (+localStorage.dashLevel >= 1 && cached && cached.uid === uid) readout(cached.on);
+    if (+localStorage.dashLevel >= 1 && cached && cached.uid === uid) readout(cached.on, cached.state);
     if (await viewerLevel() < 1) { notif.hidden = true; return; }
     try {
       const r = await fetch(STATS_URL + "/v1/admin/reminder?uid=" + encodeURIComponent(viewerUid)
         + "&target=" + encodeURIComponent(uid));
       if (!r.ok) { notif.hidden = true; return; }
-      const { on } = await r.json();
-      localStorage.viewAsRemind = JSON.stringify({ uid, on });
-      readout(on);
+      const { on, state } = await r.json();
+      localStorage.viewAsRemind = JSON.stringify({ uid, on, state });
+      readout(on, state);
     } catch { notif.hidden = true; }
     return;
   }

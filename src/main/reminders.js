@@ -71,6 +71,7 @@ const REMIND_MSG = {
 // actually show the prompt. `test` (the ?remind=test path) sends one push once
 // subscribed, to verify delivery.
 function showRemindPrompt({ test = false, reason = "missed" } = {}) {
+  localStorage.remind_shown = "1";   // the opt-in was offered (reported on the next events POST)
   remindprompt.querySelector("span").textContent = REMIND_MSG[reason] || REMIND_MSG.missed;
   remindprompt.hidden = false;
   remindyes.onclick = async () => {

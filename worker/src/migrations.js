@@ -59,4 +59,13 @@ export const MIGRATIONS = [
     up: "ALTER TABLE users ADD COLUMN tz_offset INTEGER",
     down: "ALTER TABLE users DROP COLUMN tz_offset",
   },
+  {
+    // How the user engaged with the reminder opt-in, beyond the subscription in
+    // push_subs: 'declined' (said no / blocked the browser prompt) or 'offered'
+    // (prompt shown, no answer yet). null = never shown the option. Reported on the
+    // events POST, so the dashboard view-as can tell "declined" from "not offered".
+    id: 7,
+    up: "ALTER TABLE users ADD COLUMN remind_state TEXT",
+    down: "ALTER TABLE users DROP COLUMN remind_state",
+  },
 ];

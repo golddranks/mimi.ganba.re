@@ -284,10 +284,14 @@ async function handleEvents(req, env) {
   // admin knows every user's timezone, not just reminder subscribers. COALESCE so
   // an old client that omits it doesn't wipe a previously-recorded offset.
   const tz = (typeof body.tz === "number" && body.tz >= -720 && body.tz <= 840) ? Math.trunc(body.tz) : null;
+  // remind_state: how the user engaged with the reminder opt-in (declined/offered;
+  // null = not shown / no signal). COALESCE keeps the last known value when omitted.
+  const remindState = ["declined", "offered"].includes(body.remind_state) ? body.remind_state : null;
   const userTouch = env.mimi_stats.prepare(
-    "INSERT INTO users (uid, first_seen, last_seen, tz_offset) VALUES (?, ?, ?, ?) " +
-    "ON CONFLICT(uid) DO UPDATE SET last_seen = excluded.last_seen, tz_offset = COALESCE(excluded.tz_offset, tz_offset)"
-  ).bind(body.uid, now, now, tz);
+    "INSERT INTO users (uid, first_seen, last_seen, tz_offset, remind_state) VALUES (?, ?, ?, ?, ?) " +
+    "ON CONFLICT(uid) DO UPDATE SET last_seen = excluded.last_seen, " +
+    "tz_offset = COALESCE(excluded.tz_offset, tz_offset), remind_state = COALESCE(excluded.remind_state, remind_state)"
+  ).bind(body.uid, now, now, tz, remindState);
 
   await env.mimi_stats.batch([...inserts, userTouch]);
   return json({ ok: true, count: body.events.length });
@@ -373,19 +377,23 @@ async function handleGetUser(req, env, url) {
   return json({ power_user: await powerLevel(env, uid) });
 }
 
-// Read-only daily-reminder state for a uid: on iff it has any push subscription.
-// Gated to power users (>= 1), matching the dashboard view-as it backs — the
-// requester passes their own uid; ?target is the uid being inspected.
+// Read-only daily-reminder state for a uid: `on` iff it has a push subscription;
+// `state` is the opt-in engagement otherwise ('declined' / 'offered' / null = never
+// shown). Gated to power users (>= 1), matching the dashboard view-as it backs —
+// the requester passes their own uid; ?target is the uid being inspected.
 async function handleAdminReminder(req, env, url) {
   const uid = url.searchParams.get("uid") || "";
   if (await powerLevel(env, uid) < 1) {
     return new Response("forbidden", { status: 403 });
   }
   const target = url.searchParams.get("target") || "";
-  const row = await env.mimi_stats.prepare(
+  const sub = await env.mimi_stats.prepare(
     "SELECT 1 FROM push_subs WHERE uid = ? LIMIT 1"
   ).bind(target).first();
-  return json({ on: !!row });
+  const u = await env.mimi_stats.prepare(
+    "SELECT remind_state FROM users WHERE uid = ?"
+  ).bind(target).first();
+  return json({ on: !!sub, state: u ? u.remind_state : null });
 }
 
 async function handleUser(req, env) {
