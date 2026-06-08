@@ -18,9 +18,11 @@ const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
   ? `http://${location.hostname}:8787`
   : "https://mimi-stats.golddranks.workers.dev";
 
-// uid → nickname, populated on load. Used by showUidPopup to annotate the
-// drill-down list. Empty object until the first /v1/admin/stats response.
+// uid → nickname and uid → tz offset (minutes east of UTC, from push_subs),
+// populated on load. Used by showUidPopup to annotate the drill-down list.
+// Empty until the first /v1/admin/stats/users response.
 let nicknames = {};
+let timezones = {};
 
 // Display mode shared across the three count/per-sound-% toggles (per-sound,
 // confusion matrix, sound-file confusion). Clicking any of them updates
@@ -89,6 +91,7 @@ async function loadUserStats(uid) {
     if (!res.ok) return;
     const data = await res.json();
     nicknames = data.nicknames || {};
+    timezones = data.timezones || {};
     renderOverview(data);
     renderLevelHist(data.level_hist, data.level_hist_uids);
     renderDaysHist(data.days_hist, data.days_hist_uids);
@@ -269,10 +272,20 @@ function showUidPopup(title, uidList) {
     .map((u) => {
       const nick = nicknames[u];
       const nickHtml = nick ? `<span class="nick">${escapeHtml(nick)}</span>` : "";
-      return `<li><a href="../dashboard/?uid=${encodeURIComponent(u)}" target="_blank" rel="noopener"><span>${escapeHtml(u)}</span>${nickHtml}</a></li>`;
+      const tz = fmtTz(timezones[u]);
+      const tzHtml = tz ? `<span class="tz">${tz}</span>` : "";
+      return `<li><a href="../dashboard/?uid=${encodeURIComponent(u)}" target="_blank" rel="noopener"><span>${escapeHtml(u)}</span>${nickHtml}${tzHtml}</a></li>`;
     })
     .join("");
   popup.hidden = false;
+}
+
+// A push-subscription tz offset (minutes east of UTC) as "UTC±H[:MM]" — e.g.
+// 540 → "UTC+9", 330 → "UTC+5:30". null/undefined (no reminder opt-in) → "".
+function fmtTz(off) {
+  if (off == null) return "";
+  const abs = Math.abs(off), h = Math.floor(abs / 60), m = abs % 60;
+  return `UTC${off < 0 ? "−" : "+"}${h}${m ? ":" + String(m).padStart(2, "0") : ""}`;
 }
 
 // Escape before interpolating any client-supplied string (uids, nicknames)

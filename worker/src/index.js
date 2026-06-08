@@ -499,7 +499,7 @@ async function handleAdminUserStats(req, env, url) {
   const d7 = now - 7 * 86400000;
   const d30 = now - 30 * 86400000;
 
-  const [totals, active, daily, skillStream, nicks, dailyUidRows] = await Promise.all([
+  const [totals, active, daily, skillStream, nicks, dailyUidRows, tzRows] = await Promise.all([
     db.prepare(
       `SELECT
          COUNT(*)                                                       AS events,
@@ -544,6 +544,13 @@ async function handleAdminUserStats(req, env, url) {
       `SELECT date(ts/1000, 'unixepoch') AS d, uid
        FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
        GROUP BY d, uid`
+    ).all(),
+    // uid → timezone offset (minutes east of UTC), from push_subs (set at
+    // reminder opt-in). One per uid; a multi-device user gets any one offset.
+    db.prepare(
+      `SELECT uid, tz_offset FROM push_subs
+       WHERE tz_offset IS NOT NULL AND ${EXCLUDE_TEST}
+       GROUP BY uid`
     ).all(),
   ]);
 
@@ -616,6 +623,7 @@ async function handleAdminUserStats(req, env, url) {
     days_hist,
     days_hist_uids,
     nicknames: Object.fromEntries((nicks.results || []).map((r) => [r.uid, r.nickname])),
+    timezones: Object.fromEntries((tzRows.results || []).map((r) => [r.uid, r.tz_offset])),
     daily_uids: (dailyUidRows.results || []).reduce((m, r) => {
       (m[r.d] = m[r.d] || []).push(r.uid);
       return m;

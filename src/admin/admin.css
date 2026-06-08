@@ -563,12 +563,24 @@ body {
     word-break: break-all;
 }
 
-/* Nickname shown to the right of the uid in the drill-down popup. Muted so
-   the uid stays the primary identifier. */
+/* uid takes the slack so the nickname + timezone group together on the right. */
+.uidpopup-list a > span:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Nickname + timezone shown to the right of the uid in the drill-down popup.
+   Muted so the uid stays the primary identifier. */
 .uidpopup-list a .nick {
     flex: 0 0 auto;
     color: var(--muted);
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    font-size: .8rem;
+}
+
+.uidpopup-list a .tz {
+    flex: 0 0 auto;
+    color: var(--muted);
     font-size: .8rem;
 }
 
