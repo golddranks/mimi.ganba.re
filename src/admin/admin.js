@@ -69,8 +69,17 @@ async function reloadConfusion() {
     renderVoiceConfusion(data.by_voice_shown, data.by_voice_offered);
   } catch { /* leave the current matrices in place */ }
 }
+// Two synced copies of the control: one inline in the confusion h2, one in the
+// sound-file matrix's filter row (the filter gates both matrices). Editing either
+// mirrors the value to the other and debounce-reloads.
 let accTimer = null;
-confminacc.oninput = () => { clearTimeout(accTimer); accTimer = setTimeout(reloadConfusion, 400); };
+const onMinacc = (src) => {
+  confminacc.value = confminacc2.value = src.value;
+  clearTimeout(accTimer);
+  accTimer = setTimeout(reloadConfusion, 400);
+};
+confminacc.oninput = () => onMinacc(confminacc);
+confminacc2.oninput = () => onMinacc(confminacc2);
 
 // Second-tier fetch. 403 (level-1 user) or any failure silently leaves the
 // .l2only sections hidden — the page still shows the aggregate sections.

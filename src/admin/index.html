@@ -151,12 +151,10 @@
                     <button type="button" data-mode="count" class="active">counts</button>
                     <button type="button" data-mode="pct">per-sound %</button>
                 </span>
+                <span class="minaccfilter">min user accuracy:
+                    <input id="confminacc" type="number" min="0" max="100" value="0" inputmode="numeric" title="exclude users whose overall correct rate is below this % from every confusion matrix — this one and the sound-file matrix below">%</span>
                 <span class="sub">(all users)</span>
             </h2>
-            <div class="voicefilter">
-                min user accuracy:
-                <input id="confminacc" type="number" min="0" max="100" value="0" inputmode="numeric" title="exclude users whose overall correct rate is below this % from every confusion matrix — this one and the sound-file matrices below">%
-            </div>
             <div id="confchart"><!--include:confusion-vowel-tables.html--></div>
             <div id="conschart"><!--include:confusion-consonant-table.html--></div>
         </section>
@@ -169,7 +167,7 @@
                 </span>
                 <span class="sub">— per recording; soundfiles grouped by sound within each vowel group</span>
             </h2>
-            <!--include:voice-confusion-body.html vcmin="3" vcwrong="15"-->
+            <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" minacc="<span class='minaccfilter'>min user accuracy: <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</span>"-->
         </section>
     </main>
 
