@@ -95,6 +95,28 @@ test("app: ?nativeTester prompts and persists the native-mode flag", { skip: LIV
   assert.equal(win.localStorage.nativeMode, "1", "native-mode flag persisted");
 });
 
+// skip on LIVE: this posts role-0 events (the ranking's input), which would
+// pollute prod. Uses mora 'zo' — untouched by any other test — so the global
+// ranking sees only this scenario for that recording.
+test("native pairs: keeps high-wrong recordings, drops expert-vetted ones", { skip: LIVE }, async () => {
+  const answer = (uid, confuser, n, correct = false) =>
+    postEvents(uid, Array.from({ length: n }, (_, i) => ({
+      ts: Date.now() + i, target: "zo", idx: 0, picked: correct ? "zo" : confuser,
+      cap: 2, ms: 500, ev: "a", opts: ["zo", confuser], skill: 0,
+    })));
+  // (zo#0, so): a normal listener picks 'so' 3/3 → high wrong-rate, no expert data → kept.
+  await answer(randomUUID(), "so", 3);
+  // (zo#0, syo): a normal listener also confuses it (3/3 wrong) ...
+  await answer(randomUUID(), "syo", 3);
+  // ... but 6 high-accuracy (100% 'zo') offers of 'syo' vet it → dropped despite the wrong-rate.
+  await answer(randomUUID(), "syo", 6, true);
+
+  const { pairs } = await (await fetch(`${WORKER}/v1/native/pairs`)).json();
+  const has = (c) => pairs.some((p) => p.mora === "zo" && p.confuser === c);
+  assert.ok(has("so"), "kept the high-wrong, un-vetted pair");
+  assert.ok(!has("syo"), "dropped the pair vetted by ≥5 expert offers");
+});
+
 test("app: answering questions posts events (with opts) to the worker", async (t) => {
   const { win, close } = await openPage("/");
   t.after(close);

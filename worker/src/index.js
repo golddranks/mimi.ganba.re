@@ -167,6 +167,8 @@ export default {
         res = await handlePushTest(req, env);
       } else if (req.method === "GET" && url.pathname === "/v1/voice-attempts") {
         res = await handleVoiceAttempts(req, env);
+      } else if (req.method === "GET" && url.pathname === "/v1/native/pairs") {
+        res = await handleNativePairs(req, env);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+\/events$/)) {
         res = await handleGetEvents(req, env, url);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+$/)) {
@@ -301,6 +303,51 @@ async function handleVoiceAttempts(req, env) {
   const out = {};
   for (const r of rows) (out[r.m] ||= {})[r.i] = r.n;
   return json(out);
+}
+
+// Native-tester pair ranking: which (recording, confuser) pairs to drill next.
+// Computed over all non-auto-test data (role != 1, i.e. normal + native — native
+// answers feed back, so pairs that confuse natives keep surfacing for others to
+// validate). For each off-diagonal (recording = mora+voice, confuser kana):
+//   wrong-rate = times the confuser was picked ÷ times it was offered.
+// A pair is dropped once high-accuracy listeners (>90% overall) have been offered
+// it ≥5 times — treated as vetted, not worth a native's time. The survivors are
+// ranked by wrong-rate (random tie-break); the top 200 become a no-repeat session.
+async function handleNativePairs(req, env) {
+  const db = env.mimi_stats;
+  const NOT_AUTO = "uid NOT IN (SELECT uid FROM users WHERE role = 1)";
+  const EXPERT = `uid IN (SELECT uid FROM events WHERE ${ANSWER_EVS} AND ${NOT_AUTO}
+       GROUP BY uid HAVING SUM(${CORRECT}) * 100.0 / COUNT(*) > 90)`;
+  const [allRows, expertRows] = await Promise.all([
+    db.prepare(
+      `SELECT target AS t, voice AS v, opts AS o, picked AS p, COUNT(*) AS n
+       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND voice IS NOT NULL AND ${NOT_AUTO}
+       GROUP BY target, voice, opts, picked`
+    ).all(),
+    db.prepare(
+      `SELECT target AS t, voice AS v, opts AS o, COUNT(*) AS n
+       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND voice IS NOT NULL AND ${NOT_AUTO} AND ${EXPERT}
+       GROUP BY target, voice, opts`
+    ).all(),
+  ]);
+  // shown/offered over everyone; expertOffered restricted to >90% listeners.
+  const shown = {}, offered = {}, expertOffered = {};
+  for (const r of allRows.results || []) {
+    shown[`${r.t}/${r.v}/${r.p}`] = (shown[`${r.t}/${r.v}/${r.p}`] || 0) + r.n;
+    for (const k of r.o.split(",")) offered[`${r.t}/${r.v}/${k}`] = (offered[`${r.t}/${r.v}/${k}`] || 0) + r.n;
+  }
+  for (const r of expertRows.results || []) {
+    for (const k of r.o.split(",")) expertOffered[`${r.t}/${r.v}/${k}`] = (expertOffered[`${r.t}/${r.v}/${k}`] || 0) + r.n;
+  }
+  const ranked = [];
+  for (const key in offered) {
+    const [t, v, c] = key.split("/");
+    if (c === t) continue;                          // off-diagonal only (confuser ≠ recording)
+    if ((expertOffered[key] || 0) >= 5) continue;   // vetted by high-accuracy listeners
+    ranked.push({ mora: t, voice: v, confuser: c, rate: (shown[key] || 0) / offered[key], rand: Math.random() });
+  }
+  ranked.sort((a, b) => b.rate - a.rate || b.rand - a.rand);
+  return json({ pairs: ranked.slice(0, 200).map(({ mora, voice, confuser }) => ({ mora, voice, confuser })) });
 }
 
 // Minimal per-user metadata. Currently just `power_user` (0/1/2) so the
