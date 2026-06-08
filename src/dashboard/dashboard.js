@@ -110,35 +110,24 @@ if (uid) {
 // In a ?uid= view-as: a read-only "on/off" for that uid (any of their devices
 // subscribed), shown to a power user (>= 1, same as the view-as gate) — never a
 // toggle for someone else's reminders.
+// View-as reminder readout from the server's { on, state } — filled by load().
+const reminderReadout = (on, state) =>
+  on ? "Daily reminders: on for this user."
+    : state === "declined" ? "Daily reminders: declined by this user."
+      : state === "offered" ? "Daily reminders: offered, no answer yet."
+        : "Daily reminders: not offered to this user yet.";
+
 async function renderNotif() {
   notifbtn.hidden = true;
-  if (!viewerUid) { notif.hidden = true; return; }
-
+  // View-as: the readout is fetched + filled by load() (the dashboard's own data
+  // load), since the viewed user's state isn't this device's to cache. Reserve its
+  // line here from the cached own power level so it doesn't shift in; a non-power
+  // viewer has #dash (and this with it) hidden by the gate.
   if (uid !== viewerUid) {
-    const readout = (on, state) => {
-      notifstatus.textContent = on ? "Daily reminders: on for this user."
-        : state === "declined" ? "Daily reminders: declined by this user."
-          : state === "offered" ? "Daily reminders: offered, no answer yet."
-            : "Daily reminders: not offered to this user yet.";
-      notif.hidden = false;
-    };
-    // Render the remembered state for this uid first (synchronous, before paint),
-    // so the readout doesn't flash in after the async power + reminder fetches.
-    // Only a remembered power viewer gets it; the fetch below confirms/corrects.
-    let cached = null;
-    try { cached = JSON.parse(localStorage.viewAsRemind || "null"); } catch { /* ignore */ }
-    if (+localStorage.dashLevel >= 1 && cached && cached.uid === uid) readout(cached.on, cached.state);
-    if (await viewerLevel() < 1) { notif.hidden = true; return; }
-    try {
-      const r = await fetch(STATS_URL + "/v1/admin/reminder?uid=" + encodeURIComponent(viewerUid)
-        + "&target=" + encodeURIComponent(uid));
-      if (!r.ok) { notif.hidden = true; return; }
-      const { on, state } = await r.json();
-      localStorage.viewAsRemind = JSON.stringify({ uid, on, state });
-      readout(on, state);
-    } catch { notif.hidden = true; }
+    if (+localStorage.dashLevel >= 1) { notifstatus.textContent = "Daily reminders: …"; notif.hidden = false; }
     return;
   }
+  if (!viewerUid) { notif.hidden = true; return; }
 
   notif.hidden = false;
   if (!pushSupported()) {
@@ -201,7 +190,20 @@ viewerLevel().then((level) => { uidform.hidden = level < 2; });
 // the no-uid prompt via ::before; JS only writes to #msg for error states.
 async function load(uid) {
   try {
-    const res = await fetch(STATS_URL + "/v1/user/" + encodeURIComponent(uid) + "/events");
+    // View-as (uid ≠ viewer): the gate above only reaches here for a power viewer,
+    // so fetch the viewed user's reminder state alongside their events and fill the
+    // readout with the rest of the dashboard — no separate late fetch, no caching.
+    const viewAs = uid !== viewerUid;
+    const [res, remRes] = await Promise.all([
+      fetch(STATS_URL + "/v1/user/" + encodeURIComponent(uid) + "/events"),
+      viewAs ? fetch(STATS_URL + "/v1/admin/reminder?uid=" + encodeURIComponent(viewerUid)
+        + "&target=" + encodeURIComponent(uid)).catch(() => null) : Promise.resolve(null),
+    ]);
+    if (viewAs && remRes && remRes.ok) {
+      const { on, state } = await remRes.json();
+      notifstatus.textContent = reminderReadout(on, state);
+      notif.hidden = false;
+    }
     if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
     const { events } = await res.json();
     events.sort((a, b) => a.ts - b.ts);
