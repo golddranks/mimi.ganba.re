@@ -430,10 +430,14 @@ body {
     white-space: nowrap;
 }
 
-/* By-consonant bars sit in a full-width card; cap the list width so the bars
-   read as a compact stack rather than stretching the whole row. */
-.consbars {
-    max-width: 34rem;
+/* Right column beside the left .stack: per-sound stacked over the by-consonant
+   card. align-items:start lets it size to content; the left .stack stretches to
+   match this column's (taller) height. */
+.rstack {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 0;
 }
 
 /* ---- per-mora ---- */
