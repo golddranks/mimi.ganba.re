@@ -235,10 +235,9 @@ test("app: ?remind degrades cleanly where push is unsupported (no SW / no VAPID 
   assert.ok(win.remindprompt.hidden, "no opt-in prompt where push is unsupported");
 });
 
-test("dashboard: confusion matrix renders asked vs shown denominators", async (t) => {
+test("dashboard: confusion matrix renders the pick-when-offered denominator", async (t) => {
   // Per-uid view, so counts are exact. With the sa fixture, za is picked 3x &
-  // offered 5x, sya picked 1x & offered 1x. Default "shown" = picked/offered,
-  // "asked" = raw pick count.
+  // offered 5x, sya picked 1x & offered 1x. Cells read picked/offered.
   const uid = await freshTestUser();
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
 
@@ -246,8 +245,8 @@ test("dashboard: confusion matrix renders asked vs shown denominators", async (t
   t.after(close);
 
   const r = await readConfusion(win, [["sa", "za"], ["sa", "sya"]]);
-  assert.deepEqual(r["sa/za"], { picked: 3, offered: 5, asked: 3 });
-  assert.deepEqual(r["sa/sya"], { picked: 1, offered: 1, asked: 1 });
+  assert.deepEqual(r["sa/za"], { picked: 3, offered: 5 });
+  assert.deepEqual(r["sa/sya"], { picked: 1, offered: 1 });
 });
 
 test("dashboard: confusion matrix marks grind and probe targets", async (t) => {
@@ -338,8 +337,8 @@ test("dashboard: Y/N answers feed the confusion matrix (diagonal + confuser)", a
   // Diagonal: 2 right of 4 asked. Confuser sa/za: za offered twice (the two
   // wrong-kana prompts), picked once (the wrong "yes").
   const r = await readConfusion(win, [["sa", "sa"], ["sa", "za"]]);
-  assert.deepEqual(r["sa/sa"], { picked: 2, offered: 4, asked: 2 });
-  assert.deepEqual(r["sa/za"], { picked: 1, offered: 2, asked: 1 });
+  assert.deepEqual(r["sa/sa"], { picked: 2, offered: 4 });
+  assert.deepEqual(r["sa/za"], { picked: 1, offered: 2 });
 });
 
 test("dashboard: Y/N answers count as activity (answers + accuracy)", async (t) => {
@@ -363,12 +362,12 @@ test("dashboard: Y/N answers count as activity (answers + accuracy)", async (t) 
   assert.equal(stat("correct"), "2", "the Y/N 'no' reject counts as correct");
 });
 
-test("admin: confusion matrix uses server-aggregated asked vs shown counts", { skip: LIVE }, async (t) => {
+test("admin: confusion matrix uses server-aggregated pick-when-offered counts", { skip: LIVE }, async (t) => {
   // Local-only: needs power_user granted via local SQL, and unlike the rest its
   // rows must stay *in* the aggregate (so its uid is NOT a TestUser). The admin
   // matrix is global (all users), so we can't assert exact counts against a
-  // snapshot — add the sa fixture and assert robust shape: an integer in asked
-  // mode, "picked/offered" with picked<=offered in shown.
+  // snapshot — add the sa fixture and assert robust shape: "picked/offered" with
+  // picked<=offered.
   const uid = randomUUID();
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
   grantPowerUser(uid, 1);
@@ -378,7 +377,7 @@ test("admin: confusion matrix uses server-aggregated asked vs shown counts", { s
 
   const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
 
-  // Default "shown" mode: "picked/offered", picked<=offered, offered >= the 5 we added.
+  // "picked/offered", picked<=offered, offered >= the 5 we added.
   const shown = await waitFor(() => {
     const txt = cell("sa", "za")?.textContent;
     return /^\d+\/\d+$/.test(txt || "") ? txt : null;
@@ -387,13 +386,6 @@ test("admin: confusion matrix uses server-aggregated asked vs shown counts", { s
   const [, picked, offered] = m.map(Number);
   assert.ok(picked <= offered, `picked ${picked} <= offered ${offered}`);
   assert.ok(offered >= 5, `offered >= 5 (got ${offered})`);
-
-  // Toggle to "asked": integer >= the 3 sa->za we added.
-  win.document.querySelector('#confdenom button[data-denom="asked"]').click();
-  await win.happyDOM.waitUntilComplete();
-  const asked = cell("sa", "za").textContent;
-  assert.match(asked, /^\d+$/, `asked sa/za is an integer (got ${JSON.stringify(asked)})`);
-  assert.ok(Number(asked) >= 3, `asked sa/za >= 3 (got ${asked})`);
 });
 
 test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, async () => {

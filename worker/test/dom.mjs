@@ -105,14 +105,13 @@ export async function waitFor(predicate, { timeout = 5000, step = 25 } = {}) {
   }
 }
 
-// Read the given confusion-matrix cells in both denominator modes, enforcing the
-// rendered-format contract: the default "shown" view is picked/offered ("n/n"),
-// and the toggled "asked" view is the raw pick count ("n"). That contract — and
-// which mode is the default — is the part that drifted between the pre-deploy
-// (dom.test) and post-deploy (verify.test) suites; keeping it here makes the two
-// share one source of truth. Returns "T/P" -> { picked, offered, asked }; the
-// caller asserts the actual numbers (exact for a fixture, bounded for the
-// ever-growing prod sentinel).
+// Read the given confusion-matrix cells, enforcing the rendered-format contract:
+// every cell is picked/offered ("n/n"), the pairwise pick-when-offered view (the
+// only denominator now — "vs asked" was retired). That contract is the part that
+// drifted between the pre-deploy (dom.test) and post-deploy (verify.test) suites;
+// keeping it here makes the two share one source of truth. Returns
+// "T/P" -> { picked, offered }; the caller asserts the actual numbers (exact for
+// a fixture, bounded for the ever-growing prod sentinel).
 export async function readConfusion(win, cells) {
   const cell = (t, p) => win.confchart.querySelector(`td[data-t="${t}"][data-p="${p}"]`);
   const [t0, p0] = cells[0];
@@ -124,14 +123,6 @@ export async function readConfusion(win, cells) {
     assert.match(shown, /^\d+\/\d+$/, `shown ${t}/${p}`);
     const [picked, offered] = shown.split("/").map(Number);
     out[`${t}/${p}`] = { picked, offered };
-  }
-
-  win.document.querySelector('#confdenom button[data-denom="asked"]').click();
-  await win.happyDOM.waitUntilComplete();
-  for (const [t, p] of cells) {
-    const asked = cell(t, p).textContent;
-    assert.match(asked, /^\d+$/, `asked ${t}/${p}`);
-    out[`${t}/${p}`].asked = Number(asked);
   }
   return out;
 }

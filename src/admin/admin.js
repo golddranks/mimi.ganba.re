@@ -76,8 +76,8 @@ async function load(uid) {
     // Aggregate sections — available to every power user (level 1+).
     renderHourly(data.hourly);
     renderMora(data.by_mora);
-    renderVoiceConfusion(data.by_voice_confusion, data.by_voice_shown, data.by_voice_offered);
-    renderConfusion(data.confusion, data.confusion_shown, data.confusion_offered);
+    renderVoiceConfusion(data.by_voice_shown, data.by_voice_offered);
+    renderConfusion(data.confusion_shown, data.confusion_offered);
     // Per-user / uid-drilldown sections — only if level-2 authorizes them.
     loadUserStats(uid);
   } catch (e) {
@@ -94,8 +94,8 @@ async function reloadConfusion() {
     const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid) + "&minacc=" + minacc);
     if (!res.ok) return;
     const data = await res.json();
-    renderConfusion(data.confusion, data.confusion_shown, data.confusion_offered);
-    renderVoiceConfusion(data.by_voice_confusion, data.by_voice_shown, data.by_voice_offered);
+    renderConfusion(data.confusion_shown, data.confusion_offered);
+    renderVoiceConfusion(data.by_voice_shown, data.by_voice_offered);
   } catch { /* leave the current matrices in place */ }
 }
 let accTimer = null;
@@ -314,17 +314,10 @@ function hideUidPopup() {
 
   // Count/per-sound-% toggle — one logical group across every .modeswitch
   // (per-sound, confusion, voiceconf); re-renders the sections that honour it.
-  // The denominator toggle (asked sound vs shown kana) is its own group and
-  // redraws both confusion matrices, which honour it. Mirrors the user dashboard.
   wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
     displayMode = m;
     drawMora();
     drawConsMora();
-    drawConfusion();
-    drawVoiceConfusion();
-  });
-  wireSwitchGroup([document.getElementById("confdenom")], "denom", (d) => {
-    confDenom = d;
     drawConfusion();
     drawVoiceConfusion();
   });
@@ -384,12 +377,10 @@ const VOWEL_GROUPS = {
 // "<row-head>行" — Japanese for "<vowel>-row in the 50-sound chart"
 const VOWEL_GYO = { a: "あ行", i: "い行", u: "う行", o: "お行" };
 
-let voiceConfData = [];        // [{t, v, p, n}] — picks per (recording, kana)
 let voiceShownData = [];       // [{t, v, p, n}] — picks among opts-bearing answers
 let voiceOfferedData = [];     // [{t, v, k, n}] — times kana k offered for (recording)
 
-function renderVoiceConfusion(rows, shownRows, offeredRows) {
-  voiceConfData = rows || [];
+function renderVoiceConfusion(shownRows, offeredRows) {
   voiceShownData = shownRows || [];
   voiceOfferedData = offeredRows || [];
   vcmin.oninput = drawVoiceConfusion;
@@ -407,25 +398,16 @@ function drawVoiceConfusion() {
   const minA = Math.max(0, parseInt(vcmin.value, 10) || 0);
   const minW = Math.max(0, parseInt(vcwrong.value, 10) || 0);
   const map = window.VOICE_MAP || {};
-  const counts = {}, totals = {}, shown = {}, offered = {};
-  for (const r of voiceConfData) {
-    counts[`${r.t}/${r.v}/${r.p}`] = r.n;
-    totals[`${r.t}/${r.v}`] = (totals[`${r.t}/${r.v}`] || 0) + r.n;
-  }
+  const shown = {}, offered = {};
   for (const r of voiceShownData) shown[`${r.t}/${r.v}/${r.p}`] = r.n;
   for (const r of voiceOfferedData) offered[`${r.t}/${r.v}/${r.k}`] = r.n;
 
-  // One (recording, kana) cell's confusion rate (0..100), honouring the shared
-  // denominator toggle: "shown" = picks ÷ times that kana was offered for this
-  // recording (the pairwise rate the user wants); "asked" = picks ÷ times the
-  // recording was asked. A pure rate, independent of the count/% display mode.
+  // One (recording, kana) cell's confusion rate (0..100): picks ÷ times that kana
+  // was offered for this recording (the pairwise rate). Independent of the
+  // count/% display mode.
   const offPct = (m, voice, p) => {
-    if (confDenom === "shown") {
-      const off = offered[`${m}/${voice}/${p}`] || 0;
-      return off > 0 ? (shown[`${m}/${voice}/${p}`] || 0) / off * 100 : 0;
-    }
-    const rt = totals[`${m}/${voice}`] || 0;
-    return rt > 0 ? (counts[`${m}/${voice}/${p}`] || 0) / rt * 100 : 0;
+    const off = offered[`${m}/${voice}/${p}`] || 0;
+    return off > 0 ? (shown[`${m}/${voice}/${p}`] || 0) / off * 100 : 0;
   };
 
   // Worst off-diagonal rate in a row — drives the wrong-% filter and orders
@@ -442,26 +424,16 @@ function drawVoiceConfusion() {
     return max;
   };
 
-  // value{display, mag, raw} — same shape (and shown/asked behaviour) as the main
-  // matrix's confusionValue. mag (the colour magnitude) is the rate, except in
-  // asked + count mode where it's the raw count, matching the main matrix.
+  // value{display, mag, raw} — same shape as the main matrix's confusionValue.
   const valueFor = (m, voice, p) => {
     const pct = offPct(m, voice, p);
-    if (confDenom === "shown") {
-      const n = shown[`${m}/${voice}/${p}`] || 0;
-      const off = offered[`${m}/${voice}/${p}`] || 0;
-      if (displayMode === "pct") {
-        const display = (off > 0 && n > 0) ? (Math.round(pct) === 0 ? "<1" : String(Math.round(pct))) : "";
-        return { display, mag: pct, raw: off };
-      }
-      return { display: off ? `${n}/${off}` : "", mag: pct, raw: off };
-    }
-    const n = counts[`${m}/${voice}/${p}`] || 0;
+    const n = shown[`${m}/${voice}/${p}`] || 0;
+    const off = offered[`${m}/${voice}/${p}`] || 0;
     if (displayMode === "pct") {
-      const display = n > 0 ? (Math.round(pct) === 0 ? "<1" : String(Math.round(pct))) : "";
-      return { display, mag: pct, raw: n };
+      const display = (off > 0 && n > 0) ? (Math.round(pct) === 0 ? "<1" : String(Math.round(pct))) : "";
+      return { display, mag: pct, raw: off };
     }
-    return { display: n ? String(n) : "", mag: n, raw: n };
+    return { display: off ? `${n}/${off}` : "", mag: pct, raw: off };
   };
 
   const html = [];
@@ -473,7 +445,9 @@ function drawVoiceConfusion() {
     const rowsInGroup = [];
     for (const m of morae) {
       const voices = (map[m] || []).filter((voice) => {
-        const attempts = totals[`${m}/${voice}`] || 0;
+        // Times this recording was asked = times its own kana was offered (the
+        // target is always an option), read off the offered map.
+        const attempts = offered[`${m}/${voice}/${m}`] || 0;
         if (attempts < minA) return false;
         if (minW > 0 && rowMaxOffPct(m, voice) < minW) return false;
         return true;
@@ -538,52 +512,34 @@ function drawVoiceConfusion() {
 }
 
 // ---------- confusion (same shape as user dashboard, server-side counts) ----------
-let confusionCounts = null;     // t/p -> picks, all answers ("asked" numerator)
-let confusionRowTotals = null;  // t   -> attempts, all answers ("asked" % denominator)
-let confusionShown = null;      // t/p -> picks among opts-bearing answers ("shown" numerator)
-let confusionOffered = null;    // t/p -> times kana p was on screen when t was asked ("shown" denominator)
+// A pick is normalised by how often that confuser kana was actually offered (the
+// true pairwise confusion); answers with no offered set don't appear.
+let confusionShown = null;      // t/p -> picks among opts-bearing answers (numerator)
+let confusionOffered = null;    // t/p -> times kana p was on screen when t was asked (denominator)
 
-// Denominator toggle, independent of the count/pct one — same as the user
-// dashboard. "asked" normalises by how often the sound was asked; "shown" by
-// how often that confuser kana was actually offered (true pairwise confusion).
-// Defaults to "shown"; "asked" is on its way out.
-let confDenom = "shown";
-
-function renderConfusion(rows, shownRows, offeredRows) {
-  const counts = {}, rowTotals = {}, shown = {}, offered = {};
-  for (const r of rows || []) {
-    counts[`${r.t}/${r.p}`] = r.n;
-    rowTotals[r.t] = (rowTotals[r.t] || 0) + r.n;
-  }
+function renderConfusion(shownRows, offeredRows) {
+  const shown = {}, offered = {};
   for (const r of shownRows || []) shown[`${r.t}/${r.p}`] = r.n;
   for (const r of offeredRows || []) offered[`${r.t}/${r.k}`] = r.n;
-  confusionCounts = counts;
-  confusionRowTotals = rowTotals;
   confusionShown = shown;
   confusionOffered = offered;
   drawConfusion();
 }
 
 function drawConfusion() {
-  if (!confusionCounts) return;
-  const maps = { counts: confusionCounts, rowTotals: confusionRowTotals, shown: confusionShown, offered: confusionOffered };
-  fillConfusionCells(confchart.querySelectorAll("td[data-t]"), maps, confDenom, displayMode);
-  const legend = confchart.querySelector(".conflegend");
-  if (legend) {
-    legend.textContent = confDenom === "shown"
-      ? "rows = sound heard · columns = kana picked · value = picked ÷ times that kana was offered"
-      : "rows = sound heard · columns = kana picked · diagonal = correct";
-  }
+  if (!confusionShown) return;
+  const maps = { shown: confusionShown, offered: confusionOffered };
+  fillConfusionCells(confchart.querySelectorAll("td[data-t]"), maps, displayMode);
   drawConsonantConfusion();
 }
 
 // Consonant matrix: collapses every vowel into confusion between the six
-// consonant classes (s z ts sh j ch). Same data/denominator/display mode as the
-// per-vowel matrix above, aggregated by consonant.
+// consonant classes (s z ts sh j ch). Same data/display mode as the per-vowel
+// matrix above, aggregated by consonant.
 function drawConsonantConfusion() {
-  if (!confusionCounts) return;
-  const maps = aggregateByConsonant({ counts: confusionCounts, rowTotals: confusionRowTotals, shown: confusionShown, offered: confusionOffered });
-  fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, confDenom, displayMode);
+  if (!confusionShown) return;
+  const maps = aggregateByConsonant({ shown: confusionShown, offered: confusionOffered });
+  fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, displayMode);
 }
 
 // ---------- helpers ----------

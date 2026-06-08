@@ -394,7 +394,7 @@ async function handleAdminStats(req, env, url) {
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
-  const [hourly, byMora, confusion, byVoiceConf, optsConf, ynConf, byVoiceOpts] = await Promise.all([
+  const [hourly, byMora, optsConf, ynConf, byVoiceOpts] = await Promise.all([
     db.prepare(
       `SELECT CAST(strftime('%H', ts/1000, 'unixepoch') AS INTEGER) AS h,
               COUNT(*) AS n,
@@ -408,17 +408,6 @@ async function handleAdminStats(req, env, url) {
               SUM(${CORRECT}) AS correct
        FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
        GROUP BY target`
-    ).all(),
-    db.prepare(
-      `SELECT target AS t, picked AS p, COUNT(*) AS n
-       FROM events WHERE ev IN ('a','g') AND ${EXCLUDE_TEST} ${ACC_FILTER}
-       GROUP BY target, picked`
-    ).all(),
-    db.prepare(
-      `SELECT target AS t, voice AS v, picked AS p, COUNT(*) AS n
-       FROM events
-       WHERE ev IN ('a','g') AND voice IS NOT NULL AND ${EXCLUDE_TEST} ${ACC_FILTER}
-       GROUP BY target, voice, picked`
     ).all(),
     // Pairwise "when offered" confusion source: group by the choice set so we
     // can normalise a confuser by how often it was actually on screen, not by
@@ -447,10 +436,6 @@ async function handleAdminStats(req, env, url) {
     ).all(),
   ]);
 
-  // "asked"-mode counts: raw pick counts per (target, picked) over all answers.
-  const counts = {};
-  for (const r of confusion.results || []) counts[`${r.t}/${r.p}`] = (counts[`${r.t}/${r.p}`] || 0) + r.n;
-
   // Expand the grouped opts sets into pairwise counts: offered[t/k] = times kana
   // k was on screen when t was asked; shown[t/p] = times p was picked among those
   // (p is always in opts, so shown <= offered and the ratio stays in [0,1]).
@@ -466,7 +451,6 @@ async function handleAdminStats(req, env, url) {
   for (const r of ynConf.results || []) {
     const rec = confusionRecord({ ev: r.e, target: r.t, picked: r.p });
     if (!rec) continue;
-    counts[`${rec.target}/${rec.picked}`] = (counts[`${rec.target}/${rec.picked}`] || 0) + r.n;
     shown[`${rec.target}/${rec.picked}`] = (shown[`${rec.target}/${rec.picked}`] || 0) + r.n;
     for (const k of rec.opts) offered[`${rec.target}/${k}`] = (offered[`${rec.target}/${k}`] || 0) + r.n;
   }
@@ -492,10 +476,8 @@ async function handleAdminStats(req, env, url) {
   return json({
     hourly:    hourly.results     || [],
     by_mora:   byMora.results     || [],
-    confusion: rowsOf(counts, "p"),
     confusion_shown:   rowsOf(shown, "p"),
     confusion_offered: rowsOf(offered, "k"),
-    by_voice_confusion: byVoiceConf.results   || [],
     by_voice_shown:     rowsOf3(vShown, "p"),
     by_voice_offered:   rowsOf3(vOffered, "k"),
   });

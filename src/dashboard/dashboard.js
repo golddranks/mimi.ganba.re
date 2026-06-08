@@ -310,17 +310,11 @@ function drawConsMora() {
 // Walks the static td[data-t][data-p] cells across all four vowel-group tables.
 // Color intensity is per-category (diag vs off-diag) so off-diagonal errors
 // don't get drowned out by big correct counts.
-let confusionCounts = null;     // T/P -> picks, all answers (the "asked" denominator's numerator)
-let confusionRowTotals = null;  // T   -> attempts, all answers ("asked" % denominator)
-let confusionShown = null;      // T/P -> picks among opts-bearing answers ("shown" numerator)
-let confusionOffered = null;    // T/P -> times kana P was on screen when T was asked ("shown" denominator)
-
-// Denominator toggle, independent of the count/pct one:
-//   "asked" — normalise a pick by how often the sound was asked (rows total)
-//   "shown" — normalise by how often *that confuser kana was offered*, the true
-//             pairwise confusion the `opts` column was added to measure.
-// Defaults to "shown" (the meaningful metric); "asked" is on its way out.
-let confDenom = "shown";
+// A pick is normalised by how often *that confuser kana was offered* — the true
+// pairwise confusion the `opts` column was added to measure (so a pre-`opts`
+// answer with no offered set simply doesn't appear in the matrix).
+let confusionShown = null;      // T/P -> picks among opts-bearing answers (numerator)
+let confusionOffered = null;    // T/P -> times kana P was on screen when T was asked (denominator)
 
 // Confusion-bearing answers (multi-choice + the synthesised Y/N picks), kept
 // chronological for the click-to-inspect cell history. Each carries the
@@ -333,7 +327,7 @@ let confusionEvents = [];
 let cellSeries = [];
 
 function renderConfusion(events) {
-  const counts = {}, rowTotals = {}, shown = {}, offered = {};
+  const shown = {}, offered = {};
   confusionEvents = [];
   for (const e of events) {
     // confusionRecord normalises multi-choice (a/g) and Y/N (y/n) into the same
@@ -341,36 +335,28 @@ function renderConfusion(events) {
     // judgement reads as picking the target (diagonal); a wrong one as the
     // confuser (wrong-kana prompt) or a diagonal miss (correct-kana prompt). The
     // confuser kana is offered only when it was the one shown, so a wrong-kana
-    // answer lands on both the diagonal and the confuser cell.
+    // answer lands on both the diagonal and the confuser cell. Answers with no
+    // offered set (pre-`opts`) yield no record and simply don't appear.
     const r = confusionRecord(e);
     if (r) {
-      counts[`${r.target}/${r.picked}`] = (counts[`${r.target}/${r.picked}`] || 0) + 1;
-      rowTotals[r.target] = (rowTotals[r.target] || 0) + 1;
       // picked is always in opts (or "" for a Y/N miss), so shown[T/P] <=
       // offered[T/P] and the ratio stays in [0,1].
       shown[`${r.target}/${r.picked}`] = (shown[`${r.target}/${r.picked}`] || 0) + 1;
       for (const k of r.opts) offered[`${r.target}/${k}`] = (offered[`${r.target}/${k}`] || 0) + 1;
       confusionEvents.push({ ...e, picked: r.picked, opts: r.opts.join(",") });
-    } else if (isAnswer(e)) {
-      // Pre-migration a/g rows with no offered set: still count toward the
-      // asked-mode totals, just not the shown/offered (pairwise) view.
-      counts[`${e.target}/${e.picked}`] = (counts[`${e.target}/${e.picked}`] || 0) + 1;
-      rowTotals[e.target] = (rowTotals[e.target] || 0) + 1;
     }
   }
   confusionEvents.sort((a, b) => a.ts - b.ts);
-  confusionCounts = counts;
-  confusionRowTotals = rowTotals;
   confusionShown = shown;
   confusionOffered = offered;
   drawConfusion();
 }
 
 function drawConfusion() {
-  if (!confusionCounts) return;
-  const maps = { counts: confusionCounts, rowTotals: confusionRowTotals, shown: confusionShown, offered: confusionOffered };
+  if (!confusionShown) return;
+  const maps = { shown: confusionShown, offered: confusionOffered };
   const cells = confchart.querySelectorAll("td[data-t]");
-  fillConfusionCells(cells, maps, confDenom, displayMode);
+  fillConfusionCells(cells, maps, displayMode);
 
   // Grind/probe rings are a property of the pick-when-offered data, not the
   // display mode, so they're marked in every mode (see shared/confusion.js). The
@@ -381,37 +367,25 @@ function drawConfusion() {
     td.classList.toggle("grind", grind.has(key));
     td.classList.toggle("probe", probes.has(key));
   }
-  const legend = confchart.querySelector(".conflegend");
-  if (legend) {
-    legend.textContent = confDenom === "shown"
-      ? "rows = sound heard · columns = kana picked · value = picked ÷ times that kana was offered"
-      : "rows = sound heard · columns = kana picked · diagonal = correct";
-  }
   drawConsonantConfusion();
 }
 
 // The consonant matrix collapses every vowel and shows confusion between the six
-// consonant classes (s z ts sh j ch). Same data, denominator and display mode as
-// the per-vowel matrix above, just aggregated by consonant. Non-clickable.
+// consonant classes (s z ts sh j ch). Same data and display mode as the per-vowel
+// matrix above, just aggregated by consonant. Non-clickable.
 function drawConsonantConfusion() {
-  if (!confusionCounts) return;
-  const maps = aggregateByConsonant({ counts: confusionCounts, rowTotals: confusionRowTotals, shown: confusionShown, offered: confusionOffered });
-  fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, confDenom, displayMode);
+  if (!confusionShown) return;
+  const maps = aggregateByConsonant({ shown: confusionShown, offered: confusionOffered });
+  fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, displayMode);
 }
 
 // The count/pct toggle: one logical group across every .modeswitch in the page;
-// flipping it re-renders the sections that honour the mode. The denominator
-// toggle (asked sound vs shown kana) is its own group — only the confusion
-// matrix redraws, since "when offered" has no meaning for the per-mora chart.
+// flipping it re-renders the sections that honour the mode.
 wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
   displayMode = m;
   drawConfusion();
   drawMora();
   drawConsMora();
-});
-wireSwitchGroup([document.getElementById("confdenom")], "denom", (d) => {
-  confDenom = d;
-  drawConfusion();
 });
 
 // ---------- confusion cell history ----------

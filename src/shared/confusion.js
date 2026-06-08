@@ -139,55 +139,39 @@ export function consonantCounts(moraCounts) {
 }
 
 // Collapse mora-keyed confusion maps to consonant-keyed ones, summing over every
-// vowel. Option sets are always same-vowel, so confusion[t/p] is non-zero only
-// for same-vowel pairs; summing every t∈cT, p∈cP therefore gives exactly the
-// consonant-vs-consonant totals. `maps` and the result share the shape
-// { counts:T/P→n, rowTotals:T→n, shown:T/P→n, offered:T/P→n }.
+// vowel. Option sets are always same-vowel, so shown[t/p]/offered[t/p] are
+// non-zero only for same-vowel pairs; summing every t∈cT, p∈cP therefore gives
+// exactly the consonant-vs-consonant totals. `maps` and the result share the
+// shape { shown:T/P→n, offered:T/P→n }.
 export function aggregateByConsonant(maps) {
-  const out = { counts: {}, rowTotals: {}, shown: {}, offered: {} };
+  const out = { shown: {}, offered: {} };
   const addPair = (dst, key, v) => {
     const [t, p] = key.split("/");
     const ct = consonantOf(t), cp = consonantOf(p);
     if (ct && cp) dst[`${ct}/${cp}`] = (dst[`${ct}/${cp}`] || 0) + v;
   };
-  for (const k in maps.counts) addPair(out.counts, k, maps.counts[k]);
   for (const k in maps.shown) addPair(out.shown, k, maps.shown[k]);
   for (const k in maps.offered) addPair(out.offered, k, maps.offered[k]);
-  for (const t in maps.rowTotals) {
-    const ct = consonantOf(t);
-    if (ct) out.rowTotals[ct] = (out.rowTotals[ct] || 0) + maps.rowTotals[t];
-  }
   return out;
 }
 
 // ---------- confusion-cell rendering ----------
 // Shared by the per-vowel and consonant matrices in both the dashboard and admin
 // so all four read identically. One cell's { display, mag, raw }: mag drives the
-// colour, display is the text, raw>0 means "has data". `maps` = { counts,
-// rowTotals, shown, offered }; `denom` = "shown"|"asked"; `mode` = "pct"|"count".
-export function confusionValue(maps, t, p, denom, mode) {
-  if (denom === "shown") {
-    const n = maps.shown[`${t}/${p}`] || 0;
-    const off = maps.offered[`${t}/${p}`] || 0;
-    // Colour by the pick-when-offered rate in both displays, so a cell reads the
-    // same whether it shows "3/4" or "75%" — they're the same quantity.
-    const pct = off > 0 ? n / off * 100 : 0;
-    if (mode === "pct") {
-      let display = "";
-      if (off > 0 && n > 0) { const r = Math.round(pct); display = r === 0 ? "<1" : String(r); }
-      return { display, mag: pct, raw: off };
-    }
-    return { display: off ? `${n}/${off}` : "", mag: pct, raw: off };
-  }
-  const n = maps.counts[`${t}/${p}`] || 0;
+// colour, display is the text, raw>0 means "has data". `maps` = { shown, offered }
+// (a pick normalised by how often that kana was offered); `mode` = "pct"|"count".
+export function confusionValue(maps, t, p, mode) {
+  const n = maps.shown[`${t}/${p}`] || 0;
+  const off = maps.offered[`${t}/${p}`] || 0;
+  // Colour by the pick-when-offered rate in both displays, so a cell reads the
+  // same whether it shows "3/4" or "75%" — they're the same quantity.
+  const pct = off > 0 ? n / off * 100 : 0;
   if (mode === "pct") {
-    const rt = maps.rowTotals[t] || 0;
-    const pct = rt > 0 ? n / rt * 100 : 0;
     let display = "";
-    if (n > 0) { const r = Math.round(pct); display = r === 0 ? "<1" : String(r); }
-    return { display, mag: pct, raw: n };
+    if (off > 0 && n > 0) { const r = Math.round(pct); display = r === 0 ? "<1" : String(r); }
+    return { display, mag: pct, raw: off };
   }
-  return { display: n ? String(n) : "", mag: n, raw: n };
+  return { display: off ? `${n}/${off}` : "", mag: pct, raw: off };
 }
 
 // Cell background for a magnitude, normalised within its category (diagonal vs
@@ -203,12 +187,12 @@ export function confusionBg(mag, diag, maxOn, maxOff) {
 // Paint a set of td[data-t][data-p] cells from `maps`: two passes (find the
 // per-category maxima, then colour). Sets background, textContent and .empty.
 // Grind/probe marking is left to the caller (dashboard's per-vowel matrix only).
-export function fillConfusionCells(cells, maps, denom, mode) {
+export function fillConfusionCells(cells, maps, mode) {
   let maxOn = 0, maxOff = 0;
   const seen = [];
   for (const td of cells) {
     const diag = td.dataset.t === td.dataset.p;
-    const v = confusionValue(maps, td.dataset.t, td.dataset.p, denom, mode);
+    const v = confusionValue(maps, td.dataset.t, td.dataset.p, mode);
     seen.push([td, diag, v]);
     if (diag) { if (v.mag > maxOn) maxOn = v.mag; } else if (v.mag > maxOff) maxOff = v.mag;
   }
