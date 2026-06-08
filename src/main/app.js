@@ -64,6 +64,9 @@ export const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
 const spoofedUid = new URLSearchParams(location.search).get("uid");
 export const viewMode = !!spoofedUid;
 export const uid = spoofedUid || (localStorage.uid ||= crypto.randomUUID());
+// Native-tester mode (role 2): forced-pair confusion drilling, no grind/probe,
+// 2-choice only. Persisted once opted in via ?nativeTester (set below).
+let nativeMode = !viewMode && localStorage.nativeMode === "1";
 let evQueue = [];
 try { evQueue = JSON.parse(localStorage.ev_queue || "[]"); } catch { }
 
@@ -571,6 +574,15 @@ function promptForNick(message, extra) {
 // ?nick opens a one-time prompt to set your nickname (unless one is already set).
 if (new URLSearchParams(location.search).has("nick")) {
   promptForNick("Set a nickname (shown to the site admin):");
+}
+
+// ?nativeTester: opt into native-tester mode — a Japanese nickname prompt, set
+// role 2 server-side, and flag this device so the special drilling mode persists
+// across visits (no need to revisit the secret URL).
+if (!viewMode && new URLSearchParams(location.search).has("nativeTester")) {
+  promptForNick("ニックネームを入力してください（管理者に表示されます）:", { role: 2 });
+  localStorage.nativeMode = "1";
+  nativeMode = true;
 }
 
 // ---------- boot ----------

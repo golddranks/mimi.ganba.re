@@ -86,6 +86,15 @@ test("app: ?nick prompts for a nickname once, then not again", { skip: LIVE }, a
   assert.equal(again.win.localStorage.nick, "Keep");
 });
 
+// skip on LIVE: opting in would tag a prod user role 2.
+test("app: ?nativeTester prompts and persists the native-mode flag", { skip: LIVE }, async (t) => {
+  let asked = 0;
+  const { win, close } = await openPage("/?nativeTester", { setup: (w) => { w.prompt = () => { asked++; return "ネイティブ"; }; } });
+  t.after(close);
+  assert.equal(asked, 1, "prompted for a nickname");
+  assert.equal(win.localStorage.nativeMode, "1", "native-mode flag persisted");
+});
+
 test("app: answering questions posts events (with opts) to the worker", async (t) => {
   const { win, close } = await openPage("/");
   t.after(close);
