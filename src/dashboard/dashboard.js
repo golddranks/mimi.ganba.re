@@ -2,6 +2,7 @@ import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../sha
 import { dateKey, dayKey } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, consonantCounts, fillConfusionCells } from "../shared/confusion.js";
 import { tallyFromEvents, tallyMaps, confusionRecord } from "../shared/tally.js";
+import { HIRAGANA } from "../shared/kana.js";
 import { isAnswerEv, answeredRight } from "../shared/events.js";
 import { pushSupported, currentSubscription, subscribe, unsubscribe } from "../shared/push.js";
 import { dayBarChart, dayTip, calendarSpan } from "../shared/daychart.js";
@@ -401,6 +402,7 @@ let confusionEvents = [];
 // The currently-shown cell's series (one entry per ○/✕ mark, oldest→newest), so
 // the strip's click handler can map a tapped mark back to its answer event.
 let cellSeries = [];
+let cellDiag = false;   // is the shown cell on the diagonal — there a ✕ is a wrong pick, so the tapped mark surfaces which kana was chosen
 
 function renderConfusion(events) {
   const shown = {}, offered = {};
@@ -505,6 +507,7 @@ voiceconf.addEventListener("click", (e) => {
 function showCellHistory(td) {
   confhint.hidden = true;                 // tapped a cell — the discovery hint's done its job (this session; it returns on reload)
   const t = td.dataset.t, p = td.dataset.p, diag = t === p;
+  cellDiag = diag;
   const series = confusionEvents.filter((e) => e.target === t && e.opts.split(",").includes(p));
   const outcomes = series.map((e) => ((diag ? e.picked !== t : e.picked === p) ? 1 : 0)); // 1 = red/bad
 
@@ -601,7 +604,13 @@ confdetail.addEventListener("click", (e) => {
   g.classList.add("playing");
   cellPlayer.onended = () => { g.classList.remove("playing"); cellPlayer.onended = null; };
   const fileEl = confdetail.querySelector(".cd-file");
-  if (fileEl) fileEl.textContent = `(${ev.voice || file})`;
+  if (fileEl) {
+    // On the diagonal a ✕ is a wrong answer, so name the kana the user actually
+    // picked (off the diagonal that's just the column, already in the header). The
+    // recording that played is the cell's own sound, kept for replay identity.
+    const picked = cellDiag && ev.picked && ev.picked !== ev.target ? HIRAGANA[ev.picked] : null;
+    fileEl.textContent = picked ? `(picked ${picked} · ${ev.voice || file})` : `(${ev.voice || file})`;
+  }
 });
 
 confchart.addEventListener("click", (e) => {

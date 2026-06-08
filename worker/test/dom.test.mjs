@@ -412,6 +412,29 @@ test("dashboard: clicking a confusion cell shows its history strip", async (t) =
   assert.equal(emptyStrip.getAttribute("height"), "26", "the ○/✕ row height stays reserved");
 });
 
+test("dashboard: tapping a diagonal ✕ names the kana the user wrongly picked", async (t) => {
+  // 4 sa-questions with za offered: wrongly picked za (diagonal ✕) then sa (○), twice.
+  const uid = await freshTestUser();
+  const t0 = Date.now();
+  const mk = (i, picked) => ({ ts: t0 + i, target: "sa", idx: 0, picked, cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 });
+  assert.equal((await postEvents(uid, [mk(1, "za"), mk(2, "sa"), mk(3, "za"), mk(4, "sa")])).status, 200);
+
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // own dashboard
+  });
+  t.after(close);
+  const detail = win.document.getElementById("confdetail");
+  const diagCell = () => win.confchart.querySelector('td[data-t="sa"][data-p="sa"]');
+
+  await waitFor(() => diagCell()?.textContent === "2/4", WAIT);   // diagonal: sa picked 2 of 4 offered
+  diagCell().click();
+  // ✕ marks render as <path>; the first one is the oldest event (picked za).
+  const wrongMark = await waitFor(() => detail.querySelector(".cd-mark path")?.closest(".cd-mark"), WAIT);
+  wrongMark.dispatchEvent(new win.Event("click", { bubbles: true }));   // SVG <g> has no .click(); the handler is delegated on #confdetail
+  await waitFor(() => detail.querySelector(".cd-file")?.textContent.includes("picked") ? true : null, WAIT);
+  assert.match(detail.querySelector(".cd-file").textContent, /picked ざ/, "the parenthetical names the chosen wrong kana");
+});
+
 test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", async (t) => {
   // 8 sa-questions with za offered, always answered sa → never confused (0/8).
   const uid = await freshTestUser();
