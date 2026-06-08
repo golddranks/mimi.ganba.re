@@ -500,6 +500,34 @@ test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, asyn
   assert.equal(nFor(b, "confusion_shown", "p") - nFor(a, "confusion_shown", "p"), 2, "za picked +2");
 });
 
+test("admin: ?natives switches the confusion matrix between normal and native data", { skip: LIVE }, async () => {
+  const ans = (target, picked) => ({ ts: Date.now(), target, idx: 0, picked, cap: 2, ms: 500, ev: "a", opts: [target, picked], skill: 0 });
+  // A normal (role 0) listener confuses su→tu; a native (role 2) confuses so→tyo.
+  const normal = randomUUID();
+  await postEvents(normal, [ans("su", "tu"), ans("su", "tu")]);
+  const native = randomUUID();
+  await fetch(`${WORKER}/v1/user`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ uid: native, nickname: "Native", role: 2 }),
+  });
+  await postEvents(native, [ans("so", "tyo"), ans("so", "tyo")]);
+  const admin = randomUUID();
+  await postEvents(admin, [ans("sa", "sa")]);   // creates the row for grantPowerUser
+  grantPowerUser(admin, 1);
+
+  const fetchStats = async (q) =>
+    (await fetch(`${WORKER}/v1/admin/stats?uid=${encodeURIComponent(admin)}${q}`)).json();
+  const has = (data, t, p) => (data.confusion_shown || []).some((r) => r.t === t && r.p === p);
+
+  const base = await fetchStats("");
+  assert.ok(has(base, "su", "tu"), "normal view shows a normal user's confusion");
+  assert.ok(!has(base, "so", "tyo"), "normal view excludes native-only confusion");
+
+  const nat = await fetchStats("&natives=1");
+  assert.ok(has(nat, "so", "tyo"), "natives view shows the native confusion");
+  assert.ok(!has(nat, "su", "tu"), "natives view excludes normal-user confusion");
+});
+
 test("dashboard: per-user sound-file confusion matrix renders the viewer's recordings", async (t) => {
   // Per-uid, exact counts. saFixture is all idx 0, so every answer is the same
   // sa recording; the worker assigns its voice at ingest. For that recording, za

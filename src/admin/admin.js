@@ -63,14 +63,22 @@ async function load(uid) {
 // typing in the number field doesn't fire a request per keystroke.
 async function reloadConfusion() {
   const minacc = Math.max(0, Math.min(100, parseInt(confminacc.value, 10) || 0));
+  const natives = confnatives.checked;
   try {
-    const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid) + "&minacc=" + minacc);
+    const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid)
+      + "&minacc=" + minacc + (natives ? "&natives=1" : ""));
     if (!res.ok) return;
     const data = await res.json();
     renderConfusion(data.confusion_shown, data.confusion_offered);
     renderVoiceConfusion(data.by_voice_shown, data.by_voice_offered);
   } catch { /* leave the current matrices in place */ }
 }
+// Population toggle: normal users (role 0) XOR native testers (role 2). Re-fetches
+// both confusion matrices for the chosen population and relabels the section.
+confnatives.onchange = () => {
+  confpopsub.textContent = confnatives.checked ? "(native testers)" : "(normal users)";
+  reloadConfusion();
+};
 // Two synced copies of the control: one inline in the confusion h2, one in the
 // sound-file matrix's filter row (the filter gates both matrices). Editing either
 // mirrors the value to the other and debounce-reloads.

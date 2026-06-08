@@ -153,7 +153,8 @@
                 </span>
                 <span class="minaccfilter">min user accuracy:
                     <input id="confminacc" type="number" min="0" max="100" value="0" inputmode="numeric" title="exclude users whose overall correct rate is below this % from every confusion matrix — this one and the sound-file matrix below">%</span>
-                <span class="sub">(all users)</span>
+                <label class="natfilter" title="show the native testers' confusions (role 2) instead of normal users' — gates both this matrix and the sound-file one"><input id="confnatives" type="checkbox"> natives</label>
+                <span class="sub" id="confpopsub">(normal users)</span>
             </h2>
             <div id="confchart"><!--include:confusion-vowel-tables.html--></div>
             <div id="conschart"><!--include:confusion-consonant-table.html--></div>

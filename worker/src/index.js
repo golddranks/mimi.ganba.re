@@ -444,8 +444,17 @@ async function handleAdminStats(req, env, url) {
   // muddy the confusion signal. Parsed to a clamped integer, so it's safe to inline.
   // Only the confusion aggregations honour it (the difficulty/activity ones don't).
   const minacc = Math.max(0, Math.min(100, parseInt(url.searchParams.get("minacc"), 10) || 0));
+
+  // ?natives=1 switches the confusion matrices to the native testers (role 2)
+  // instead of normal users (role 0) — to review what genuinely confuses natives,
+  // exclusive of each other. Only the confusion aggregations honour it; the
+  // activity/difficulty sections always reflect normal users.
+  const POP = url.searchParams.get("natives") === "1"
+    ? "uid IN (SELECT uid FROM users WHERE role = 2)"
+    : EXCLUDE_TEST;
+
   const ACC_FILTER = minacc > 0
-    ? `AND uid IN (SELECT uid FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
+    ? `AND uid IN (SELECT uid FROM events WHERE ${ANSWER_EVS} AND ${POP}
          GROUP BY uid HAVING SUM(${CORRECT}) * 100.0 / COUNT(*) >= ${minacc})`
     : "";
 
@@ -473,14 +482,14 @@ async function handleAdminStats(req, env, url) {
     // so we expand it in JS below. opts is null on pre-migration / 'r' / 'p'.
     db.prepare(
       `SELECT target AS t, opts AS o, picked AS p, COUNT(*) AS n
-       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${EXCLUDE_TEST} ${ACC_FILTER}
+       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${POP} ${ACC_FILTER}
        GROUP BY target, opts, picked`
     ).all(),
     // Y/N answers have no offered set; we synthesise one per (target, picked, ev)
     // group in JS below (confusionRecord), the same mapping the dashboard uses.
     db.prepare(
       `SELECT target AS t, picked AS p, ev AS e, COUNT(*) AS n
-       FROM events WHERE ev IN ('y','n') AND ${EXCLUDE_TEST} ${ACC_FILTER}
+       FROM events WHERE ev IN ('y','n') AND ${POP} ${ACC_FILTER}
        GROUP BY target, picked, ev`
     ).all(),
     // Same "when offered" expansion as optsConf, but per recording (target,
@@ -489,7 +498,7 @@ async function handleAdminStats(req, env, url) {
     // recording was asked. Expanded in JS below.
     db.prepare(
       `SELECT target AS t, voice AS v, opts AS o, picked AS p, COUNT(*) AS n
-       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND voice IS NOT NULL AND ${EXCLUDE_TEST} ${ACC_FILTER}
+       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND voice IS NOT NULL AND ${POP} ${ACC_FILTER}
        GROUP BY target, voice, opts, picked`
     ).all(),
   ]);
