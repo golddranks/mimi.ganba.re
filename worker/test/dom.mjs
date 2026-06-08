@@ -55,10 +55,15 @@ export async function loadHtml(html, { url, workerBase, setup } = {}) {
   // :8787; rewrite that origin to wherever the harness actually booted the
   // worker (the pre-push hook uses :8799), so the DOM tests are port-agnostic.
   const pageWorker = `http://${win.location.hostname}:8787`;
+  const pending = new Set();   // in-flight page fetches, so close() can drain them
   win.fetch = (u, init) => {
     let s = String(u);
     if (workerBase && s.startsWith(pageWorker)) s = workerBase + s.slice(pageWorker.length);
-    return globalThis.fetch(s, init);
+    const p = globalThis.fetch(s, init);
+    pending.add(p);
+    const done = () => pending.delete(p);
+    p.then(done, done);
+    return p;
   };
 
   if (setup) setup(win);
@@ -78,7 +83,19 @@ export async function loadHtml(html, { url, workerBase, setup } = {}) {
   currentScript = null;
 
   await win.happyDOM.waitUntilComplete();
-  return { win, logs, close: () => win.happyDOM.close() };
+  // Drain the page's in-flight fetches (and any follow-up fetches their .then
+  // chains queue) before tearing the window down. Otherwise those callbacks
+  // resolve against a closed window and throw ReferenceErrors on now-undefined
+  // element globals (a happy-dom artifact — a real browser discards the JS context
+  // on navigation, so they never run). Capped so a hung/polling request can't wedge it.
+  const close = async () => {
+    for (let i = 0; i < 10 && pending.size; i++) {
+      await Promise.allSettled([...pending]);
+      await new Promise((r) => setTimeout(r, 0));   // flush the .then chains they fed
+    }
+    win.happyDOM.close();
+  };
+  return { win, logs, close };
 }
 
 // Open an app page by URL path ("/", "/dashboard/?uid=…", "/?morning"),
