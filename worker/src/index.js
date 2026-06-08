@@ -361,10 +361,11 @@ async function handleNativePairs(req, env) {
     const [t, i, c] = key.split("/");
     if (c === t) continue;                          // off-diagonal only (confuser ≠ recording)
     if ((expertOffered[key] || 0) >= 5) continue;   // vetted by high-accuracy listeners
-    ranked.push({ mora: t, idx: +i, confuser: c, rate: (shown[key] || 0) / offered[key], rand: Math.random() });
+    ranked.push({ mora: t, idx: +i, confuser: c, rate: (shown[key] || 0) / offered[key], offered: offered[key], wrong: shown[key] || 0, rand: Math.random() });
   }
   ranked.sort((a, b) => b.rate - a.rate || b.rand - a.rand);
-  return json({ pairs: ranked.slice(0, 200).map(({ mora, idx, confuser }) => ({ mora, idx, confuser })) });
+  // offered/wrong (rate's denominator/numerator) ride along for debugging — the client ignores them.
+  return json({ pairs: ranked.slice(0, 200).map(({ mora, idx, confuser, offered, wrong }) => ({ mora, idx, confuser, offered, wrong })) });
 }
 
 // Minimal per-user metadata. Currently just `power_user` (0/1/2) so the

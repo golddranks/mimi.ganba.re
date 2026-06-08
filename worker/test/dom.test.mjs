@@ -116,6 +116,8 @@ test("native pairs: keeps high-wrong recordings, drops expert-vetted ones", { sk
   const { pairs } = await (await fetch(`${WORKER}/v1/native/pairs`)).json();
   assert.ok(Array.isArray(pairs) && pairs.every((p) => p.mora && Number.isInteger(p.idx) && p.confuser),
     "returns well-formed {mora, idx, confuser} pairs");
+  assert.ok(pairs.every((p) => Number.isInteger(p.offered) && Number.isInteger(p.wrong) && p.wrong <= p.offered && p.offered > 0),
+    "each pair carries debug counts (wrong ≤ offered)");
   if (!ISOLATED) return;   // exact ranking membership only holds on a fresh DB
   const has = (c) => pairs.some((p) => p.mora === "zo" && p.confuser === c);
   assert.ok(has("so"), "kept the high-wrong, un-vetted pair");
