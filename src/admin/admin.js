@@ -1,4 +1,4 @@
-import { aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
+import { aggregateByConsonant, consonantCounts, fillConfusionCells } from "../shared/confusion.js";
 import { dayBarChart, dayTip, calendarSpan } from "../shared/daychart.js";
 import { drawBars, drawHourly, wireSwitchGroup } from "../shared/charts.js";
 
@@ -320,6 +320,7 @@ function hideUidPopup() {
   wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
     displayMode = m;
     drawMora();
+    drawConsMora();
     drawConfusion();
     drawVoiceConfusion();
   });
@@ -363,10 +364,19 @@ function renderMora(byMora) {
   moraCounts = counts;
   moraMaxN = Math.max(1, ...Object.values(counts).map((c) => c.total || 0));
   drawMora();
+  drawConsMora();
 }
 
 function drawMora() {
   if (moraCounts) drawBars(morachart, moraCounts, moraMaxN, displayMode);
+}
+
+// The consonant-level twin of per-sound: same bars, morae summed by consonant.
+function drawConsMora() {
+  if (!moraCounts) return;
+  const cc = consonantCounts(moraCounts);
+  const maxN = Math.max(1, ...Object.values(cc).map((c) => c.total));
+  drawBars(consmorachart, cc, maxN, displayMode);
 }
 
 // ---------- sound-file difficulty ----------

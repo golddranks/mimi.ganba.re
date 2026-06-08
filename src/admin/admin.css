@@ -290,6 +290,12 @@ body {
     height: 100%;
 }
 
+/* By-consonant bars sit in a full-width card; cap the list width so the bars
+   read as a compact stack rather than stretching the whole row. */
+.consbars {
+    max-width: 34rem;
+}
+
 /* ---- per-mora ---- */
 .mrow {
     display: grid;

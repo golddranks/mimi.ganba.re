@@ -1,6 +1,6 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { dateKey, dayKey } from "../shared/dates.js";
-import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
+import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, consonantCounts, fillConfusionCells } from "../shared/confusion.js";
 import { tallyFromEvents, tallyMaps, confusionRecord } from "../shared/tally.js";
 import { isAnswerEv, answeredRight } from "../shared/events.js";
 import { pushSupported, currentSubscription, subscribe, unsubscribe } from "../shared/push.js";
@@ -291,10 +291,19 @@ function renderMora(events) {
   moraCounts = counts;
   moraMaxN = Math.max(1, ...Object.values(counts).map((c) => c.total));
   drawMora();
+  drawConsMora();
 }
 
 function drawMora() {
   if (moraCounts) drawBars(morachart, moraCounts, moraMaxN, displayMode);
+}
+
+// The consonant-level twin of per-sound: same bars, morae summed by consonant.
+function drawConsMora() {
+  if (!moraCounts) return;
+  const cc = consonantCounts(moraCounts);
+  const maxN = Math.max(1, ...Object.values(cc).map((c) => c.total));
+  drawBars(consmorachart, cc, maxN, displayMode);
 }
 
 // ---------- confusion ----------
@@ -398,6 +407,7 @@ wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
   displayMode = m;
   drawConfusion();
   drawMora();
+  drawConsMora();
 });
 wireSwitchGroup([document.getElementById("confdenom")], "denom", (d) => {
   confDenom = d;

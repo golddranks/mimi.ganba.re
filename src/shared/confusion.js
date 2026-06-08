@@ -123,6 +123,21 @@ const MORA_CONSONANT = Object.fromEntries(
 );
 export const consonantOf = (mora) => MORA_CONSONANT[mora];
 
+// Collapse a per-mora accuracy map { mora: {correct, total} } to a per-consonant
+// one { cons: {correct, total} }, summing each consonant's morae. Feeds the
+// "By consonant" bar list (drawBars), the consonant-level twin of per-sound.
+export function consonantCounts(moraCounts) {
+  const out = {};
+  for (const m in moraCounts) {
+    const c = consonantOf(m);
+    if (!c) continue;
+    const o = out[c] || (out[c] = { correct: 0, total: 0 });
+    o.correct += moraCounts[m].correct;
+    o.total += moraCounts[m].total;
+  }
+  return out;
+}
+
 // Collapse mora-keyed confusion maps to consonant-keyed ones, summing over every
 // vowel. Option sets are always same-vowel, so confusion[t/p] is non-zero only
 // for same-vowel pairs; summing every t∈cT, p∈cP therefore gives exactly the
