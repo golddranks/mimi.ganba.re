@@ -124,17 +124,22 @@ async function renderNotif() {
     notifstatus.textContent = "Reminders: blocked in your browser settings.";
     return;
   }
+  const showState = (on) => {
+    notifbtn.hidden = false;
+    notifstatus.textContent = on
+      ? "Daily reminders are on for this device."
+      : localStorage.remind_optout
+        ? "Daily reminders are off (you dismissed them)."
+        : "Daily reminders are off.";
+    notifbtn.textContent = on ? "Turn off" : "Turn on";
+  };
+  // Render from the remembered state first (synchronous, before first paint), so
+  // the status doesn't flash in after the async getSubscription on every refresh;
+  // then confirm/correct from the actual subscription and remember it.
+  showState(localStorage.remindOn === "1");
   const sub = await currentSubscription();
-  notifbtn.hidden = false;
-  if (sub) {
-    notifstatus.textContent = "Daily reminders are on for this device.";
-    notifbtn.textContent = "Turn off";
-  } else {
-    notifstatus.textContent = localStorage.remind_optout
-      ? "Daily reminders are off (you dismissed them)."
-      : "Daily reminders are off.";
-    notifbtn.textContent = "Turn on";
-  }
+  localStorage.remindOn = sub ? "1" : "0";
+  showState(!!sub);
 }
 
 notifbtn.onclick = async () => {
