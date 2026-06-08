@@ -147,15 +147,15 @@
 
         <section class="card span2">
             <h2>Confusion matrix
-                <span class="modeswitch" id="confmode">
-                    <button type="button" data-mode="count" class="active">counts</button>
-                    <button type="button" data-mode="pct">per-sound %</button>
+                <span class="modeswitch" data-switch="mode" id="confmode">
+                    <label><input type="radio" name="confmode" value="count" checked>counts</label>
+                    <label><input type="radio" name="confmode" value="pct">per-sound %</label>
                 </span>
                 <span class="minaccfilter">min user accuracy:
                     <input id="confminacc" type="number" min="0" max="100" value="0" inputmode="numeric" title="exclude users whose overall correct rate is below this % from every confusion matrix — this one and the sound-file matrix below">%</span>
-                <span class="modeswitch" id="confpop" title="which population's confusions to show — gates both this matrix and the sound-file one">
-                    <button type="button" data-pop="0" class="active">normal users</button>
-                    <button type="button" data-pop="2">natives</button>
+                <span class="modeswitch" data-switch="pop" id="confpop" title="which population's confusions to show — gates both this matrix and the sound-file one">
+                    <label><input type="radio" name="confpop" value="0" checked>normal users</label>
+                    <label><input type="radio" name="confpop" value="2">natives</label>
                 </span>
             </h2>
             <div id="confchart"><!--include:confusion-vowel-tables.html--></div>
@@ -164,13 +164,13 @@
 
         <section class="card span2">
             <h2>Sound-file confusion matrix
-                <span class="modeswitch" id="voiceconfmode">
-                    <button type="button" data-mode="count" class="active">counts</button>
-                    <button type="button" data-mode="pct">per-sound %</button>
+                <span class="modeswitch" data-switch="mode" id="voiceconfmode">
+                    <label><input type="radio" name="voiceconfmode" value="count" checked>counts</label>
+                    <label><input type="radio" name="voiceconfmode" value="pct">per-sound %</label>
                 </span>
                 <span class="sub">— per recording; soundfiles grouped by sound within each vowel group</span>
             </h2>
-            <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" minacc="<span class='minaccfilter'>min user accuracy: <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</span>" pop="<span class='modeswitch' id='confpop2'><button type='button' data-pop='0' class='active'>normal users</button><button type='button' data-pop='2'>natives</button></span>"-->
+            <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" minacc="<span class='minaccfilter'>min user accuracy: <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</span>" pop="<span class='modeswitch' data-switch='pop' id='confpop2'><label><input type='radio' name='confpop2' value='0' checked>normal users</label><label><input type='radio' name='confpop2' value='2'>natives</label></span>"-->
         </section>
     </main>
 

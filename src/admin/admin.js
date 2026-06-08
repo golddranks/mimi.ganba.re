@@ -38,17 +38,35 @@ let confpopRole = "0";
 // for cases like a fresh browser or testing as a different power user.
 const uid = new URLSearchParams(location.search).get("uid") || localStorage.getItem("uid") || "";
 
-// Reset the confusion filters to their HTML defaults on every load. Browsers
-// restore typed <input> values across a refresh, but the data is always fetched
-// at defaults and the count/% + population toggles reset too — so the controls
-// must start at defaults to match, or they'd lie about what's shown.
-for (const el of [confminacc, confminacc2, vcmin, vcwrong]) el.value = el.defaultValue;
+// The confusion query string: min-accuracy (number input) + the population
+// toggle. Used by the initial load and every re-filter, so the first paint
+// matches the controls — which the browser persists across a soft reload (and
+// clears on a hard reload), exactly like the number-input filters.
+const confusionParams = () =>
+  "&minacc=" + Math.max(0, Math.min(100, parseInt(confminacc.value, 10) || 0))
+  + (confpopRole === "2" ? "&natives=1" : "");
+
+// Seed the count/% and normal/natives toggles from their restored-or-default
+// state and wire user changes — before the first load(), so its fetch + render
+// reflect the controls. (onPick fires only on a user change, by when data has
+// loaded; the returned value is the current selection.)
+displayMode = wireSwitchGroup(document.querySelectorAll('[data-switch="mode"]'), (m) => {
+  displayMode = m;
+  drawMora();
+  drawConsMora();
+  drawConfusion();
+  drawVoiceConfusion();
+});
+confpopRole = wireSwitchGroup(document.querySelectorAll('[data-switch="pop"]'), (p) => {
+  confpopRole = p;
+  reloadConfusion();
+});
 
 if (uid) load(uid);
 
 async function load(uid) {
   try {
-    const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid));
+    const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid) + confusionParams());
     if (res.status === 403) {
       msg.textContent = "Unauthorized.";
       dash.style.display = "none";
@@ -68,14 +86,12 @@ async function load(uid) {
   }
 }
 
-// Min-overall-accuracy filter: re-fetch with ?minacc and re-render just the
-// confusion matrices (the only sections it gates server-side). Debounced so
+// Re-fetch just the confusion matrices (the only sections min-accuracy and the
+// population toggle gate server-side) and re-render them. Debounced for minacc so
 // typing in the number field doesn't fire a request per keystroke.
 async function reloadConfusion() {
-  const minacc = Math.max(0, Math.min(100, parseInt(confminacc.value, 10) || 0));
   try {
-    const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid)
-      + "&minacc=" + minacc + (confpopRole === "2" ? "&natives=1" : ""));
+    const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid) + confusionParams());
     if (!res.ok) return;
     const data = await res.json();
     renderConfusion(data.confusion_shown, data.confusion_offered);
@@ -317,26 +333,6 @@ function hideUidPopup() {
   popup.querySelector(".uidpopup-backdrop").onclick = hideUidPopup;
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !popup.hidden) hideUidPopup();
-  });
-
-  // Count/per-sound-% toggle — one logical group across every .modeswitch
-  // (per-sound, confusion, voiceconf); re-renders the sections that honour it.
-  // The pop switches also carry .modeswitch for styling, but only data-mode
-  // buttons respond here, so they're inert in this group.
-  wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
-    displayMode = m;
-    drawMora();
-    drawConsMora();
-    drawConfusion();
-    drawVoiceConfusion();
-  });
-
-  // Normal-users (role 0) ⊕ natives (role 2) toggle, mirrored in the confusion
-  // h2 and the sound-file matrix's filter row; both copies stay in sync and
-  // re-fetch the confusion matrices for the chosen population.
-  wireSwitchGroup([confpop, confpop2], "pop", (p) => {
-    confpopRole = p;
-    reloadConfusion();
   });
 
   // Click-to-play delegation on the sound-file confusion matrix (its row

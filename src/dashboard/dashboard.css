@@ -227,25 +227,35 @@ body {
     font-size: .75rem;
 }
 
-.modeswitch button {
+/* Segmented radio toggle: each option is a <label> wrapping a visually-hidden
+   radio (a real form control, so the browser persists/restores it across a soft
+   reload). The label is the button; :has(:checked) is the active segment. */
+.modeswitch label {
     background: var(--bg);
     color: var(--muted);
     border: 1px solid var(--panel-2);
     padding: .2rem .55rem;
     cursor: pointer;
-    font: inherit;
 }
 
-.modeswitch button:first-child {
+.modeswitch label:first-child {
     border-radius: 4px 0 0 4px;
 }
 
-.modeswitch button:last-child {
+.modeswitch label:last-child {
     border-radius: 0 4px 4px 0;
     border-left: 0;
 }
 
-.modeswitch button.active {
+.modeswitch input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.modeswitch label:has(input:checked) {
     background: var(--accent);
     color: #fff;
     border-color: var(--accent);

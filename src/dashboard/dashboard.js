@@ -62,6 +62,18 @@ const viewerLevel = () => (viewerLevelP ||= viewerUid
       .then((r) => r.ok ? r.json() : null).then((i) => (i && i.power_user) || 0).catch(() => 0)
   : Promise.resolve(0));
 
+// Seed the count/% toggle from its restored-or-default state and wire changes —
+// before the first load() renders, so the initial view reflects the control (the
+// browser persists it across a soft reload, like the filter inputs; a hard reload
+// starts at the default).
+let displayMode = wireSwitchGroup(document.querySelectorAll('[data-switch="mode"]'), (m) => {
+  displayMode = m;
+  drawConfusion();
+  drawMora();
+  drawConsMora();
+  drawVoiceConf();
+});
+
 if (uid) {
   uidinput.value = uid;
   if (uid === viewerUid) {
@@ -296,11 +308,6 @@ function renderHourly(events) {
   drawHourly(hourlychart, hrs);
 }
 
-// ---------- display mode (shared) ----------
-// Per-sound and confusion both honour the same count/per-sound-% toggle. Each section
-// has its own .modeswitch in the h2 — clicking either updates the shared
-// `displayMode` and re-runs both renderers (the toggles stay in sync).
-let displayMode = "count";
 
 // ---------- per-mora ----------
 // Fills the static .mrow elements in dashboard.html (each keyed by data-mora)
@@ -446,16 +453,6 @@ function drawVoiceConf() {
 voiceconf.addEventListener("click", (e) => {
   const th = e.target.closest("th.vname");
   if (th) playVoice(th.dataset.mora, th.dataset.voice);
-});
-
-// The count/pct toggle: one logical group across every .modeswitch in the page;
-// flipping it re-renders the sections that honour the mode.
-wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
-  displayMode = m;
-  drawConfusion();
-  drawMora();
-  drawConsMora();
-  drawVoiceConf();
 });
 
 // ---------- confusion cell history ----------

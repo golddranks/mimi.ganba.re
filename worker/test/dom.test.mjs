@@ -508,15 +508,17 @@ test("admin: normal/native population toggle defaults to normal and syncs both c
   await waitFor(() => cellTxt().includes("/") ? true : null, WAIT);
   const normalCell = cellTxt();
 
-  const active = (id) => win.document.getElementById(id).querySelector("button.active").dataset.pop;
-  // Default matches the page's default fetch (normal), so a refresh resets cleanly
-  // — the previous checkbox stayed checked on reload while the data reverted.
+  const active = (id) => [...win.document.getElementById(id).querySelectorAll("input")].find((r) => r.checked).value;
+  // Default (hard reload / first load) is normal — the radios start at the HTML
+  // default; a soft reload would restore whatever was last picked.
   assert.equal(active("confpop"), "0", "confusion-h2 switch defaults to normal");
   assert.equal(active("confpop2"), "0", "sound-file filter-row copy defaults to normal");
 
-  // Clicking natives on one copy switches both (one logical group).
-  win.document.getElementById("confpop").querySelector('button[data-pop="2"]').click();
-  assert.equal(active("confpop"), "2", "clicked switch updates");
+  // Choosing natives in one copy switches both (one logical group).
+  const nat = win.document.querySelector('#confpop input[value="2"]');
+  nat.checked = true;
+  nat.dispatchEvent(new win.Event("change", { bubbles: true }));
+  assert.equal(active("confpop"), "2", "picked switch updates");
   assert.equal(active("confpop2"), "2", "the mirrored copy stays in sync");
 
   // Drain the population re-fetch the click kicked off: this normal-user uid has

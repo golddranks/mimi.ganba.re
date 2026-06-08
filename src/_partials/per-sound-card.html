@@ -4,9 +4,9 @@
      hardest-first and fills widths/text. -->
 <section class="card">
     <h2>Per-sound {{noun}}
-        <span class="modeswitch" id="moramode">
-            <button type="button" data-mode="count" class="active">counts</button>
-            <button type="button" data-mode="pct">per-sound %</button>
+        <span class="modeswitch" data-switch="mode" id="moramode">
+            <label><input type="radio" name="moramode" value="count" checked>counts</label>
+            <label><input type="radio" name="moramode" value="pct">per-sound %</label>
         </span>
         <span class="sub">(hardest first)</span>
     </h2>

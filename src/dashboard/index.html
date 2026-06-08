@@ -105,9 +105,9 @@
 
         <section class="card span2">
             <h2>Confusion matrix
-                <span class="modeswitch" id="confmode">
-                    <button type="button" data-mode="count" class="active">counts</button>
-                    <button type="button" data-mode="pct">per-sound %</button>
+                <span class="modeswitch" data-switch="mode" id="confmode">
+                    <label><input type="radio" name="confmode" value="count" checked>counts</label>
+                    <label><input type="radio" name="confmode" value="pct">per-sound %</label>
                 </span>
             </h2>
             <div id="syncnotice" hidden>

@@ -61,24 +61,25 @@ export function drawHourly(el, hrs, tipSuffix = "") {
   el.innerHTML = `<svg>${bars}${labels}</svg>`;
 }
 
-// Wire a group of segmented toggles that share one selected value. On a click of
-// any `button[data-${attr}]` within `switches`, the active class is synced across
-// every button in the group and `onPick(value)` runs. Used for the count/pct
-// switches (one logical group spanning several .modeswitch elements) and the
-// confusion denominator switch (a group of one).
-export function wireSwitchGroup(switches, attr, onPick) {
+// Wire a set of segmented radio toggles that share one selected value (e.g. the
+// count/pct switches across several .modeswitch elements, or the normal/natives
+// pair). A change in any copy mirrors the chosen value to every copy and runs
+// onPick(value). Because the switches are real radio inputs, the browser restores
+// them across a soft reload and clears them on a hard reload — same as the
+// number-input filters. Returns the current value (restored or HTML-default) so
+// the caller seeds its first render; onPick is NOT fired on load.
+export function wireSwitchGroup(switches, onPick) {
   const els = [...switches];
-  for (const sw of els) {
-    sw.addEventListener("click", (e) => {
-      const btn = e.target.closest(`button[data-${attr}]`);
-      if (!btn) return;
-      const val = btn.dataset[attr];
-      for (const s of els) {
-        for (const b of s.querySelectorAll(`button[data-${attr}]`)) {
-          b.classList.toggle("active", b.dataset[attr] === val);
-        }
-      }
-      onPick(val);
+  const radios = () => els.flatMap((s) => [...s.querySelectorAll("input[type=radio]")]);
+  const select = (val) => { for (const r of radios()) r.checked = r.value === val; };
+  for (const s of els) {
+    s.addEventListener("change", (e) => {
+      if (!e.target || e.target.type !== "radio") return;
+      select(e.target.value);
+      onPick(e.target.value);
     });
   }
+  const current = (radios().find((r) => r.checked) || radios()[0] || {}).value;
+  select(current);
+  return current;
 }
