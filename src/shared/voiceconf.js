@@ -107,7 +107,9 @@ export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, mi
         const val = valueFor(row.m, row.voice, p);
         const diag = row.m === p;
         const cls = ((diag ? "diag" : "") + (val.raw === 0 ? " empty" : "")).trim();
-        body += `<td class="${cls}" style="background:${confusionBg(val.mag, diag, maxOn, maxOff)}" title="${row.m} (${row.voice}) → ${p}: ${val.raw}">${val.display}</td>`;
+        // No-data cells: no inline bg, so the .empty CSS (light grey) shows.
+        const style = val.raw === 0 ? "" : ` style="background:${confusionBg(val.mag, diag, maxOn, maxOff)}"`;
+        body += `<td class="${cls}"${style} title="${row.m} (${row.voice}) → ${p}: ${val.raw}">${val.display}</td>`;
       }
       body += `</tr>`;
     }

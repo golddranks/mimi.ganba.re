@@ -108,7 +108,8 @@
     border-color: color-mix(in srgb, var(--good) 50%, var(--panel-2));
 }
 
+/* No-data cells get a light grey fill so they read as "no data" rather than
+   blank white (matches the main confusion matrix). */
 .vconfgrid td.empty {
-    color: var(--muted);
-    opacity: .35;
+    background: color-mix(in srgb, var(--panel-2) 45%, transparent);
 }
