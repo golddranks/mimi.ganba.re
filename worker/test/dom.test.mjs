@@ -814,6 +814,21 @@ test("admin reminder: reports a uid's push-subscription state, gated to power us
   assert.equal((await (await ask(admin, target)).json()).on, true, "subscribed → on");
 });
 
+test("admin: a user's timezone is recorded from events, not just subscriptions", { skip: LIVE }, async () => {
+  // A normal (role 0) user who never subscribed to reminders, but whose events
+  // POST carried tz — should still show a timezone in the admin overview.
+  const uid = randomUUID();
+  await fetch(`${WORKER}/v1/events`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ uid, tz: 540, events: [{ ts: Date.now(), target: "sa", idx: 0, picked: "sa", cap: 2, ms: 100, ev: "a", opts: ["sa", "za"], skill: 0 }] }),
+  });
+  const admin = randomUUID();
+  await postEvents(admin, saFixture(Date.now()));
+  grantPowerUser(admin, 2);
+  const data = await (await fetch(`${WORKER}/v1/admin/stats/users?uid=${encodeURIComponent(admin)}`)).json();
+  assert.equal(data.timezones?.[uid], 540, "tz from the events POST shows in admin (no subscription needed)");
+});
+
 test("dashboard: a power user sees the viewed uid's reminder state, read-only", { skip: LIVE }, async (t) => {
   const admin = randomUUID();
   await postEvents(admin, saFixture(Date.now()));

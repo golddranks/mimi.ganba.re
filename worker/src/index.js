@@ -280,10 +280,14 @@ async function handleEvents(req, env) {
     );
   });
   const now = Date.now();
+  // tz = minutes east of UTC (client's -getTimezoneOffset()); recorded so the
+  // admin knows every user's timezone, not just reminder subscribers. COALESCE so
+  // an old client that omits it doesn't wipe a previously-recorded offset.
+  const tz = (typeof body.tz === "number" && body.tz >= -720 && body.tz <= 840) ? Math.trunc(body.tz) : null;
   const userTouch = env.mimi_stats.prepare(
-    "INSERT INTO users (uid, first_seen, last_seen) VALUES (?, ?, ?) " +
-    "ON CONFLICT(uid) DO UPDATE SET last_seen = excluded.last_seen"
-  ).bind(body.uid, now, now);
+    "INSERT INTO users (uid, first_seen, last_seen, tz_offset) VALUES (?, ?, ?, ?) " +
+    "ON CONFLICT(uid) DO UPDATE SET last_seen = excluded.last_seen, tz_offset = COALESCE(excluded.tz_offset, tz_offset)"
+  ).bind(body.uid, now, now, tz);
 
   await env.mimi_stats.batch([...inserts, userTouch]);
   return json({ ok: true, count: body.events.length });
@@ -588,7 +592,7 @@ async function handleAdminUserStats(req, env, url) {
   const d7 = now - 7 * 86400000;
   const d30 = now - 30 * 86400000;
 
-  const [totals, active, daily, skillStream, nicks, dailyUidRows, tzRows] = await Promise.all([
+  const [totals, active, daily, skillStream, nicks, dailyUidRows, userTzRows, tzRows] = await Promise.all([
     db.prepare(
       `SELECT
          COUNT(*)                                                       AS events,
@@ -634,8 +638,13 @@ async function handleAdminUserStats(req, env, url) {
        FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
        GROUP BY d, uid`
     ).all(),
-    // uid → timezone offset (minutes east of UTC), from push_subs (set at
-    // reminder opt-in). One per uid; a multi-device user gets any one offset.
+    // uid → timezone offset (minutes east of UTC). Primary source: users.tz_offset
+    // (reported on every events POST — covers all users). push_subs.tz_offset is a
+    // fallback for users who subscribed but haven't been active since it shipped.
+    db.prepare(
+      `SELECT uid, tz_offset FROM users
+       WHERE tz_offset IS NOT NULL AND ${EXCLUDE_TEST}`
+    ).all(),
     db.prepare(
       `SELECT uid, tz_offset FROM push_subs
        WHERE tz_offset IS NOT NULL AND ${EXCLUDE_TEST}
@@ -712,7 +721,11 @@ async function handleAdminUserStats(req, env, url) {
     days_hist,
     days_hist_uids,
     nicknames: Object.fromEntries((nicks.results || []).map((r) => [r.uid, r.nickname])),
-    timezones: Object.fromEntries((tzRows.results || []).map((r) => [r.uid, r.tz_offset])),
+    // push_subs as fallback, users.tz_offset (authoritative, all users) overlaid on top.
+    timezones: {
+      ...Object.fromEntries((tzRows.results || []).map((r) => [r.uid, r.tz_offset])),
+      ...Object.fromEntries((userTzRows.results || []).map((r) => [r.uid, r.tz_offset])),
+    },
     daily_uids: (dailyUidRows.results || []).reduce((m, r) => {
       (m[r.d] = m[r.d] || []).push(r.uid);
       return m;

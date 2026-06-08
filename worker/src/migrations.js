@@ -51,4 +51,12 @@ export const MIGRATIONS = [
     up: "UPDATE users SET role = 1 WHERE nickname = 'TestUser'",
     down: "UPDATE users SET role = 0 WHERE nickname = 'TestUser'",
   },
+  {
+    // Per-user timezone (minutes east of UTC), reported on every events POST — so
+    // the admin knows it for ALL users, not just those subscribed to reminders
+    // (push_subs.tz_offset only covers subscribers).
+    id: 6,
+    up: "ALTER TABLE users ADD COLUMN tz_offset INTEGER",
+    down: "ALTER TABLE users DROP COLUMN tz_offset",
+  },
 ];

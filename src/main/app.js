@@ -86,7 +86,7 @@ async function flushEvents() {
     const res = await fetch(STATS_URL + "/v1/events", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ uid, events: batch }),
+      body: JSON.stringify({ uid, events: batch, tz: -new Date().getTimezoneOffset() }),
     });
     if (res.ok) {
       evQueue.splice(0, batch.length);

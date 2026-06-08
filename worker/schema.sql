@@ -10,7 +10,8 @@ CREATE TABLE IF NOT EXISTS users (
   first_seen INTEGER NOT NULL,                  -- unix ms of first event POST
   last_seen  INTEGER NOT NULL,                  -- unix ms of most recent event POST
   power_user INTEGER NOT NULL DEFAULT 0,        -- 0 = none; 1 = aggregate admin sections; 2 = + per-user/uid drilldowns
-  role       INTEGER NOT NULL DEFAULT 0         -- 0 = normal; 1 = automatic (e2e) test user; 2 = native test user. Roles 1 & 2 are excluded from production aggregates (EXCLUDE_TEST = role 0)
+  role       INTEGER NOT NULL DEFAULT 0,        -- 0 = normal; 1 = automatic (e2e) test user; 2 = native test user. Roles 1 & 2 are excluded from production aggregates (EXCLUDE_TEST = role 0)
+  tz_offset  INTEGER                            -- minutes east of UTC, reported on each events POST (every user, not just reminder subscribers)
 );
 
 -- One row per user action within a question. Action kinds (`ev`):
