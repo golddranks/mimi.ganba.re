@@ -38,6 +38,12 @@ let confpopRole = "0";
 // for cases like a fresh browser or testing as a different power user.
 const uid = new URLSearchParams(location.search).get("uid") || localStorage.getItem("uid") || "";
 
+// Reset the confusion filters to their HTML defaults on every load. Browsers
+// restore typed <input> values across a refresh, but the data is always fetched
+// at defaults and the count/% + population toggles reset too — so the controls
+// must start at defaults to match, or they'd lie about what's shown.
+for (const el of [confminacc, confminacc2, vcmin, vcwrong]) el.value = el.defaultValue;
+
 if (uid) load(uid);
 
 async function load(uid) {
