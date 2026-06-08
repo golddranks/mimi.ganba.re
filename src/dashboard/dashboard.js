@@ -40,6 +40,18 @@ const params = new URLSearchParams(location.search);
 const viewerUid = localStorage.getItem("uid") || "";
 const uid = params.get("uid") || viewerUid;
 
+// Capture the elements that async callbacks (the form reveal, renderNotif, the
+// view-as gate) touch after a fetch resolves. Holding the node means a callback
+// that lands after navigation still sets a (now-detached) element instead of
+// throwing on a window global that's gone — which in tests surfaces as an
+// "uidform/notif is not defined" rejection when the page is torn down mid-fetch.
+const uidform = document.getElementById("uidform");
+const notif = document.getElementById("notif");
+const notifstatus = document.getElementById("notifstatus");
+const notifbtn = document.getElementById("notifbtn");
+const msg = document.getElementById("msg");
+const dash = document.getElementById("dash");
+
 // Carry an explicit ?uid= back to the app so "back" stays in view-as mode for
 // that user. Without one (you're looking at your own dashboard), back goes to
 // the app's own localStorage-backed state.
