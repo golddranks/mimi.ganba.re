@@ -1,10 +1,11 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
-import { pad2, dateKey, dayKey } from "../shared/dates.js";
+import { dateKey, dayKey } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
 import { tallyFromEvents, tallyMaps, confusionRecord } from "../shared/tally.js";
 import { isAnswerEv, answeredRight } from "../shared/events.js";
 import { pushSupported, currentSubscription, subscribe, unsubscribe } from "../shared/push.js";
 import { dayBarChart, dayTip } from "../shared/daychart.js";
+import { drawBars, drawHourly, wireSwitchGroup } from "../shared/charts.js";
 
 // Read-only per-user dashboard. Pulls events from the stats worker and renders
 // a handful of visualizations. No localStorage writes, no event posts.
@@ -260,37 +261,14 @@ function renderDaily(events) {
 
 // ---------- hourly ----------
 function renderHourly(events) {
-  const ag = events.filter(isAnswer);
-  const hrs = Array.from({ length: 24 }, () => ({ correct: 0, wrong: 0 }));
-  for (const e of ag) {
+  const hrs = Array.from({ length: 24 }, () => ({ correct: 0, total: 0 }));
+  for (const e of events) {
+    if (!isAnswer(e)) continue;
     const hour = new Date(e.ts).getHours();
-    if (answeredRight(e)) hrs[hour].correct++; else hrs[hour].wrong++;
+    hrs[hour].total++;
+    if (answeredRight(e)) hrs[hour].correct++;
   }
-  const max = Math.max(1, ...hrs.map((h) => h.correct + h.wrong));
-  // Geometry is computed in a logical 480×180 box but emitted as percentages
-  // (no viewBox), so the SVG stretches to fill its container — taller box ⇒
-  // taller bars — while font-size stays in crisp, non-scaling px. X% spans the
-  // logical width, Y% the logical height.
-  const w = 480, h = 180;
-  const innerH = h - 40;
-  const bw = (w - 40) / 24;
-  const X = (v) => (v / w * 100).toFixed(2), Y = (v) => (v / h * 100).toFixed(2);
-  let bars = "", labels = "";
-  for (let i = 0; i < 24; i++) {
-    const x = 20 + i * bw;
-    const tot = hrs[i].correct + hrs[i].wrong;
-    const totH = tot / max * innerH;
-    const cH = tot ? hrs[i].correct / tot * totH : 0;
-    const tip = `${pad2(i)}:00  ${hrs[i].correct}/${tot}`;
-    if (tot) {
-      bars += `<rect x="${X(x)}%" y="${Y(h - 20 - totH)}%" width="${X(bw * 0.8)}%" height="${Y(totH)}%" fill="var(--bad-bar)"><title>${tip}</title></rect>`;
-      bars += `<rect x="${X(x)}%" y="${Y(h - 20 - cH)}%" width="${X(bw * 0.8)}%" height="${Y(cH)}%" fill="var(--good)"><title>${tip}</title></rect>`;
-    }
-    if (i % 3 === 0) {
-      labels += `<text x="${X(x + bw * 0.4)}%" y="${Y(h - 4)}%" fill="var(--muted)" font-size="10" text-anchor="middle">${i}</text>`;
-    }
-  }
-  hourlychart.innerHTML = `<svg>${bars}${labels}</svg>`;
+  drawHourly(hourlychart, hrs);
 }
 
 // ---------- display mode (shared) ----------
@@ -300,8 +278,8 @@ function renderHourly(events) {
 let displayMode = "count";
 
 // ---------- per-mora ----------
-// Updates the 19 static .mrow elements in dashboard.html; each carries its
-// own data-mora attribute, so we only set widths and the text readout.
+// Fills the static .mrow elements in dashboard.html (each keyed by data-mora)
+// via the shared drawBars; renderMora just tallies events into {correct, total}.
 let moraCounts = null;
 let moraMaxN = 1;
 
@@ -319,26 +297,7 @@ function renderMora(events) {
 }
 
 function drawMora() {
-  if (!moraCounts) return;
-  for (const mrow of morachart.querySelectorAll(".mrow")) {
-    const c = moraCounts[mrow.dataset.mora] || { correct: 0, total: 0 };
-    const accPct = c.total ? c.correct / c.total : 0;
-    const total = mrow.querySelector(".mbar-total");
-    const correct = mrow.querySelector(".mbar-correct");
-    const txt = mrow.querySelector(".mtxt");
-    if (displayMode === "pct") {
-      // Equal-width bars so accuracy is comparable across rows regardless of volume.
-      total.style.width = c.total ? "100%" : "0%";
-      correct.style.width = (accPct * 100) + "%";
-      txt.textContent = c.total ? `${Math.round(accPct * 100)}%` : "—";
-    } else {
-      total.style.width = (c.total / moraMaxN * 100) + "%";
-      correct.style.width = (accPct * 100) + "%";
-      txt.textContent = c.total
-        ? `${c.correct}/${c.total} · ${(accPct * 100).toFixed(0)}%`
-        : "0/0";
-    }
-  }
+  if (moraCounts) drawBars(morachart, moraCounts, moraMaxN, displayMode);
 }
 
 // ---------- confusion ----------
@@ -434,42 +393,19 @@ function drawConsonantConfusion() {
   fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, confDenom, displayMode);
 }
 
-// Hook up every .modeswitch once at module load. Clicking any of them flips
-// the shared displayMode, syncs the active-button state across all switches,
-// and re-renders the sections that honour the mode.
-(() => {
-  const switches = document.querySelectorAll(".modeswitch");
-  for (const sw of switches) {
-    sw.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-mode]");
-      if (!btn) return;
-      displayMode = btn.dataset.mode;
-      for (const s of switches) {
-        for (const b of s.querySelectorAll("button[data-mode]")) {
-          b.classList.toggle("active", b.dataset.mode === displayMode);
-        }
-      }
-      drawConfusion();
-      drawMora();
-    });
-  }
-})();
-
-// The confusion matrix's denominator toggle (asked sound vs shown kana). Its
-// own switch, separate from the shared count/pct one above, since "when offered"
-// has no meaning for the per-mora chart — only the confusion matrix redraws.
-(() => {
-  const sw = document.getElementById("confdenom");
-  sw.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-denom]");
-    if (!btn) return;
-    confDenom = btn.dataset.denom;
-    for (const b of sw.querySelectorAll("button[data-denom]")) {
-      b.classList.toggle("active", b.dataset.denom === confDenom);
-    }
-    drawConfusion();
-  });
-})();
+// The count/pct toggle: one logical group across every .modeswitch in the page;
+// flipping it re-renders the sections that honour the mode. The denominator
+// toggle (asked sound vs shown kana) is its own group — only the confusion
+// matrix redraws, since "when offered" has no meaning for the per-mora chart.
+wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
+  displayMode = m;
+  drawConfusion();
+  drawMora();
+});
+wireSwitchGroup([document.getElementById("confdenom")], "denom", (d) => {
+  confDenom = d;
+  drawConfusion();
+});
 
 // ---------- confusion cell history ----------
 // Click a matrix cell to inspect that sound→kana pair over time as a ○/✕ strip

@@ -1,6 +1,7 @@
 import { pad2 } from "../shared/dates.js";
 import { aggregateByConsonant, fillConfusionCells } from "../shared/confusion.js";
 import { dayBarChart, dayTip } from "../shared/daychart.js";
+import { drawBars, drawHourly, wireSwitchGroup } from "../shared/charts.js";
 
 // Power-user-only app-wide aggregate dashboard. Fans two endpoints into the
 // static skeleton declared in admin/index.html. Auth is the requester's own
@@ -315,37 +316,18 @@ function hideUidPopup() {
     if (e.key === "Escape" && !popup.hidden) hideUidPopup();
   });
 
-  // Count/per-sound-% toggle — three switches (per-sound, confusion, voiceconf)
-  // sharing one displayMode. Clicking any of them syncs every switch's
-  // active button and re-renders the three sections that honour the mode.
-  const switches = document.querySelectorAll(".modeswitch");
-  for (const sw of switches) {
-    sw.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-mode]");
-      if (!btn) return;
-      displayMode = btn.dataset.mode;
-      for (const s of switches) {
-        for (const b of s.querySelectorAll("button[data-mode]")) {
-          b.classList.toggle("active", b.dataset.mode === displayMode);
-        }
-      }
-      drawMora();
-      drawConfusion();
-      drawVoiceConfusion();
-    });
-  }
-
-  // Confusion-matrix denominator toggle (asked sound vs shown kana). Redraws both
-  // the per-vowel/consonant matrix and the per-recording (sound-file) one, which
-  // now honour it too. Mirrors the user dashboard.
-  const denomSwitch = document.getElementById("confdenom");
-  denomSwitch.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-denom]");
-    if (!btn) return;
-    confDenom = btn.dataset.denom;
-    for (const b of denomSwitch.querySelectorAll("button[data-denom]")) {
-      b.classList.toggle("active", b.dataset.denom === confDenom);
-    }
+  // Count/per-sound-% toggle — one logical group across every .modeswitch
+  // (per-sound, confusion, voiceconf); re-renders the sections that honour it.
+  // The denominator toggle (asked sound vs shown kana) is its own group and
+  // redraws both confusion matrices, which honour it. Mirrors the user dashboard.
+  wireSwitchGroup(document.querySelectorAll(".modeswitch"), "mode", (m) => {
+    displayMode = m;
+    drawMora();
+    drawConfusion();
+    drawVoiceConfusion();
+  });
+  wireSwitchGroup([document.getElementById("confdenom")], "denom", (d) => {
+    confDenom = d;
     drawConfusion();
     drawVoiceConfusion();
   });
@@ -366,76 +348,28 @@ function hideUidPopup() {
 
 // ---------- hourly (UTC) ----------
 function renderHourly(hourly) {
-  const hrs = Array.from({ length: 24 }, () => ({ n: 0, correct: 0 }));
-  for (const r of hourly || []) hrs[r.h] = { n: r.n, correct: r.correct };
-  const max = Math.max(1, ...hrs.map((h) => h.n));
-  // Logical 480×180 box emitted as percentages (no viewBox) so the SVG fills
-  // its (stretchy, in-stack) container with crisp px text. See dayBarChart.
-  const w = 480, h = 180;
-  const innerH = h - 40;
-  const bw = (w - 40) / 24;
-  const X = (v) => (v / w * 100).toFixed(2), Y = (v) => (v / h * 100).toFixed(2);
-  let bars = "", labels = "";
-  for (let i = 0; i < 24; i++) {
-    const x = 20 + i * bw;
-    const totH = hrs[i].n / max * innerH;
-    const cH = hrs[i].n ? hrs[i].correct / hrs[i].n * totH : 0;
-    const tip = `${pad2(i)}:00 UTC  ${hrs[i].correct}/${hrs[i].n}`;
-    if (hrs[i].n) {
-      bars += `<rect x="${X(x)}%" y="${Y(h - 20 - totH)}%" width="${X(bw * 0.8)}%" height="${Y(totH)}%" fill="var(--bad-bar)"><title>${tip}</title></rect>`;
-      bars += `<rect x="${X(x)}%" y="${Y(h - 20 - cH)}%" width="${X(bw * 0.8)}%" height="${Y(cH)}%" fill="var(--good)"><title>${tip}</title></rect>`;
-    }
-    if (i % 3 === 0) {
-      labels += `<text x="${X(x + bw * 0.4)}%" y="${Y(h - 4)}%" fill="var(--muted)" font-size="10" text-anchor="middle">${i}</text>`;
-    }
-  }
-  hourlychart.innerHTML = `<svg>${bars}${labels}</svg>`;
+  const hrs = Array.from({ length: 24 }, () => ({ correct: 0, total: 0 }));
+  for (const r of hourly || []) hrs[r.h] = { correct: r.correct, total: r.n };
+  drawHourly(hourlychart, hrs, " UTC");
 }
 
 // ---------- per-sound difficulty ----------
-// Reorders the static .mrow elements so hardest (lowest accuracy with at
-// least 1 attempt) comes first; unattempted sounds sink to the bottom.
+// Fills the static .mrow elements (keyed by data-mora) via the shared drawBars,
+// which orders them hardest-first; renderMora just normalises the server's
+// {m, n, correct} rows into {correct, total}.
 let moraCounts = null;
 let moraMaxN = 1;
 
 function renderMora(byMora) {
   const counts = {};
-  for (const r of byMora || []) counts[r.m] = { n: r.n, correct: r.correct };
+  for (const r of byMora || []) counts[r.m] = { correct: r.correct, total: r.n };
   moraCounts = counts;
-  moraMaxN = Math.max(1, ...Object.values(counts).map((c) => c.n || 0));
+  moraMaxN = Math.max(1, ...Object.values(counts).map((c) => c.total || 0));
   drawMora();
 }
 
 function drawMora() {
-  if (!moraCounts) return;
-  const rows = [...morachart.querySelectorAll(".mrow")];
-  rows.sort((a, b) => {
-    const ca = moraCounts[a.dataset.mora] || { n: 0, correct: 0 };
-    const cb = moraCounts[b.dataset.mora] || { n: 0, correct: 0 };
-    if (!ca.n && !cb.n) return 0;
-    if (!ca.n) return 1;
-    if (!cb.n) return -1;
-    return (ca.correct / ca.n) - (cb.correct / cb.n);
-  });
-  for (const mrow of rows) {
-    morachart.appendChild(mrow);
-    const c = moraCounts[mrow.dataset.mora] || { n: 0, correct: 0 };
-    const acc = c.n ? c.correct / c.n : 0;
-    const total = mrow.querySelector(".mbar-total");
-    const correct = mrow.querySelector(".mbar-correct");
-    const txt = mrow.querySelector(".mtxt");
-    if (displayMode === "pct") {
-      total.style.width = c.n ? "100%" : "0%";
-      correct.style.width = (acc * 100) + "%";
-      txt.textContent = c.n ? `${Math.round(acc * 100)}%` : "—";
-    } else {
-      total.style.width = (c.n / moraMaxN * 100) + "%";
-      correct.style.width = (acc * 100) + "%";
-      txt.textContent = c.n
-        ? `${c.correct}/${c.n} · ${(acc * 100).toFixed(0)}%`
-        : "0/0";
-    }
-  }
+  if (moraCounts) drawBars(morachart, moraCounts, moraMaxN, displayMode);
 }
 
 // ---------- sound-file difficulty ----------
