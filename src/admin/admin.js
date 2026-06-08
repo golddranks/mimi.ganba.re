@@ -168,7 +168,7 @@ function renderDaily(daily, uids) {
     const tip = dayTip(d.k, d.correct, d.n);
     return `<rect x="${x}%" y="${y0 - bh}%" width="${barW}%" height="${bh}%" fill="var(--bad-bar)"></rect>`
       + `<rect x="${x}%" y="${y0 - cH}%" width="${barW}%" height="${cH}%" fill="var(--good)"></rect>`
-      + `<rect class="dayband" data-date="${d.k}" x="${bandX}%" y="0" width="${bandW}%" height="${y0}%"><title>${tip}</title></rect>`;
+      + `<rect class="hitband" data-date="${d.k}" x="${bandX}%" y="0" width="${bandW}%" height="${y0}%"><title>${tip}</title></rect>`;
   }, () => "", true);
   dailychart.onclick = (e) => {
     const r = e.target.closest("rect[data-date]");
@@ -194,16 +194,25 @@ function renderLevelHist(hist, uids) {
     const max = Math.max(1, ...bins);
     const col = levelhist.querySelector(`.lvlcol[data-vowel="${v}"]`);
     col.querySelector(".lvltotal").textContent = total;
+    // Lay a full-height band over each column (once) so clicking anywhere in it
+    // — not just the thin bar — opens that bucket's uids, with a hover cue. The
+    // bars are the static skeleton; bands go on top (appended last).
+    const svg = col.querySelector("svg");
+    if (!svg.querySelector(".hitband")) {
+      svg.insertAdjacentHTML("beforeend", [0, 1, 2, 3, 4].map((i) =>
+        `<rect class="hitband" data-bin="${i}" x="${10 + i * 44}" y="0" width="44" height="${baseY}"><title></title></rect>`).join(""));
+    }
     for (let i = 0; i < 5; i++) {
       const bh = bins[i] / max * innerH;
-      const rect = col.querySelector(`rect[data-bin="${i}"]`);
+      const rect = col.querySelector(`rect[data-bin="${i}"]:not(.hitband)`);
       rect.setAttribute("height", bh);
       rect.setAttribute("y", baseY - bh);
-      rect.querySelector("title").textContent = `${i + 2} buttons: ${bins[i]} users`;
       const text = col.querySelector(`text.bincount[data-bin="${i}"]`);
       text.setAttribute("y", baseY - bh - 2);
       text.textContent = bins[i] || "";
-      rect.onclick = () => showUidPopup(`${VOWEL_GYO[v]} · ${i + 2} buttons`, bucketUids[i]);
+      const band = col.querySelector(`rect.hitband[data-bin="${i}"]`);
+      band.querySelector("title").textContent = `${i + 2} buttons: ${bins[i]} users`;
+      band.onclick = () => showUidPopup(`${VOWEL_GYO[v]} · ${i + 2} buttons`, bucketUids[i]);
     }
   }
 }
@@ -228,21 +237,28 @@ function paintHist(svgEl, w, h, bins, labels, tooltipFn, uids, titleFn) {
   const barW = Math.max(2, bw * 0.78);
   const max = Math.max(1, ...bins);
   const X = (v) => (v / w * 100).toFixed(2), Y = (v) => (v / h * 100).toFixed(2);
+  const clickable = uids && titleFn;
   let html = "";
   for (let i = 0; i < n; i++) {
     const cx = padL + (i + 0.5) * bw;
     const bh = bins[i] / max * innerH;
-    html += `<rect data-bin="${i}" x="${X(cx - barW / 2)}%" y="${Y(baseY - bh)}%" width="${X(barW)}%" height="${Y(bh)}%" fill="var(--accent)"><title>${tooltipFn(i, bins[i])}</title></rect>`;
+    const title = `<title>${tooltipFn(i, bins[i])}</title>`;
+    // When clickable, a full-height band over the whole column (below) is the
+    // click/hover/tooltip target; otherwise the bar carries the tooltip itself.
+    html += `<rect data-bin="${i}" x="${X(cx - barW / 2)}%" y="${Y(baseY - bh)}%" width="${X(barW)}%" height="${Y(bh)}%" fill="var(--accent)">${clickable ? "" : title}</rect>`;
     if (bins[i] > 0) {
       html += `<text x="${X(cx)}%" y="${Y(baseY - bh - 4)}%" fill="var(--muted)" font-size="11" text-anchor="middle">${bins[i]}</text>`;
     }
     if (labels[i]) {
       html += `<text x="${X(cx)}%" y="${Y(h - 6)}%" fill="var(--muted)" font-size="11" text-anchor="middle">${labels[i]}</text>`;
     }
+    if (clickable) {
+      html += `<rect class="hitband" data-bin="${i}" x="${X(padL + i * bw)}%" y="0" width="${X(bw)}%" height="${Y(baseY)}%">${title}</rect>`;
+    }
   }
   svgEl.innerHTML = html;
-  if (uids && titleFn) {
-    // Delegate one click handler on the SVG. Each bar carries data-bin so
+  if (clickable) {
+    // Delegate one click handler on the SVG. Each band carries data-bin so
     // we look up its uid list by index. Re-renders replace the children;
     // we set the handler each time on the still-stable svg element.
     svgEl.onclick = (e) => {
