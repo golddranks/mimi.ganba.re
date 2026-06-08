@@ -77,16 +77,6 @@ let displayMode = wireSwitchGroup(document.querySelectorAll('[data-switch="mode"
   drawVoiceConf();
 });
 
-// Remember the sound-file matrix's open/closed fold across refreshes — browsers
-// don't restore <details> state. Restore synchronously (before first paint, so
-// it doesn't flash open/closed) and save on every toggle.
-if (localStorage.sfMatrixOpen === "1") voiceconfdetails.open = true;
-voiceconfdetails.ontoggle = () => { localStorage.sfMatrixOpen = voiceconfdetails.open ? "1" : "0"; };
-
-// The "tap a cell" hint is just discovery: once the user has ever tapped a cell
-// (set in showCellHistory), drop it for good. Restored synchronously before paint.
-if (localStorage.confHintSeen === "1") confhint.hidden = true;
-
 if (uid) {
   uidinput.value = uid;
   if (uid === viewerUid) {
@@ -486,8 +476,7 @@ voiceconf.addEventListener("click", (e) => {
 // diagonal → the user got it wrong. Only opts-bearing answers where the column
 // kana was actually offered count (same data as the shown/grind metrics).
 function showCellHistory(td) {
-  confhint.hidden = true;                 // discovery hint done its job — drop it for good
-  localStorage.confHintSeen = "1";
+  confhint.hidden = true;                 // tapped a cell — the discovery hint's done its job (this session; it returns on reload)
   const t = td.dataset.t, p = td.dataset.p, diag = t === p;
   const series = confusionEvents.filter((e) => e.target === t && e.opts.split(",").includes(p));
   const outcomes = series.map((e) => ((diag ? e.picked !== t : e.picked === p) ? 1 : 0)); // 1 = red/bad

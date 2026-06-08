@@ -397,9 +397,8 @@ test("dashboard: clicking a confusion cell shows its history strip", async (t) =
   assert.match(detail.querySelector(".cd-head").textContent, /→ ざ · confused 3\/6/);
   assert.ok(cell().classList.contains("selected"), "clicked cell is marked selected");
 
-  // The discovery hint drops for good once a cell has been tapped.
+  // The discovery hint hides for the session once a cell has been tapped.
   assert.equal(win.confhint.hidden, true, "the 'tap a cell' hint hides after the first tap");
-  assert.equal(win.localStorage.getItem("confHintSeen"), "1", "and stays hidden on future loads");
   // The replay hint rides inline on the head row as a parenthetical.
   const replayHint = detail.querySelector(".cd-head .cd-file");
   assert.ok(replayHint?.textContent.startsWith("(tap a ○ / ✕"), "replay hint is an inline parenthetical on the head row");
@@ -630,23 +629,6 @@ test("dashboard: per-user sound-file confusion matrix renders the viewer's recor
   // the current voice set). saFixture is idx 0, so its voice is VOICE_MAP[sa][0].
   const vth = [...win.voiceconf.querySelectorAll("th.vname")].find((th) => th.dataset.voice === voice);
   assert.equal(vth?.title, `${voice} — current id 0`, "row header hover shows the current file id");
-});
-
-test("dashboard: the sound-file matrix remembers its open/closed fold across loads", async (t) => {
-  const uid = await freshTestUser();
-  assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
-  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
-    setup: (w) => { w.localStorage.setItem("uid", uid); w.localStorage.setItem("sfMatrixOpen", "1"); },
-  });
-  t.after(close);
-  // Drain the page's async load() before asserting (avoids post-teardown work).
-  await waitFor(() => win.confchart.querySelector('td[data-t="sa"][data-p="za"]')?.textContent === "3/5", WAIT);
-
-  assert.equal(win.voiceconfdetails.open, true, "restored open from the saved state");
-  // Closing it persists the new state.
-  win.voiceconfdetails.open = false;
-  win.voiceconfdetails.dispatchEvent(new win.Event("toggle"));
-  assert.equal(win.localStorage.getItem("sfMatrixOpen"), "0", "saved closed on toggle");
 });
 
 test("admin: sound-file matrix exposes per-recording shown/offered (vs the kana)", { skip: LIVE }, async () => {
