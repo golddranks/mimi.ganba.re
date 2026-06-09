@@ -20,11 +20,11 @@ import { daysAgo } from "../../src/shared/dates.js";
 const getEvents = async (uid) =>
   (await (await fetch(`${WORKER}/v1/user/${encodeURIComponent(uid)}/events`)).json()).events || [];
 
-const postEvents = (uid, events) =>
+const postEvents = (uid, events, tz) =>
   fetch(`${WORKER}/v1/events`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ uid, events }),
+    body: JSON.stringify(tz == null ? { uid, events } : { uid, events, tz }),
   });
 
 // Register a uid as an automatic test user (role 1) so the worker excludes its
@@ -472,6 +472,24 @@ test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", asy
   await waitFor(() => !detail.hidden && detail.querySelector(".cd-head"), WAIT);
   assert.match(detail.querySelector(".cd-head").textContent, /confused 0\/8 · consistent/);
   assert.equal(detail.querySelectorAll("svg polyline").length, 0, "no trend line for a flat cell");
+});
+
+// skip on LIVE: posts a role-0-style fixture under a fresh uid with a tz.
+test("dashboard: hour-of-day buckets in the viewed user's timezone, not the viewer's", { skip: LIVE }, async (t) => {
+  // Two answers at 02:30 UTC; the user reports JST (+540 min), so they belong at hour 11.
+  const uid = await freshTestUser();
+  const ts = Date.UTC(2026, 0, 1, 2, 30, 0);
+  const ev = (i) => ({ ts: ts + i * 1000, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 });
+  assert.equal((await postEvents(uid, [ev(0), ev(1)], 540)).status, 200);   // tz = JST
+
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // own dashboard
+  });
+  t.after(close);
+  const titles = () => [...win.hourlychart.querySelectorAll("title")].map((n) => n.textContent);
+  await waitFor(() => titles().length ? titles() : null, WAIT);
+  assert.ok(titles().some((s) => s.startsWith("11:00") && s.includes("2/2")), "the two answers bucket at JST 11:00");
+  assert.ok(!titles().some((s) => s.startsWith("02:00")), "not at the raw UTC hour (02:00)");
 });
 
 test("dashboard: Y/N answers feed the confusion matrix (diagonal + confuser)", async (t) => {

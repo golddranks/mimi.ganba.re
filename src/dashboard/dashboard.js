@@ -211,7 +211,7 @@ async function load(uid) {
       reminders.hidden = false;
     }
     if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
-    const { events } = await res.json();
+    const { events, tz_offset } = await res.json();
     events.sort((a, b) => a.ts - b.ts);
     if (events.length === 0) {
       msg.textContent = "No events for this user.";
@@ -220,7 +220,7 @@ async function load(uid) {
     renderOverview(uid, events);
     renderLevels(events);
     renderDaily(events);
-    renderHourly(events);
+    renderHourly(events, tz_offset);
     renderMora(events);
     renderConfusion(events);
     renderVoiceConfusion(events);
@@ -344,11 +344,19 @@ function renderDaily(events) {
 }
 
 // ---------- hourly ----------
-function renderHourly(events) {
+// Hour-of-day in the *viewed* user's local time — UTC/JST mean nothing for their
+// own daily rhythm. tzMin is their reported tz_offset (minutes east of UTC), which
+// shifts each UTC timestamp onto their clock. Falls back to viewer-local only when
+// the user has no tz on record (pre-tz_offset rows); on your own dashboard the two
+// agree anyway.
+function renderHourly(events, tzMin) {
   const hrs = Array.from({ length: 24 }, () => ({ correct: 0, total: 0 }));
+  const hourOf = tzMin == null
+    ? (ts) => new Date(ts).getHours()
+    : (ts) => new Date(ts + tzMin * 60000).getUTCHours();
   for (const e of events) {
     if (!isAnswer(e)) continue;
-    const hour = new Date(e.ts).getHours();
+    const hour = hourOf(e.ts);
     hrs[hour].total++;
     if (answeredRight(e)) hrs[hour].correct++;
   }

@@ -300,10 +300,15 @@ async function handleEvents(req, env) {
 
 async function handleGetEvents(req, env, url) {
   const uid = decodeURIComponent(url.pathname.split("/")[3]);
-  const rows = await env.mimi_stats.prepare(
-    "SELECT ts, target, idx, picked, cap, ms, ev, voice, opts FROM events WHERE uid = ? ORDER BY ts ASC"
-  ).bind(uid).all();
-  return json({ events: rows.results || [] });
+  const [rows, user] = await Promise.all([
+    env.mimi_stats.prepare(
+      "SELECT ts, target, idx, picked, cap, ms, ev, voice, opts FROM events WHERE uid = ? ORDER BY ts ASC"
+    ).bind(uid).all(),
+    env.mimi_stats.prepare("SELECT tz_offset FROM users WHERE uid = ?").bind(uid).first(),
+  ]);
+  // tz_offset (minutes east of UTC) lets the dashboard bucket this user's
+  // hour-of-day in their own local time, not the viewer's. Null = not yet reported.
+  return json({ events: rows.results || [], tz_offset: user ? user.tz_offset : null });
 }
 
 // Per-recording answer counts so the app can prefer the least-judged recording
