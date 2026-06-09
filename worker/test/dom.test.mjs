@@ -472,6 +472,27 @@ test("dashboard: tapping a diagonal ✕ names the kana the user wrongly picked",
   assert.match(detail.querySelector(".cd-file").textContent, /picked ざ/, "the parenthetical names the chosen wrong kana");
 });
 
+test("dashboard: confusion matrix metric switch (wrong → guessed)", async (t) => {
+  // sa→za picked 3× (all offered za), one of them a guess → wrong 3/3, guessed 1/3.
+  const uid = await freshTestUser();
+  const t0 = Date.now();
+  const a = (i, ev_) => ({ ts: t0 + i, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: ev_, opts: ["sa", "za"], skill: 0 });
+  assert.equal((await postEvents(uid, [a(1, "a"), a(2, "a"), a(3, "g")])).status, 200);
+
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),
+  });
+  t.after(close);
+  const cell = () => win.confchart.querySelector('td[data-t="sa"][data-p="za"]');
+  await waitFor(() => cell()?.textContent === "3/3" ? true : null, WAIT);   // default metric = wrong
+
+  const g = win.confmetric.querySelector('input[value="guessed"]');
+  g.checked = true;
+  g.dispatchEvent(new win.Event("change", { bubbles: true }));   // wireSwitchGroup delegates on the span
+  await waitFor(() => cell()?.textContent === "1/3" ? true : null, WAIT);
+  assert.equal(cell().textContent, "1/3", "guessed metric counts only the guess, over the same offered");
+});
+
 test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", async (t) => {
   // 8 sa-questions with za offered, always answered sa → never confused (0/8).
   const uid = await freshTestUser();

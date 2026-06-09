@@ -4,6 +4,40 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { pAbove20, confusionTargets, logisticFit, logisticAt, logisticTrend } from "../../src/shared/confusion.js";
+import { confusionExtras } from "../../src/shared/tally.js";
+
+test("confusionExtras: guessed (incl. correct→diagonal), after-played, re-listened by order", () => {
+  const ev = (ts, ms, kind, picked, opts) => ({ target: "sa", ts, ms, ev: kind, picked, opts: opts && opts.join(",") });
+  const events = [
+    // Q1: re-listen then a *wrong* guess of za. ts-ms is 1000 for the 'r' but 1003
+    // for the answer — they DON'T match (as in real data), so order, not ts-ms,
+    // must link them. offered: sa, za.
+    ev(1200, 200, "r", ""),
+    ev(1503, 500, "g", "za", ["sa", "za"]),
+    // Q2: correct guess of sa (→ diagonal), no re-listen.
+    ev(2400, 400, "g", "sa", ["sa", "za"]),
+    // Q3: plain answer, then after-played za during review.
+    ev(3400, 400, "a", "sa", ["sa", "za"]),
+    ev(3900, 900, "p", "za"),
+  ];
+  const { guessed, afterPlayed, reListened } = confusionExtras(events);
+  assert.equal(guessed["sa/za"], 1, "wrong guess of za");
+  assert.equal(guessed["sa/sa"], 1, "correct guess lands on the diagonal");
+  assert.equal(afterPlayed["sa/za"], 1, "replayed za in review");
+  assert.equal(reListened["sa/sa"], 1, "re-listen credited to every offered kana despite ts-ms mismatch");
+  assert.equal(reListened["sa/za"], 1, "...and the confuser");
+  assert.equal(afterPlayed["sa/sa"], undefined, "no stray after-play");
+});
+
+test("confusionExtras: slow = slowest engaged (<6s) reactions at the 96th pct", () => {
+  // 10 sa→za picks at ms 100..1000 (engaged) + one 7000ms (away, not hesitating).
+  // 96th pct of the engaged set is the slowest (1000), so only that pick is "slow";
+  // the 7s one is excluded by the <6s cap.
+  const mk = (ms) => ({ target: "sa", ts: 1_000_000 + ms, ms, ev: "a", picked: "za", opts: "sa,za" });
+  const events = [...Array(10)].map((_, i) => mk((i + 1) * 100)).concat(mk(7000));
+  const { slow } = confusionExtras(events);
+  assert.equal(slow["sa/za"], 1, "only the slowest engaged reaction; the 7s away-answer doesn't count");
+});
 
 test("logisticFit captures trend direction over a 0/1 sequence", () => {
   const up = logisticFit([0, 0, 0, 0, 1, 1, 1, 1]);

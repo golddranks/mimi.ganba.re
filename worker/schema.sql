@@ -37,10 +37,12 @@ CREATE TABLE IF NOT EXISTS users (
 -- This polymorphism lets a single (idx, voice) pair carry "what was played"
 -- across all kinds without redundant pidx/pvoice columns.
 --
--- A question instance is implicitly identified by (uid, target, ts - ms):
--- all events from the same question share the same display timestamp. There
--- is no explicit `question_id` column. To recover a 'p' event's question
--- voice, join to the sibling 'a'/'g' event on that key.
+-- A question instance has no explicit `question_id`; its events are consecutive
+-- and share a display time ~= ts - ms. WARNING: ts and ms are stamped from
+-- separate clock reads (with answer-handling work between), so ts - ms differs by
+-- a few ms across one question's events — it is NOT an exact join key. Pair a
+-- re-listen / after-play with its answer by *order* instead (a re-listen precedes
+-- its answer; an after-play follows it) — see confusionExtras in src/shared/tally.js.
 --
 -- `ms` is elapsed time since the question first appeared. For 'p' events
 -- this is cumulative — subtract the matching 'a' event's `ms` to get the

@@ -66,6 +66,56 @@ export function tallyFromEvents(events) {
   return tally;
 }
 
+// Per-(target/kana) counts for the confusion matrix's alternate metrics. Each
+// shares the *same* `offered` denominator (confusionMaps) as the main picked map:
+//   guessed     — a guess answer (ev 'g') picked that kana. picked === target is a
+//                 *correct* guess → the diagonal, so it's its own axis, not a
+//                 subset of "wrong".
+//   afterPlayed — that kana was tapped to replay during review (ev 'p', picked = it).
+//   reListened  — the question had a re-listen (ev 'r'). A re-listen is about the
+//                 sound, not a pick, so it's counted against EVERY kana the question
+//                 offered. A re-listen always *precedes* its answer in time, so it's
+//                 grouped by order: walk in ts order and let the next answer of that
+//                 sound consume it. (NOT by (target, ts - ms): the app stamps ts and
+//                 ms from separate clock reads, so they're a few ms apart and never
+//                 match exactly — which silently dropped every re-listen.)
+// "Slow reaction": an answer among the slowest of THIS user's *engaged* reactions —
+// under 6s, since beyond that they'd stepped away, not hesitated — at/above their
+// 96th percentile (slowest ~4%). Per-user, so a fast and a slow user each judge
+// against their own pace. Counted per pick like wrong: a slow *correct* answer is
+// still hesitation, so it lands on the diagonal too.
+const SLOW_CAP_MS = 6000;
+const SLOW_PCTL = 0.96;
+function nearestRankPctile(xs, q) {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.max(0, Math.ceil(q * s.length) - 1))];
+}
+
+export function confusionExtras(events) {
+  const guessed = {}, afterPlayed = {}, reListened = {}, slow = {};
+  const bump1 = (m, t, p) => { m[`${t}/${p}`] = (m[`${t}/${p}`] || 0) + 1; };
+  const answers = [], engaged = [];   // for the slow-reaction percentile
+  let relistenedTarget = null;        // a re-listen waiting for its answer (by ts order)
+  for (const e of [...events].sort((a, b) => a.ts - b.ts)) {
+    const rec = confusionRecord(e);   // non-null for a/g/y/n
+    if (rec) {
+      if (e.ev === "g") bump1(guessed, rec.target, rec.picked);
+      if (typeof e.ms === "number") {
+        answers.push({ t: rec.target, p: rec.picked, ms: e.ms });
+        if (e.ms < SLOW_CAP_MS) engaged.push(e.ms);
+      }
+      // this answer ends the question; if it re-listened, credit every offered kana
+      if (relistenedTarget === rec.target) for (const p of rec.opts) bump1(reListened, rec.target, p);
+      relistenedTarget = null;
+    } else if (e.ev === "r") relistenedTarget = e.target;
+    else if (e.ev === "p") bump1(afterPlayed, e.target, e.picked);
+  }
+  const p96 = nearestRankPctile(engaged, SLOW_PCTL);
+  if (p96 != null) for (const a of answers) if (a.ms >= p96 && a.ms < SLOW_CAP_MS) bump1(slow, a.t, a.p);
+  return { guessed, afterPlayed, reListened, slow };
+}
+
 // Build the shown[T/P] (wrong picks) and offered[T/P] (offers) maps the target
 // classifier expects from a tally. The diagonal (T/T) is never present — bump
 // records correct picks only as `correct`, never in conf/offered.
