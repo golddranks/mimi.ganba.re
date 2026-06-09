@@ -18,6 +18,7 @@ import { MIGRATIONS } from "./migrations.js";
 import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/shared/skill.js";
 import { confusionRecord } from "../../src/shared/tally.js";
 import { isAnswerEv, answeredRight, isPenalizedRelisten } from "../../src/shared/events.js";
+import { VOWEL_GROUPS } from "../../src/shared/kana.js";
 import { VAPID_PUBLIC_KEY } from "../../src/shared/vapid.js";
 import { localStamp, dueNudge, vapidAuth, encryptPayload, sendPush, NUDGE_TEXT, START_HOUR, DONE_HOUR } from "./push.js";
 
@@ -358,18 +359,44 @@ async function handleGetEvents(req, env, url) {
   });
 }
 
-// Per-recording answer counts so the app can prefer the least-judged recording
-// of each sound and even out the dataset. Shape: { mora: { idx: n } } over answer
-// events (a/g/y/n), test users excluded. Public + uid-free (just aggregate
-// counts); the client uses it best-effort. Missing (mora, idx) = 0 attempts.
+// Per-recording confusion-matrix coverage so the app can prefer the recordings
+// the matrix still lacks data for, evening the dataset out. Shape: { mora: { idx:
+// n } }, where n is NOT the total answers but the *minimum* over the recording's
+// same-vowel confuser pairings of how often that confuser was offered alongside
+// it — because the sound-file matrix needs every (recording, confuser) cell
+// filled, and a recording sampled heavily overall is still useless to a cell it
+// was never offered against. A confuser never offered with the recording counts
+// as 0, so it drops the min to 0. Only matrix-usable answers count: multi-choice
+// (a/g) that recorded their offered set (opts) — Y/N and pre-migration rows have
+// no opts and can't feed the matrix. Test users excluded; public + uid-free; the
+// client uses it best-effort. Missing (mora, idx) = 0 attempts.
 async function handleVoiceAttempts(req, env) {
   const rows = ((await env.mimi_stats.prepare(
-    `SELECT target AS m, idx AS i, COUNT(*) AS n
-     FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
-     GROUP BY target, idx`
+    `SELECT target AS m, idx AS i, opts AS o, COUNT(*) AS n
+     FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND idx IS NOT NULL AND ${EXCLUDE_TEST}
+     GROUP BY target, idx, opts`
   ).all()).results) || [];
+  // offered[mora][idx][k] = times confuser k was on screen when this recording
+  // was answered (summed across the distinct opts sets it appeared in).
+  const offered = {};
+  for (const r of rows) {
+    const byIdx = offered[r.m] ||= {};
+    const byK = byIdx[r.i] ||= {};
+    for (const k of r.o.split(",")) byK[k] = (byK[k] || 0) + r.n;
+  }
   const out = {};
-  for (const r of rows) (out[r.m] ||= {})[r.i] = r.n;
+  for (const m in offered) {
+    // Confusers = the target's same-vowel siblings (the only kana ever offered as
+    // distractors; see the app's option generator). A missing one is 0, dragging
+    // the min down — exactly the gap we want the client to go fill.
+    const confusers = (VOWEL_GROUPS[m.slice(-1)] || []).filter((k) => k !== m);
+    for (const i in offered[m]) {
+      const byK = offered[m][i];
+      (out[m] ||= {})[i] = confusers.length
+        ? Math.min(...confusers.map((k) => byK[k] || 0))
+        : Object.values(byK).reduce((a, b) => a + b, 0);   // no siblings: fall back to total
+    }
+  }
   return json(out);
 }
 

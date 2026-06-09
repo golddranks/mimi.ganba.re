@@ -1086,24 +1086,28 @@ test("admin: minacc filter drops low-accuracy users from the confusion matrices"
   assert.equal(await offeredZa(90) - before90, 0, "minacc=90 excludes the low-accuracy user");
 });
 
-test("voice-attempts: per-recording answer counts (a/g/y/n), test users excluded", async () => {
+test("voice-attempts: per-recording matrix coverage = min over same-vowel confusers", async () => {
   const get = async () => (await fetch(`${WORKER}/v1/voice-attempts`)).json();
-  const n = (d) => (d.sa && d.sa["7"]) || 0;   // sa recording #7 — assert the delta
-
-  const before = n(await get());
-
-  // Two answers on sa#7 — one multi-choice 'a', one Y/N 'y' — under a real uid.
   const real = randomUUID();   // not a TestUser → counted
   const t0 = Date.now();
-  await postEvents(real, [
-    { ts: t0 + 1, target: "sa", idx: 7, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 },
-    { ts: t0 + 2, target: "sa", idx: 7, picked: "za", cap: 2, ms: 500, ev: "y" },
-  ]);
-  // One more on sa#7 under a TestUser — must NOT be counted.
-  await postEvents(await freshTestUser(),
-    [{ ts: t0 + 3, target: "sa", idx: 7, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }]);
+  const all = ["sa", "za", "sya", "zya", "tya"];   // sa + its 4 same-vowel confusers
+  const a = (i, idx, opts) => ({ ts: t0 + i, target: "sa", idx, picked: "sa", cap: opts.length, ms: 500, ev: "a", opts, skill: 0 });
 
-  assert.equal(n(await get()) - before, 2, "the two real answers count; the TestUser one is excluded");
+  // sa#91: every confuser offered ≥2× (za 3×), so the min lands on the rarest = 2.
+  await postEvents(real, [
+    a(1, 91, all), a(2, 91, all),
+    a(3, 91, ["sa", "za"]),                                // za → 3
+    { ts: t0 + 4, target: "sa", idx: 91, picked: "za", cap: 2, ms: 500, ev: "y" },   // Y/N: no opts → not matrix-usable
+    { ts: t0 + 5, target: "sa", idx: 91, picked: "sa", cap: 2, ms: 500, ev: "a", skill: 0 },   // pre-migration: no opts → ignored
+  ]);
+  // A TestUser offering every confuser — role-excluded, so it must not lift the min.
+  await postEvents(await freshTestUser(), [a(6, 91, all)]);
+  assert.equal((await get()).sa?.["91"], 2, "min over za=3, sya/zya/tya=2; Y/N, opts-less, and TestUser rows ignored");
+
+  // sa#92: za/sya/zya offered but tya never → that empty cell forces the min to 0,
+  // even though the recording is otherwise sampled.
+  await postEvents(real, [a(7, 92, ["sa", "za", "sya", "zya"])]);
+  assert.equal((await get()).sa?.["92"], 0, "a never-offered confuser drops the min to 0");
 });
 
 test("dashboard: detects local-tally drift and syncs from the server", async (t) => {
