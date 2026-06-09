@@ -618,7 +618,7 @@ function promptForNick(message, extra) {
     fetch(STATS_URL + "/v1/user", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ uid, nickname: localStorage.nick || "", ...extra }),
+      body: JSON.stringify({ uid, nickname: localStorage.nick || "", tz: -new Date().getTimezoneOffset(), ...extra }),
     }).catch(() => { });
   }
   return localStorage.nick || null;

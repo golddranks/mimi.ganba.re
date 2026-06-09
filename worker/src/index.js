@@ -38,6 +38,8 @@ const EXCLUDE_TEST = "uid NOT IN (SELECT uid FROM users WHERE role != 0)";
 const ANSWER_EVS = "ev IN ('a','g','y','n')";
 const CORRECT = "CASE WHEN ev = 'n' THEN picked <> target ELSE picked = target END";
 const DAY_MS = 86400000;
+// Validate a reported tz offset (minutes east of UTC, -720..+840) → int or null.
+const tzOf = (v) => (typeof v === "number" && v >= -720 && v <= 840) ? Math.trunc(v) : null;
 
 // users.power_user for a uid, 0 if unknown. The admin endpoints gate on this.
 // In local dev (scripts/dev.sh runs `wrangler dev --var DEV:1`) every uid is
@@ -303,7 +305,7 @@ async function handleEvents(req, env) {
   // tz = minutes east of UTC (client's -getTimezoneOffset()); recorded so the
   // admin knows every user's timezone, not just reminder subscribers. COALESCE so
   // an old client that omits it doesn't wipe a previously-recorded offset.
-  const tz = (typeof body.tz === "number" && body.tz >= -720 && body.tz <= 840) ? Math.trunc(body.tz) : null;
+  const tz = tzOf(body.tz);
   // remind_state: how the user engaged with the reminder opt-in (declined/offered;
   // null = not shown / no signal). COALESCE keeps the last known value when omitted.
   const remindState = ["declined", "offered"].includes(body.remind_state) ? body.remind_state : null;
@@ -452,14 +454,15 @@ async function handleUser(req, env) {
   // the caller's own data / changes their own mode. null = leave role unchanged
   // (a plain nickname update mustn't reset a native tester back to normal).
   const role = [0, 1, 2].includes(body.role) ? body.role : null;
+  const tz = tzOf(body.tz);   // capture tz at registration too, so a register-only user (e.g. a native tester who hasn't answered) still has one
   const now = Date.now();
   // delete_after baseline (+30d) for a brand-new register-only user (e.g. a native
   // tester who hasn't answered yet); a later events POST recomputes it in full.
   // Left untouched on conflict — the events path owns it once they've trained.
   await env.mimi_stats.prepare(
-    "INSERT INTO users (uid, nickname, role, first_seen, last_seen, delete_after) VALUES (?, ?, COALESCE(?, 0), ?, ?, ?) " +
-    "ON CONFLICT(uid) DO UPDATE SET nickname = excluded.nickname, role = COALESCE(?, role), last_seen = excluded.last_seen"
-  ).bind(body.uid, nickname, role, now, now, now + 30 * DAY_MS, role).run();
+    "INSERT INTO users (uid, nickname, role, first_seen, last_seen, tz_offset, delete_after) VALUES (?, ?, COALESCE(?, 0), ?, ?, ?, ?) " +
+    "ON CONFLICT(uid) DO UPDATE SET nickname = excluded.nickname, role = COALESCE(?, role), last_seen = excluded.last_seen, tz_offset = COALESCE(excluded.tz_offset, tz_offset)"
+  ).bind(body.uid, nickname, role, now, now, tz, now + 30 * DAY_MS, role).run();
   return json({ ok: true });
 }
 

@@ -1099,6 +1099,16 @@ test("delete_after: registration stamps a +30d baseline", { skip: LIVE }, async 
   assert.ok(Math.abs(delete_after - (t0 + 30 * 86400000)) < 60000, `≈ now + 30d (got ${delete_after})`);
 });
 
+test("user registration records tz_offset (before any events)", { skip: LIVE }, async () => {
+  const uid = randomUUID();
+  await fetch(`${WORKER}/v1/user`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ uid, nickname: "TestUser", role: 1, tz: 540 }),
+  });
+  const { tz_offset } = await (await fetch(`${WORKER}/v1/user/${encodeURIComponent(uid)}/events`)).json();
+  assert.equal(tz_offset, 540, "tz captured at registration, so a register-only user has one");
+});
+
 test("delete_after: an events POST recomputes it (30d + 1d per 10 answers)", { skip: LIVE }, async () => {
   const uid = await freshTestUser();
   const t0 = Date.now();
