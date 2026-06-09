@@ -115,12 +115,26 @@ def inline(html: str, src_dir: Path, css_name: str | None,
     return re.sub(r">\s+<", "><", html).strip()
 
 
-def bundle_index(voice_counts: dict[str, int]) -> None:
+def build_sha() -> str:
+    """Commit the bundle is built from — embedded as window.BUILD_SHA and written to
+    dist/version.json, so a running app can spot when a newer build has shipped.
+    GITHUB_SHA in CI; else the local git HEAD; else 'dev' (which never nags)."""
+    sha = os.environ.get("GITHUB_SHA")
+    if sha:
+        return sha
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
+        return out.stdout.strip() or "dev"
+    except Exception:
+        return "dev"
+
+
+def bundle_index(voice_counts: dict[str, int], sha: str) -> None:
     src = SRC / "main"
     html = (src / "index.html").read_text(encoding="utf-8")
     counts_js = json.dumps(voice_counts, ensure_ascii=False, separators=(",", ":"))
     html = inline(html, src, "app.css", "app.js",
-                  js_prelude=f"window.VOICE_COUNTS={counts_js};")
+                  js_prelude=f"window.BUILD_SHA={json.dumps(sha)};window.VOICE_COUNTS={counts_js};")
     DIST.mkdir(parents=True, exist_ok=True)
     (DIST / "index.html").write_text(html, encoding="utf-8")
     (DIST / ".nojekyll").write_text("")
@@ -182,12 +196,16 @@ def main() -> None:
     voice_counts = {mora: len(info["voices"]) for mora, info in voices.items()}
     voice_map = {mora: info["voices"] for mora, info in voices.items()}
 
-    bundle_index(voice_counts)
+    sha = build_sha()
+    bundle_index(voice_counts, sha)
     bundle_dashboard(voice_map)
     bundle_privacy()
     bundle_stats(voice_map)
     bundle_admin()
     bundle_sw()
+    # The deployed build's id. CI re-stamps this with github.sha (same value); here
+    # it gives local/test builds a real version.json so the update check has a peer.
+    (DIST / "version.json").write_text(json.dumps({"sha": sha}) + "\n", encoding="utf-8")
 
     pages = list(DIST.rglob("index.html"))
     html_total = sum(f.stat().st_size for f in pages if f.is_file())

@@ -6,6 +6,7 @@ import { pickTip } from "./tips.js";
 import { confusionRecord } from "../shared/tally.js";
 import { getGrind, tallyAnswer, initGrind, recordGrindAnswer } from "./grind.js";
 import { scheduleReminders } from "./reminders.js";
+import { updateAvailable } from "../shared/version.js";
 import { render } from "./render.js";
 
 // Mora identifiers are kunrei-shiki (ASCII) so audio URLs stay plain ASCII; the
@@ -638,7 +639,22 @@ if (!viewMode && new URLSearchParams(location.search).has("nativeTester")) {
   nativeMode = true;
 }
 
+// Nudge a reload once a newer build has shipped — a PWA can otherwise run a stale
+// cached bundle for a while (that's how the tz feature missed early users). Checks
+// on load and whenever the tab refocuses; reload busts the HTTP cache via the
+// document's etag. No-op in view-as and for 'dev' builds. (No polling timer — it'd
+// keep the event loop alive and hang the test runner; refocus covers the rest.)
+function watchForUpdate() {
+  if (viewMode) return;
+  const bar = updatebar;   // hold the node so the async check can't throw on a vanished global post-teardown
+  updatereload.onclick = () => location.reload();
+  const check = () => updateAvailable().then((stale) => { if (stale) bar.hidden = false; });
+  check();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+}
+
 // ---------- boot ----------
+watchForUpdate();
 if (viewMode) {
   stats = {}; run = 0; skill = {};
   tip.textContent = `(view-as: ${spoofedUid})`;

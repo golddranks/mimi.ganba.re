@@ -112,6 +112,22 @@ test("app: the top-left dashboard link carries ?uid in view-as", { skip: LIVE },
   assert.equal(va.win.dashlink.getAttribute("href"), `dashboard/?uid=${uid}`, "view-as keeps the uid on the dashboard link");
 });
 
+// skip on LIVE: opens a fresh "/" and fakes /version.json.
+test("app: nudges to reload when a newer build is deployed", { skip: LIVE }, async (t) => {
+  const { win, close } = await openPage("/", {
+    setup: (w) => {
+      const real = w.fetch.bind(w);
+      w.fetch = (u, o) => String(u).includes("/version.json")
+        ? Promise.resolve(new w.Response('{"sha":"newer-than-this-build"}', { status: 200 }))
+        : real(u, o);
+    },
+  });
+  t.after(close);
+  assert.ok(win.BUILD_SHA && win.BUILD_SHA !== "dev", "build embedded a real BUILD_SHA");
+  await waitFor(() => win.updatebar && !win.updatebar.hidden ? true : null, WAIT);
+  assert.match(win.updatebar.textContent, /New version available/);
+});
+
 // skip on LIVE: posts role-0 events (the ranking's input), which would pollute
 // prod. The exact presence/absence assertions also need an isolated DB — the
 // global top-200 only reflects this scenario when it's the only data (a prod

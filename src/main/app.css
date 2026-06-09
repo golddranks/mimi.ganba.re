@@ -125,6 +125,36 @@ body {
     color: var(--accent);
 }
 
+/* Reload nudge shown when a newer build has shipped (src/shared/version.js). A
+   pill below the title; the global [hidden] !important rule keeps it out until then. */
+#updatebar {
+    position: fixed;
+    top: 2.6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .35rem .7rem;
+    background: var(--panel);
+    color: var(--muted);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    font-size: .8rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+}
+
+#updatereload {
+    font: inherit;
+    cursor: pointer;
+    border: 0;
+    border-radius: 4px;
+    padding: .15rem .5rem;
+    background: var(--accent);
+    color: #fff;
+}
+
 /* Floating header readouts share most styling. */
 #message,
 #score,
