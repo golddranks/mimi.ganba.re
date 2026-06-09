@@ -1,5 +1,5 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
-import { dateKey, dayKey } from "../shared/dates.js";
+import { pad2, dayKeyTz } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, consonantCounts, fillConfusionCells } from "../shared/confusion.js";
 import { tallyFromEvents, tallyMaps, confusionMaps, confusionRecord } from "../shared/tally.js";
 import { HIRAGANA } from "../shared/kana.js";
@@ -40,6 +40,13 @@ const isAnswerOrRelisten = (e) => isAnswer(e) || e.ev === "r";
 const params = new URLSearchParams(location.search);
 const viewerUid = localStorage.getItem("uid") || "";
 const uid = params.get("uid") || viewerUid;
+
+// Day/hour bucketing frame: the *viewed* user's tz (minutes east of UTC), set from
+// their events response in load(). Defaults to the viewer's own browser offset —
+// correct on your own dashboard, and the fallback when a user has no tz on record.
+// tzKnown distinguishes "their reported tz" from that fallback (for the hour label).
+let viewedTzMin = -new Date().getTimezoneOffset();
+let tzKnown = false;
 
 // Capture the elements that async callbacks (the form reveal, renderReminders, the
 // view-as gate) touch after a fetch resolves. Holding the node means a callback
@@ -212,6 +219,7 @@ async function load(uid) {
     }
     if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
     const { events, tz_offset } = await res.json();
+    if (tz_offset != null) { viewedTzMin = tz_offset; tzKnown = true; }
     events.sort((a, b) => a.ts - b.ts);
     if (events.length === 0) {
       msg.textContent = "No events for this user.";
@@ -220,7 +228,7 @@ async function load(uid) {
     renderOverview(uid, events);
     renderLevels(events);
     renderDaily(events);
-    renderHourly(events, tz_offset);
+    renderHourly(events);
     renderMora(events);
     renderConfusion(events);
     renderVoiceConfusion(events);
@@ -243,7 +251,7 @@ function dailyPeakStreaks(events) {
   let run = 0, lastDay = null;
   for (const e of events) {
     if (!isAnswerOrRelisten(e)) continue;
-    const d = dayKey(e.ts);
+    const d = dayKeyTz(e.ts, viewedTzMin);
     if (lastDay !== null && d !== lastDay) run = 0;
     lastDay = d;
     if (e.ev === "r") run = 0;
@@ -259,7 +267,7 @@ function renderOverview(uid, events) {
   const correct = ag.filter((e) => answeredRight(e)).length;
   const acc = ag.length ? correct / ag.length : 0;
   const topStreak = Math.max(0, ...dailyPeakStreaks(events).values());
-  const days = new Set(ag.map((e) => dayKey(e.ts))).size;
+  const days = new Set(ag.map((e) => dayKeyTz(e.ts, viewedTzMin))).size;
   const relisten = events.filter((e) => e.ev === "r").length;
 
   overview.querySelector(".uid .uid-value").textContent = uid;
@@ -269,8 +277,8 @@ function renderOverview(uid, events) {
   setStat("topstreak", topStreak);
   setStat("days", days);
   setStat("relisten", relisten);
-  setStat("first", dayKey(events[0].ts));
-  setStat("last", dayKey(events[events.length - 1].ts));
+  setStat("first", dayKeyTz(events[0].ts, viewedTzMin));
+  setStat("last", dayKeyTz(events[events.length - 1].ts, viewedTzMin));
 }
 
 // ---------- skill levels per vowel ----------
@@ -317,8 +325,8 @@ function renderLevels(events) {
 // month's gridline show even before today's first answer (otherwise the latest
 // week line is missing until you train). max() guards a future-dated event.
 function calendarDays(events, valueFor) {
-  const firstKey = dayKey(events[0].ts);
-  const lastKey = [dayKey(events[events.length - 1].ts), dateKey(new Date())].sort().pop();
+  const firstKey = dayKeyTz(events[0].ts, viewedTzMin);
+  const lastKey = [dayKeyTz(events[events.length - 1].ts, viewedTzMin), dayKeyTz(Date.now(), viewedTzMin)].sort().pop();
   return calendarSpan(firstKey, lastKey, valueFor);
 }
 
@@ -326,7 +334,7 @@ function renderDaily(events) {
   const map = new Map();
   for (const e of events) {
     if (!isAnswer(e)) continue;
-    const k = dayKey(e.ts);
+    const k = dayKeyTz(e.ts, viewedTzMin);
     const v = map.get(k) || { correct: 0, wrong: 0 };
     if (answeredRight(e)) v.correct++; else v.wrong++;
     map.set(k, v);
@@ -355,15 +363,12 @@ const tzLabel = (min) => {
   return "UTC" + (min < 0 ? "-" : "+") + Math.floor(a / 60) + (a % 60 ? ":" + pad2(a % 60) : "");
 };
 
-function renderHourly(events, tzMin) {
-  hourtz.textContent = "— local time (" + (tzMin == null ? "tz unknown" : tzLabel(tzMin)) + ")";
+function renderHourly(events) {
+  hourtz.textContent = "— local time (" + (tzKnown ? tzLabel(viewedTzMin) : "tz unknown") + ")";
   const hrs = Array.from({ length: 24 }, () => ({ correct: 0, total: 0 }));
-  const hourOf = tzMin == null
-    ? (ts) => new Date(ts).getHours()
-    : (ts) => new Date(ts + tzMin * 60000).getUTCHours();
   for (const e of events) {
     if (!isAnswer(e)) continue;
-    const hour = hourOf(e.ts);
+    const hour = new Date(e.ts + viewedTzMin * 60000).getUTCHours();
     hrs[hour].total++;
     if (answeredRight(e)) hrs[hour].correct++;
   }

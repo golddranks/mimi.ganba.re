@@ -493,6 +493,25 @@ test("dashboard: hour-of-day buckets in the viewed user's timezone, not the view
   assert.match(win.hourtz.textContent, /UTC\+9\b/, "the heading names the timezone the hours are in");
 });
 
+// skip on LIVE: posts a fixture under a fresh uid with a tz.
+test("dashboard: day-bucketing uses the viewed user's timezone (first-seen, days)", { skip: LIVE }, async (t) => {
+  // 16:00 UTC on Jan 1 is 01:00 of Jan 2 in JST — with tz=JST both answers must
+  // bucket as Jan 2 (one day), and first-seen must read the JST date, not the UTC one.
+  const uid = await freshTestUser();
+  const ts = Date.UTC(2026, 0, 1, 16, 0, 0);
+  const ev = (i) => ({ ts: ts + i * 1000, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 });
+  assert.equal((await postEvents(uid, [ev(0), ev(1)], 540)).status, 200);   // tz = JST
+
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // own dashboard
+  });
+  t.after(close);
+  const stat = (k) => win.document.querySelector(`#overview [data-stat="${k}"]`).textContent;
+  await waitFor(() => stat("first") !== "—" ? true : null, WAIT);
+  assert.equal(stat("first"), "2026-01-02", "first-seen is the user's JST day, not the UTC day (2026-01-01)");
+  assert.equal(stat("days"), "1", "both answers fall on the same JST day");
+});
+
 test("dashboard: Y/N answers feed the confusion matrix (diagonal + confuser)", async (t) => {
   // Y/N events all ask the さ sound (target sa); picked = the kana shown, ev y =
   // "yes it matches", n = "no". The matrix counts a correct-kana prompt on the
