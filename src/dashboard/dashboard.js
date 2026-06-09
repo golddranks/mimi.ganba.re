@@ -530,11 +530,16 @@ function drawVoiceConf() {
     const [t, v, x] = s.split("/");
     return { t, v, [key]: x, n };
   });
+  // Only "answered" has a wrong axis (off-diagonal); for the others the diagonal is
+  // signal too, so the row filter/order spans all cells and the label drops "wrong".
+  const answered = confMetric === "answered";
+  vcwronglabel.textContent = answered ? "min % wrong" : "min %";
   renderVoiceConf(voiceconf, rows(num, "p"), rows(den, "k"), {
     mode: displayMode,
     minA: Math.max(0, parseInt(vcmin.value, 10) || 0),
     minW: Math.max(0, parseInt(vcwrong.value, 10) || 0),
     scheme: confScheme(),
+    diagIsSignal: !answered,
   });
 }
 

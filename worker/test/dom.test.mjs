@@ -640,6 +640,20 @@ test("dashboard: the sound-file matrix has synced metric + count/% switches that
   assert.notEqual(win.voiceconf.innerHTML, countHtml, "the sound-file matrix re-rendered in per-sound % mode");
 });
 
+test("dashboard: the sound-file matrix's row filter relabels 'min % wrong' → 'min %' for non-answered metrics", { skip: LIVE }, async (t) => {
+  const uid = await freshTestUser();
+  await postEvents(uid, saFixture(Date.now()));
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, { setup: (w) => w.localStorage.setItem("uid", uid) });
+  t.after(close);
+  await waitFor(() => win.voiceconf.querySelector("td") ? true : null, WAIT);
+  assert.equal(win.vcwronglabel.textContent, "min % wrong", "answered: off-diagonal-only filter, labelled 'min % wrong'");
+  const r = win.confmetric.querySelector('input[value="relistened"]');
+  r.checked = true;
+  r.dispatchEvent(new win.Event("change", { bubbles: true }));
+  await waitFor(() => win.vcwronglabel.textContent === "min %" ? true : null, WAIT);
+  assert.equal(win.vcwronglabel.textContent, "min %", "non-answered: diagonal is signal too, so just 'min %'");
+});
+
 test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", async (t) => {
   // 8 sa-questions with za offered, always answered sa → never confused (0/8).
   const uid = await freshTestUser();

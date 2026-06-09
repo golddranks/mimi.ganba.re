@@ -5,8 +5,8 @@
 <div class="voicefilter">
     min attempts:
     <input id="vcmin" type="number" min="0" value="{{vcmin}}" inputmode="numeric">
-    min % wrong:
-    <input id="vcwrong" type="number" min="0" value="{{vcwrong}}" inputmode="numeric" title="row's worst off-diagonal cell must hit at least this percentage of the row's attempts — independent of the counts/per-sound-% display toggle">
+    <span id="vcwronglabel">min % wrong</span>:
+    <input id="vcwrong" type="number" min="0" value="{{vcwrong}}" inputmode="numeric" title="row's strongest cell must hit at least this percentage of the row's attempts — independent of the counts/per-sound-% display toggle">
     {{minacc}}
     {{pop}}
 </div>

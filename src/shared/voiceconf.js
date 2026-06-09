@@ -25,7 +25,7 @@ export function playVoice(mora, voice) {
 // removed ones drop out). `minA` = min times asked, `minW` = min worst-confusion
 // %, `mode` = "pct"|"count". Cells show the same pairwise pick-when-offered value
 // as the main confusion matrix; rows are ordered hardest-first within each sound.
-export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, minA, minW, scheme = "outcome" }) {
+export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, minA, minW, scheme = "outcome", diagIsSignal = false }) {
   const map = window.VOICE_MAP || {};
   const shown = {}, offered = {};
   for (const r of shownRows) shown[`${r.t}/${r.v}/${r.p}`] = r.n;
@@ -37,12 +37,15 @@ export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, mi
     const off = offered[`${m}/${voice}/${p}`] || 0;
     return off > 0 ? (shown[`${m}/${voice}/${p}`] || 0) / off * 100 : 0;
   };
-  // Worst off-diagonal rate in a row — drives the wrong-% filter and orders
-  // recordings hardest-first, surfacing the ones driving a specific confusion.
-  const rowMaxOffPct = (m, voice) => {
+  // A row's representative rate — drives the min-% filter and orders recordings
+  // hardest-first. For "answered" only the off-diagonal counts (the diagonal is the
+  // correct rate, not a confusion); for the other metrics the diagonal IS signal (a
+  // correct guess, a re-listen on the right sound, a slow-but-correct answer), so
+  // `diagIsSignal` includes it.
+  const rowMaxPct = (m, voice) => {
     let max = 0;
     for (const p of VOWEL_GROUPS[m.slice(-1)] || []) {
-      if (p === m) continue;
+      if (p === m && !diagIsSignal) continue;
       const pct = offPct(m, voice, p);
       if (pct > max) max = pct;
     }
@@ -72,10 +75,10 @@ export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, mi
         // target is always an option), read off the offered map.
         const attempts = offered[`${m}/${voice}/${m}`] || 0;
         if (attempts < minA) return false;
-        if (minW > 0 && rowMaxOffPct(m, voice) < minW) return false;
+        if (minW > 0 && rowMaxPct(m, voice) < minW) return false;
         return true;
       });
-      voices.sort((a, b) => rowMaxOffPct(m, b) - rowMaxOffPct(m, a));
+      voices.sort((a, b) => rowMaxPct(m, b) - rowMaxPct(m, a));
       // idx = the recording's position in the current voice set, i.e. its current
       // file id (audio/<vowel>/<mora>/<idx>.opus) — mutable as voices are
       // added/reordered, unlike the stable voice name.
