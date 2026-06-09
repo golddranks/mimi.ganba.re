@@ -425,14 +425,15 @@ let confusionOffered = null;    // T/P -> times kana P was on screen when T was 
 // after-plays, re-listens, slow — see confusionExtras. All but re-listen share the
 // `offered` denominator; re-listen has its own (you can re-listen without answering).
 let confusionGuessed = null, confusionAfterplayed = null, confusionRelistened = null, confusionRelistenedOffered = null, confusionSlow = null;
-// Which numerator the matrix shows: wrong (picks) | guessed | relistened | afterplayed.
+// Which numerator the matrix shows: answered (picks — diagonal = correct, off =
+// wrong) | guessed | relistened | afterplayed | slow.
 // Rings/cell-history/drift always use the picks (confusionShown), regardless.
 let confMetric = wireSwitchGroup(document.querySelectorAll('[data-switch="metric"]'), (m) => {
   confMetric = m;
   drawConfusion();   // redraws the vowel + consonant matrices with the new numerator
 });
 const confNumerator = () => ({
-  wrong: confusionShown, guessed: confusionGuessed, relistened: confusionRelistened,
+  answered: confusionShown, guessed: confusionGuessed, relistened: confusionRelistened,
   afterplayed: confusionAfterplayed, slow: confusionSlow,
 }[confMetric] || confusionShown);
 // Re-listen counts against every question that offered the kana (answered or not),

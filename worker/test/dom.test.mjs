@@ -525,8 +525,8 @@ test("dashboard: tapping a diagonal ✕ names the kana the user wrongly picked",
   assert.match(detail.querySelector(".cd-file").textContent, /picked ざ/, "the parenthetical names the chosen wrong kana");
 });
 
-test("dashboard: confusion matrix metric switch (wrong → guessed)", async (t) => {
-  // sa→za picked 3× (all offered za), one of them a guess → wrong 3/3, guessed 1/3.
+test("dashboard: confusion matrix metric switch (answered → guessed)", async (t) => {
+  // sa→za picked 3× (all offered za), one of them a guess → answered 3/3, guessed 1/3.
   const uid = await freshTestUser();
   const t0 = Date.now();
   const a = (i, ev_) => ({ ts: t0 + i, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: ev_, opts: ["sa", "za"], skill: 0 });
@@ -537,7 +537,7 @@ test("dashboard: confusion matrix metric switch (wrong → guessed)", async (t) 
   });
   t.after(close);
   const cell = () => win.confchart.querySelector('td[data-t="sa"][data-p="za"]');
-  await waitFor(() => cell()?.textContent === "3/3" ? true : null, WAIT);   // default metric = wrong
+  await waitFor(() => cell()?.textContent === "3/3" ? true : null, WAIT);   // default metric = answered
 
   const g = win.confmetric.querySelector('input[value="guessed"]');
   g.checked = true;
@@ -593,7 +593,7 @@ test("dashboard: a re-listen with no answer still shows in the re-listen metric"
   const { win, close } = await openPage(`/dashboard/?uid=${uid}`, { setup: (w) => w.localStorage.setItem("uid", uid) });
   t.after(close);
   const cell = () => win.confchart.querySelector('td[data-t="sa"][data-p="za"]');
-  await waitFor(() => cell()?.textContent ? true : null, WAIT);   // wrong metric renders first
+  await waitFor(() => cell()?.textContent ? true : null, WAIT);   // answered metric renders first
   const r = win.confmetric.querySelector('input[value="relistened"]');
   r.checked = true;
   r.dispatchEvent(new win.Event("change", { bubbles: true }));
