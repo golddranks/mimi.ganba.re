@@ -224,6 +224,35 @@ test("app: native mode drills forced 2-choice pairs from the ranking", { skip: L
   assert.equal(answers[0].opts.split(",").length, 2, "records a normal 2-option answer event");
 });
 
+// skip on LIVE: posts role-0 seed + a native re-listen/answer.
+test("app: a re-listen then an answer share one start_ts (the re-listen is creditable)", { skip: LIVE }, async (t) => {
+  await postEvents(randomUUID(), Array.from({ length: 3 }, (_, i) => ({
+    ts: Date.now() + i, target: "su", idx: 0, picked: "zu", cap: 2, ms: 500, ev: "a", opts: ["su", "zu"], skill: 0,
+  })));
+  const { win, close } = await openPage("/", { setup: (w) => { w.localStorage.setItem("nativeMode", "1"); } });
+  t.after(close);
+  const uid = win.localStorage.uid;
+
+  win.primary.click();
+  const btns = await waitFor(() => {
+    const b = win.choices.querySelectorAll("button.choice");
+    return b.length ? b : null;
+  }, WAIT);
+
+  win.relisten.click();                       // re-listen BEFORE answering (cap-2 → free, but recorded)
+  await waitFor(async () => (await getEvents(uid)).some((e) => e.ev === "r") || null, WAIT);
+  btns[0].click();                            // then answer the SAME question
+
+  const evs = await waitFor(async () => {
+    const e = await getEvents(uid);
+    return e.some((x) => x.ev === "r") && e.some((x) => x.ev === "a") ? e : null;
+  }, WAIT);
+  const r = evs.find((e) => e.ev === "r");
+  const a = evs.find((e) => e.ev === "a");
+  assert.ok(r.start_ts != null && r.start_ts === a.start_ts,
+    `re-listen and answer share start_ts (r=${r.start_ts}, a=${a.start_ts}) so confusionExtras can credit the re-listen`);
+});
+
 test("app: answering questions posts events (with opts) to the worker", async (t) => {
   const { win, close } = await openPage("/");
   t.after(close);
@@ -547,6 +576,29 @@ test("dashboard: a free (cap-2) re-listen is recorded but doesn't break the stre
   r.dispatchEvent(new win.Event("change", { bubbles: true }));
   await waitFor(() => cell()?.textContent === "1/3" ? true : null, WAIT);
   assert.equal(cell().textContent, "1/3", "the free re-listen is recorded and shows in the re-listen metric");
+});
+
+test("dashboard: a re-listen with no answer still shows in the re-listen metric", { skip: LIVE }, async (t) => {
+  // The re-listen carries its own opts, so it's credited even when the question is
+  // never answered — and the denominator counts every question that offered the
+  // kana (answered or not), so the ratio stays sane.
+  const uid = await freshTestUser();
+  const t0 = Date.now();
+  await postEvents(uid, [
+    // An answered sa question that offered za — no re-listen.
+    { ts: t0 + 1, start_ts: t0, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 1, ev: "a", opts: ["sa", "za"], skill: 0 },
+    // A sa question that was re-listened then abandoned — only the 'r' (with opts).
+    { ts: t0 + 100, start_ts: t0 + 100, target: "sa", idx: 0, picked: "", cap: 2, ms: 1, ev: "r", opts: ["sa", "za"] },
+  ]);
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, { setup: (w) => w.localStorage.setItem("uid", uid) });
+  t.after(close);
+  const cell = () => win.confchart.querySelector('td[data-t="sa"][data-p="za"]');
+  await waitFor(() => cell()?.textContent ? true : null, WAIT);   // wrong metric renders first
+  const r = win.confmetric.querySelector('input[value="relistened"]');
+  r.checked = true;
+  r.dispatchEvent(new win.Event("change", { bubbles: true }));
+  await waitFor(() => cell()?.textContent === "1/2" ? true : null, WAIT);
+  assert.equal(cell().textContent, "1/2", "unanswered re-listen counts; denominator = both questions that offered za");
 });
 
 test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", async (t) => {

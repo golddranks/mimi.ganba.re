@@ -421,9 +421,10 @@ function drawConsMora() {
 // answer with no offered set simply doesn't appear in the matrix).
 let confusionShown = null;      // T/P -> picks among opts-bearing answers (numerator)
 let confusionOffered = null;    // T/P -> times kana P was on screen when T was asked (denominator)
-// Alternate numerators over the same offered denominator, picked by the metric
-// switch (confMetric): guesses, after-plays, re-listens — see confusionExtras.
-let confusionGuessed = null, confusionAfterplayed = null, confusionRelistened = null, confusionSlow = null;
+// Alternate numerators picked by the metric switch (confMetric): guesses,
+// after-plays, re-listens, slow — see confusionExtras. All but re-listen share the
+// `offered` denominator; re-listen has its own (you can re-listen without answering).
+let confusionGuessed = null, confusionAfterplayed = null, confusionRelistened = null, confusionRelistenedOffered = null, confusionSlow = null;
 // Which numerator the matrix shows: wrong (picks) | guessed | relistened | afterplayed.
 // Rings/cell-history/drift always use the picks (confusionShown), regardless.
 let confMetric = wireSwitchGroup(document.querySelectorAll('[data-switch="metric"]'), (m) => {
@@ -434,6 +435,9 @@ const confNumerator = () => ({
   wrong: confusionShown, guessed: confusionGuessed, relistened: confusionRelistened,
   afterplayed: confusionAfterplayed, slow: confusionSlow,
 }[confMetric] || confusionShown);
+// Re-listen counts against every question that offered the kana (answered or not),
+// so it uses its own denominator; the others normalise by answered offers.
+const confDenominator = () => confMetric === "relistened" ? confusionRelistenedOffered : confusionOffered;
 
 // Confusion-bearing answers (multi-choice + the synthesised Y/N picks), kept
 // chronological for the click-to-inspect cell history. Each carries the
@@ -467,13 +471,13 @@ function renderConfusion(events) {
   confusionEvents.sort((a, b) => a.ts - b.ts);
   confusionShown = shown;
   confusionOffered = offered;
-  ({ guessed: confusionGuessed, afterPlayed: confusionAfterplayed, reListened: confusionRelistened, slow: confusionSlow } = confusionExtras(events));
+  ({ guessed: confusionGuessed, afterPlayed: confusionAfterplayed, reListened: confusionRelistened, reListenedOffered: confusionRelistenedOffered, slow: confusionSlow } = confusionExtras(events));
   drawConfusion();
 }
 
 function drawConfusion() {
   if (!confusionShown) return;
-  const maps = { shown: confNumerator(), offered: confusionOffered };
+  const maps = { shown: confNumerator(), offered: confDenominator() };
   const cells = confchart.querySelectorAll("td[data-t]");
   fillConfusionCells(cells, maps, displayMode);
 
@@ -494,7 +498,7 @@ function drawConfusion() {
 // matrix above, just aggregated by consonant. Non-clickable.
 function drawConsonantConfusion() {
   if (!confusionShown) return;
-  const maps = aggregateByConsonant({ shown: confNumerator(), offered: confusionOffered });
+  const maps = aggregateByConsonant({ shown: confNumerator(), offered: confDenominator() });
   fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, displayMode);
 }
 

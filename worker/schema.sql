@@ -69,10 +69,12 @@ CREATE TABLE IF NOT EXISTS events (
   -- if voices are added / removed / reordered later.
   voice  TEXT,
   -- `opts` is the comma-joined set of choice morae offered for this question
-  -- (e.g. 'sa,za,tya'), set on 'a'/'g' events. Lets us measure true pairwise
-  -- confusion — how often a confuser is picked *when it's offered* — rather
-  -- than diluting by attempts where it wasn't on screen. NULL on older rows
-  -- and on 'r'/'p' events.
+  -- (e.g. 'sa,za,tya'), set on every event with choices on screen — 'a'/'g'
+  -- answers and 'r'/'p' (re-listen / after-play). Lets us measure true pairwise
+  -- confusion — how often a confuser is picked *when it's offered* — rather than
+  -- diluting by attempts where it wasn't on screen; and (on 'r') lets a re-listen
+  -- be credited even when the question is never answered. NULL on older rows, and
+  -- on Y/N events (which show one kana, not a choice set).
   opts   TEXT,
   -- `skill` is the target vowel's level (correct-count) the question was asked
   -- at, set on 'a'/'g' events. Frozen here so changing the level rules (LEVELS

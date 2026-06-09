@@ -496,12 +496,13 @@ function replay(m, btn, random = false) {
   audio.onended = () => { btn.classList.remove("playing"); audio.onended = null; };
   const i = random ? rand(m) : +btn.dataset.idx;
   play(path(m, i));
-  const { target, cap, startTs } = current;
+  const { target, cap, startTs, opts } = current;
   // For 'p' events, idx describes what was *played*: the voice sample of the tapped
   // mora `m` (= picked). The question's own voice is on its sibling 'a'/'g' event,
   // paired by the shared start_ts (the per-question key). See worker/schema.sql.
+  // opts (the offered set) rides along like every on-screen-choices event.
   const now = Date.now();
-  pushEvent({ ts: now, target, idx: i, picked: m, cap, ms: now - startTs, ev: "p", start_ts: startTs });
+  pushEvent({ ts: now, target, idx: i, picked: m, cap, ms: now - startTs, ev: "p", opts, start_ts: startTs });
 }
 
 function submit(picked, btn, wasGuess = false) {
@@ -546,15 +547,16 @@ function disarmRelisten() {
 // it's skipped and the first tap re-listens straight away.
 function relistenCurrent() {
   if (!current) return;
-  const { target, idx, cap, startTs } = current;
+  const { target, idx, cap, startTs, opts } = current;
 
   if (cap <= 2) {
     // Free re-listen — beginner-friendly at the lowest level: no skill/streak
     // penalty (no applyRelisten). Still recorded; every replay gates the penalty
     // on cap >= 3 (isPenalizedRelisten), so a cap-2 'r' shows in the re-listen
-    // confusion metric without a phantom penalty.
+    // confusion metric without a phantom penalty. opts (the offered set) rides
+    // along so the re-listen is creditable even if the question is never answered.
     const now = Date.now();
-    pushEvent({ ts: now, target, idx, picked: "", cap, ms: now - startTs, ev: "r", start_ts: startTs });
+    pushEvent({ ts: now, target, idx, picked: "", cap, ms: now - startTs, ev: "r", opts, start_ts: startTs });
     play(current.voice);
     return;
   }
@@ -570,7 +572,7 @@ function relistenCurrent() {
   save();
   render();
   const now = Date.now();
-  pushEvent({ ts: now, target, idx, picked: "", cap, ms: now - startTs, ev: "r", start_ts: startTs });
+  pushEvent({ ts: now, target, idx, picked: "", cap, ms: now - startTs, ev: "r", opts, start_ts: startTs });
   play(current.voice);
 }
 

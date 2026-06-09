@@ -66,17 +66,19 @@ export function tallyFromEvents(events) {
   return tally;
 }
 
-// Per-(target/kana) counts for the confusion matrix's alternate metrics. Each
-// shares the *same* `offered` denominator (confusionMaps) as the main picked map:
+// Per-(target/kana) counts for the confusion matrix's alternate metrics.
 //   guessed     — a guess answer (ev 'g') picked that kana. picked === target is a
 //                 *correct* guess → the diagonal, so it's its own axis, not a
-//                 subset of "wrong".
+//                 subset of "wrong". Over the shared `offered` denominator.
 //   afterPlayed — that kana was tapped to replay during review (ev 'p', picked = it).
-//   reListened  — the question had a re-listen (ev 'r'). A re-listen is about the
-//                 sound, not a pick, so it's counted against EVERY kana the question
-//                 offered. Paired with its answer by start_ts (the exact per-question
-//                 key) when present, else by order (a re-listen precedes its answer).
-//                 NOT by ts - ms, which jitters (ts and ms are separate clock reads).
+//                 Over the shared `offered` denominator.
+//   reListened  — the question had a re-listen (ev 'r'); counted against EVERY kana
+//                 the question offered (a re-listen is about the sound, not a pick).
+//                 Question-scoped by start_ts, so multiple re-listens of one question
+//                 count once and a never-answered question still counts. Its own
+//                 denominator, reListenedOffered (every question that offered the kana,
+//                 answered or not), because you can re-listen without ever answering —
+//                 unlike "wrong", which only makes sense on an answered question.
 // "Slow reaction": an answer among the slowest of THIS user's *engaged* reactions —
 // under 6s, since beyond that they'd stepped away, not hesitated — at/above their
 // 96th percentile (slowest ~4%). Per-user, so a fast and a slow user each judge
@@ -91,11 +93,20 @@ function nearestRankPctile(xs, q) {
 }
 
 export function confusionExtras(events) {
-  const guessed = {}, afterPlayed = {}, reListened = {}, slow = {};
+  const guessed = {}, afterPlayed = {}, reListened = {}, reListenedOffered = {}, slow = {};
   const bump1 = (m, t, p) => { m[`${t}/${p}`] = (m[`${t}/${p}`] || 0) + 1; };
   const answers = [], engaged = [];   // for the slow-reaction percentile
-  let pending = null;                 // a re-listen awaiting its answer: { target, q }
-  for (const e of [...events].sort((a, b) => a.ts - b.ts)) {
+  // Re-listen is a property of the *question*, not one event: a question can be
+  // re-listened several times and may never be answered. Every event that had the
+  // choices on screen now carries `opts` (a/g and, going forward, r/p too), so we
+  // group by start_ts (the per-question key) and read the offered set off whichever
+  // event recorded it. reListenedOffered is the re-listen denominator: every
+  // question that offered P, answered or not — so an abandoned-but-re-listened
+  // question still counts, unlike the wrong/guessed `offered` which (rightly) counts
+  // only answered questions. Rows without start_ts (pre-migration) carry no opts on
+  // r/p, so their re-listens don't enter this metric.
+  const questions = new Map();        // start_ts -> { target, opts:[…]|null, relistened }
+  for (const e of events) {
     const rec = confusionRecord(e);   // non-null for a/g/y/n
     if (rec) {
       if (e.ev === "g") bump1(guessed, rec.target, rec.picked);
@@ -103,20 +114,24 @@ export function confusionExtras(events) {
         answers.push({ t: rec.target, p: rec.picked, ms: e.ms });
         if (e.ms < SLOW_CAP_MS) engaged.push(e.ms);
       }
-      // This answer ends the question; if it re-listened, credit every offered kana.
-      // Same sound, and — when both rows carry start_ts — the same start_ts, so a
-      // re-listen from a question that was refreshed away isn't mis-credited to a
-      // later same-sound question (older rows lack start_ts → order alone).
-      if (pending && pending.target === rec.target &&
-          (pending.q == null || e.start_ts == null || pending.q === e.start_ts))
-        for (const p of rec.opts) bump1(reListened, rec.target, p);
-      pending = null;
-    } else if (e.ev === "r") pending = { target: e.target, q: e.start_ts };
-    else if (e.ev === "p") bump1(afterPlayed, e.target, e.picked);
+    } else if (e.ev === "p") bump1(afterPlayed, e.target, e.picked);
+    if (e.start_ts != null) {
+      const q = questions.get(e.start_ts) || { target: e.target, opts: null, relistened: false };
+      if (e.opts) q.opts = e.opts.split(",");
+      if (e.ev === "r") q.relistened = true;
+      questions.set(e.start_ts, q);
+    }
+  }
+  for (const q of questions.values()) {
+    if (!q.opts) continue;            // unknown offered set (Y/N, or a re-listen-only legacy question)
+    for (const p of q.opts) {
+      bump1(reListenedOffered, q.target, p);
+      if (q.relistened) bump1(reListened, q.target, p);
+    }
   }
   const p96 = nearestRankPctile(engaged, SLOW_PCTL);
   if (p96 != null) for (const a of answers) if (a.ms >= p96 && a.ms < SLOW_CAP_MS) bump1(slow, a.t, a.p);
-  return { guessed, afterPlayed, reListened, slow };
+  return { guessed, afterPlayed, reListened, reListenedOffered, slow };
 }
 
 // Build the shown[T/P] (wrong picks) and offered[T/P] (offers) maps the target

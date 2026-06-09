@@ -6,44 +6,54 @@ import assert from "node:assert/strict";
 import { pAbove20, confusionTargets, logisticFit, logisticAt, logisticTrend } from "../../src/shared/confusion.js";
 import { confusionExtras } from "../../src/shared/tally.js";
 
-test("confusionExtras: guessed (incl. correct→diagonal), after-played, re-listened by order", () => {
-  const ev = (ts, ms, kind, picked, opts) => ({ target: "sa", ts, ms, ev: kind, picked, opts: opts && opts.join(",") });
+test("confusionExtras: guessed (incl. correct→diagonal), after-played, re-listened", () => {
+  const ev = (q, ts, kind, picked, opts) => ({ target: "sa", ts, ms: ts - q, ev: kind, picked, opts: opts && opts.join(","), start_ts: q });
   const events = [
-    // Q1: re-listen then a *wrong* guess of za. ts-ms is 1000 for the 'r' but 1003
-    // for the answer — they DON'T match (as in real data), so order, not ts-ms,
-    // must link them. offered: sa, za.
-    ev(1200, 200, "r", ""),
-    ev(1503, 500, "g", "za", ["sa", "za"]),
-    // Q2: correct guess of sa (→ diagonal), no re-listen.
-    ev(2400, 400, "g", "sa", ["sa", "za"]),
-    // Q3: plain answer, then after-played za during review.
-    ev(3400, 400, "a", "sa", ["sa", "za"]),
-    ev(3900, 900, "p", "za"),
+    // Q1 (start_ts 1000): re-listen (carries opts) then a *wrong* guess of za.
+    ev(1000, 1200, "r", "", ["sa", "za"]),
+    ev(1000, 1500, "g", "za", ["sa", "za"]),
+    // Q2 (start_ts 2000): correct guess of sa (→ diagonal), no re-listen.
+    ev(2000, 2400, "g", "sa", ["sa", "za"]),
+    // Q3 (start_ts 3000): plain answer, then after-played za during review.
+    ev(3000, 3400, "a", "sa", ["sa", "za"]),
+    ev(3000, 3900, "p", "za", ["sa", "za"]),
   ];
-  const { guessed, afterPlayed, reListened } = confusionExtras(events);
+  const { guessed, afterPlayed, reListened, reListenedOffered } = confusionExtras(events);
   assert.equal(guessed["sa/za"], 1, "wrong guess of za");
   assert.equal(guessed["sa/sa"], 1, "correct guess lands on the diagonal");
   assert.equal(afterPlayed["sa/za"], 1, "replayed za in review");
-  assert.equal(reListened["sa/sa"], 1, "re-listen credited to every offered kana despite ts-ms mismatch");
-  assert.equal(reListened["sa/za"], 1, "...and the confuser");
+  assert.equal(reListened["sa/sa"], 1, "Q1 re-listened → credited on the diagonal");
+  assert.equal(reListened["sa/za"], 1, "...and against the offered confuser");
+  assert.equal(reListenedOffered["sa/za"], 3, "all three questions offered za (the re-listen denominator)");
   assert.equal(afterPlayed["sa/sa"], undefined, "no stray after-play");
 });
 
-test("confusionExtras: start_ts pairs a re-listen with its own question, not a later one", () => {
+test("confusionExtras: a re-listen is credited from its own opts, even if the question is never answered", () => {
   const events = [
-    // Q1 (start_ts 1000): re-listen, then ABANDONED (refresh — no answer for it).
-    { target: "sa", ts: 1200, ms: 200, ev: "r", picked: "", start_ts: 1000 },
-    // Q2 (start_ts 2000, same sound): answered, with no re-listen of its own.
-    { target: "sa", ts: 2400, ms: 400, ev: "a", picked: "za", opts: "sa,za", start_ts: 2000 },
-    // Q3 (start_ts 3000): re-listen then its own answer → credited.
-    { target: "su", ts: 3100, ms: 100, ev: "r", picked: "", start_ts: 3000 },
-    { target: "su", ts: 3500, ms: 500, ev: "a", picked: "su", opts: "su,tu", start_ts: 3000 },
+    // Q1 (start_ts 1000): re-listened TWICE, then abandoned (no answer). Carries opts.
+    { target: "sa", ts: 1100, ms: 100, ev: "r", picked: "", opts: "sa,za", start_ts: 1000 },
+    { target: "sa", ts: 1200, ms: 200, ev: "r", picked: "", opts: "sa,za", start_ts: 1000 },
+    // Q2 (start_ts 2000): answered, no re-listen.
+    { target: "sa", ts: 2100, ms: 100, ev: "a", picked: "sa", opts: "sa,za", start_ts: 2000 },
   ];
-  const { reListened } = confusionExtras(events);
-  assert.equal(reListened["sa/za"], undefined, "abandoned re-listen not credited to a later same-sound question");
-  assert.equal(reListened["sa/sa"], undefined, "...nor its diagonal");
-  assert.equal(reListened["su/su"], 1, "a re-listen with its matching answer (same start_ts) is credited");
-  assert.equal(reListened["su/tu"], 1, "...to every offered kana");
+  const { reListened, reListenedOffered } = confusionExtras(events);
+  assert.equal(reListened["sa/sa"], 1, "two re-listens of one question count ONCE (question-scoped)");
+  assert.equal(reListened["sa/za"], 1, "...credited despite the question never being answered");
+  assert.equal(reListenedOffered["sa/sa"], 2, "both questions offered sa → denominator 2");
+  assert.equal(reListenedOffered["sa/za"], 2, "both offered za");
+});
+
+test("confusionExtras: a re-listen is scoped to its own question, not a later same-sound one", () => {
+  const events = [
+    // Q1 (start_ts 1000): answered WITHOUT a re-listen.
+    { target: "su", ts: 1100, ms: 100, ev: "a", picked: "su", opts: "su,tu", start_ts: 1000 },
+    // Q2 (start_ts 2000): re-listened then answered.
+    { target: "su", ts: 2100, ms: 100, ev: "r", picked: "", opts: "su,tu", start_ts: 2000 },
+    { target: "su", ts: 2200, ms: 200, ev: "a", picked: "su", opts: "su,tu", start_ts: 2000 },
+  ];
+  const { reListened, reListenedOffered } = confusionExtras(events);
+  assert.equal(reListened["su/su"], 1, "only the re-listened question (Q2) counts, not Q1");
+  assert.equal(reListenedOffered["su/su"], 2, "both questions in the denominator");
 });
 
 test("confusionExtras: slow = slowest engaged (<6s) reactions at the 96th pct", () => {
