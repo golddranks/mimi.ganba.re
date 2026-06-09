@@ -108,6 +108,23 @@ body {
     color: var(--accent);
 }
 
+/* Mirror of #privacy in the opposite (left) corner — a link to this user's dashboard. */
+#dashlink {
+    position: fixed;
+    top: 0;
+    left: max(.8rem, var(--col));
+    height: 2.2rem;
+    line-height: 2.2rem;
+    font-size: .7rem;
+    color: var(--muted);
+    text-decoration: none;
+    z-index: 12;
+}
+
+#dashlink:hover {
+    color: var(--accent);
+}
+
 /* Floating header readouts share most styling. */
 #message,
 #score,

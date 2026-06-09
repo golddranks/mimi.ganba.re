@@ -95,6 +95,20 @@ test("app: ?nativeTester prompts and persists the native-mode flag", { skip: LIV
   assert.equal(win.localStorage.nativeMode, "1", "native-mode flag persisted");
 });
 
+// skip on LIVE: opening a fresh "/" would create a role-0 prod user.
+test("app: the top-left dashboard link carries ?uid in view-as", { skip: LIVE }, async (t) => {
+  const own = await openPage("/");
+  t.after(own.close);
+  assert.equal(own.win.dashlink.getAttribute("href"), "dashboard/", "own session links to the bare dashboard");
+
+  const uid = await freshTestUser();
+  await postEvents(uid, saFixture(Date.now()));
+  const va = await openPage(`/?uid=${uid}`);
+  t.after(va.close);
+  await waitFor(() => va.win.score.textContent.includes("out of 6") ? true : null, WAIT);   // loadAsUser's render landed
+  assert.equal(va.win.dashlink.getAttribute("href"), `dashboard/?uid=${uid}`, "view-as keeps the uid on the dashboard link");
+});
+
 // skip on LIVE: posts role-0 events (the ranking's input), which would pollute
 // prod. The exact presence/absence assertions also need an isolated DB — the
 // global top-200 only reflects this scenario when it's the only data (a prod

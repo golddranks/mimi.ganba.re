@@ -642,6 +642,7 @@ if (!viewMode && new URLSearchParams(location.search).has("nativeTester")) {
 if (viewMode) {
   stats = {}; run = 0; skill = {};
   tip.textContent = `(view-as: ${spoofedUid})`;
+  dashlink.href = "dashboard/?uid=" + encodeURIComponent(spoofedUid);   // keep view-as context on the dashboard link too
   render();
   loadAsUser(spoofedUid);
 } else {
