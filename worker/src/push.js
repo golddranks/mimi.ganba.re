@@ -5,7 +5,7 @@
 // pushes, so a body — not just VAPID identification — is required to reach it.
 import { pad2 } from "../../src/shared/dates.js";
 import { dayTier } from "../../src/shared/daytier.js";
-import { isAnswerEv, answeredRight } from "../../src/shared/events.js";
+import { isAnswerEv, answeredRight, isPenalizedRelisten } from "../../src/shared/events.js";
 
 export const START_HOUR = 19;   // local hour for the "haven't started today" nudge
 export const DONE_HOUR = 22;    // local hour for the "not done yet" nudge
@@ -41,16 +41,16 @@ export function localStamp(nowMs, tzOffset) {
 }
 
 // Reconstruct { correct, total, maxRun } for one local day from a user's events.
-// Replays that day's answers in ts order, with relistens ('r') breaking the
-// streak — mirroring applyAnswer / applyRelisten in app.js, so "done" here means
-// what it means in the app.
+// Replays that day's answers in ts order, with penalized relistens (cap >= 3 'r')
+// breaking the streak — mirroring applyAnswer / applyRelisten in app.js, so "done"
+// here means what it means in the app. Free cap-2 relistens don't break it.
 export function dayStats(events, day, tzOffset) {
   const todays = events
     .filter((e) => (isAnswerEv(e.ev) || e.ev === "r") && localStamp(e.ts, tzOffset).day === day)
     .sort((a, b) => a.ts - b.ts);
   let correct = 0, total = 0, run = 0, maxRun = 0;
   for (const e of todays) {
-    if (e.ev === "r") { run = 0; continue; }
+    if (e.ev === "r") { if (isPenalizedRelisten(e)) run = 0; continue; }
     total++;
     if (answeredRight(e)) { correct++; if (++run > maxRun) maxRun = run; }
     else run = 0;

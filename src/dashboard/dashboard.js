@@ -3,7 +3,7 @@ import { pad2, dayKeyTz } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, consonantCounts, fillConfusionCells } from "../shared/confusion.js";
 import { tallyFromEvents, tallyMaps, confusionMaps, confusionRecord, confusionExtras } from "../shared/tally.js";
 import { HIRAGANA } from "../shared/kana.js";
-import { isAnswerEv, answeredRight } from "../shared/events.js";
+import { isAnswerEv, answeredRight, isPenalizedRelisten } from "../shared/events.js";
 import { pushSupported, currentSubscription, subscribe, unsubscribe } from "../shared/push.js";
 import { dayBarChart, dayTip, calendarSpan } from "../shared/daychart.js";
 import { drawBars, drawHourly, wireSwitchGroup } from "../shared/charts.js";
@@ -256,7 +256,7 @@ function dailyPeakStreaks(events) {
     const d = dayKeyTz(e.ts, viewedTzMin);
     if (lastDay !== null && d !== lastDay) run = 0;
     lastDay = d;
-    if (e.ev === "r") run = 0;
+    if (e.ev === "r") { if (isPenalizedRelisten(e)) run = 0; }   // free re-listens don't break the streak
     else if (answeredRight(e)) run++;
     else run = 0;
     if (run > (peaks.get(d) || 0)) peaks.set(d, run);
@@ -296,7 +296,7 @@ function renderLevels(events) {
     const v = e.target.slice(-1);
     if (!(v in skill)) continue;
     seen[v] = true;
-    if (e.ev === "r") skill[v] = onRelisten(skill[v]);
+    if (e.ev === "r") { if (isPenalizedRelisten(e)) skill[v] = onRelisten(skill[v]); }
     else if (answeredRight(e)) skill[v] = onCorrect(skill[v]);
     else skill[v] = onWrong(skill[v]);
   }

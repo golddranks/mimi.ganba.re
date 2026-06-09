@@ -493,6 +493,38 @@ test("dashboard: confusion matrix metric switch (wrong → guessed)", async (t) 
   assert.equal(cell().textContent, "1/3", "guessed metric counts only the guess, over the same offered");
 });
 
+test("dashboard: a free (cap-2) re-listen is recorded but doesn't break the streak", async (t) => {
+  // Three correct sa answers with a cap-2 (free) re-listen before the third. The
+  // re-listen is recorded — it shows in the re-listen metric (1/3) — but at cap 2
+  // it carries no penalty, so the streak runs through it to 3 (a cap>=3 'r' would
+  // have reset it to 1). Locks isPenalizedRelisten gating the replay.
+  const uid = await freshTestUser();
+  const t0 = Date.now();
+  const ans = (s) => ({ ts: s + 1, start_ts: s, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 1, ev: "a", opts: ["sa", "za"], skill: 0 });
+  const events = [
+    ans(t0),
+    ans(t0 + 10),
+    { ts: t0 + 20, start_ts: t0 + 21, target: "sa", idx: 0, picked: "", cap: 2, ms: 1, ev: "r" },  // free re-listen
+    ans(t0 + 21),
+  ];
+  assert.equal((await postEvents(uid, events)).status, 200);
+
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),
+  });
+  t.after(close);
+  const stat = (k) => win.document.querySelector(`#overview [data-stat="${k}"]`).textContent;
+  await waitFor(() => stat("topstreak") !== "0" ? true : null, WAIT);
+  assert.equal(stat("topstreak"), "3", "free re-listen doesn't break the streak");
+
+  const cell = () => win.confchart.querySelector('td[data-t="sa"][data-p="za"]');
+  const r = win.confmetric.querySelector('input[value="relistened"]');
+  r.checked = true;
+  r.dispatchEvent(new win.Event("change", { bubbles: true }));
+  await waitFor(() => cell()?.textContent === "1/3" ? true : null, WAIT);
+  assert.equal(cell().textContent, "1/3", "the free re-listen is recorded and shows in the re-listen metric");
+});
+
 test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", async (t) => {
   // 8 sa-questions with za offered, always answered sa → never confused (0/8).
   const uid = await freshTestUser();

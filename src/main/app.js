@@ -4,6 +4,7 @@ import { HIRAGANA } from "../shared/kana.js";
 import { dayTier } from "../shared/daytier.js";
 import { pickTip } from "./tips.js";
 import { confusionRecord } from "../shared/tally.js";
+import { isPenalizedRelisten } from "../shared/events.js";
 import { getGrind, tallyAnswer, initGrind, recordGrindAnswer } from "./grind.js";
 import { scheduleReminders } from "./reminders.js";
 import { updateAvailable } from "../shared/version.js";
@@ -548,8 +549,12 @@ function relistenCurrent() {
   const { target, idx, cap, startTs } = current;
 
   if (cap <= 2) {
-    // Free re-listen — beginner-friendly at the lowest level. Skip the
-    // event entirely so the server doesn't replay a phantom penalty.
+    // Free re-listen — beginner-friendly at the lowest level: no skill/streak
+    // penalty (no applyRelisten). Still recorded; every replay gates the penalty
+    // on cap >= 3 (isPenalizedRelisten), so a cap-2 'r' shows in the re-listen
+    // confusion metric without a phantom penalty.
+    const now = Date.now();
+    pushEvent({ ts: now, target, idx, picked: "", cap, ms: now - startTs, ev: "r", start_ts: startTs });
     play(current.voice);
     return;
   }
@@ -602,7 +607,7 @@ async function loadAsUser(targetUid) {
     if (lastDay !== null && k !== lastDay) run = 0;   // day boundary resets streak
     lastDay = k;
     const v = e.target.slice(-1);
-    if (e.ev === "r") { applyRelisten(v); continue; }
+    if (e.ev === "r") { if (isPenalizedRelisten(e)) applyRelisten(v); continue; }
     // Y/N 'n' inverts correctness: a correct "no" means the shown kana wasn't it.
     applyAnswer(k, v, e.ev === "n" ? e.picked !== e.target : e.picked === e.target);
   }

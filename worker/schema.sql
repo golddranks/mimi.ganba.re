@@ -21,8 +21,10 @@ CREATE TABLE IF NOT EXISTS users (
 --         correct iff picked = target.
 --   'g' — guess answer (long-press), correct or wrong. Same shape as 'a'.
 --   'r' — re-listen button (or Space) pressed *before* answering.
---         picked is empty. This also resets the vowel's in-level skill
---         and breaks the streak. The voice replayed is the question's.
+--         picked is empty. At cap >= 3 this resets the vowel's in-level skill
+--         and breaks the streak; at cap <= 2 it's a FREE re-listen (recorded,
+--         but no penalty — see isPenalizedRelisten in src/shared/events.js, which
+--         every skill/streak replay gates on). The voice replayed is the question's.
 --   'p' — after a wrong/guess answer, a choice button was tapped during
 --         review to play that choice's audio. picked = the mora tapped.
 --   'y' — Y/N quiz, user answered ○ ("yes, this kana is the sound").

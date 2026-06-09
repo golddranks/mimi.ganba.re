@@ -9,22 +9,25 @@ const b64url = (buf) => Buffer.from(buf).toString("base64").replace(/\+/g, "-").
 const unb64url = (s) => Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64");
 const a = (ts, picked, ev = "a", target = "sa") => ({ ts, target, picked, ev });
 
-test("dayStats: counts a/g/y/n, inverts 'n', relisten resets the streak, scopes to the day", () => {
+test("dayStats: counts a/g/y/n, inverts 'n', penalized re-listen resets the streak (free cap-2 doesn't), scopes to the day", () => {
   const day = "2026-06-05";
   const t0 = Date.UTC(2026, 5, 5, 9, 0, 0);
+  const rel = (ts, cap) => ({ ts, target: "sa", picked: "", ev: "r", cap });
   const events = [
     a(t0 + 1, "sa"),                       // ✓ run 1
-    a(t0 + 2, "sa"),                       // ✓ run 2 (max)
-    a(t0 + 3, "za"),                       // ✗ run 0
+    a(t0 + 2, "sa"),                       // ✓ run 2
+    rel(t0 + 3, 3),                        // re-listen at cap 3 → penalized, run 0
     a(t0 + 4, "sa"),                       // ✓ run 1
-    a(t0 + 5, "", "r"),                    // relisten → run 0
-    a(t0 + 6, "sa"),                       // ✓ run 1
-    a(t0 + 7, "sa", "n"),                  // 'n' + picked==target → ✗ run 0
-    a(t0 + 8, "za", "n"),                  // 'n' + picked!=target → ✓ run 1
+    a(t0 + 5, "sa"),                       // ✓ run 2
+    rel(t0 + 6, 2),                        // re-listen at cap 2 → FREE, run unchanged (2)
+    a(t0 + 7, "sa"),                       // ✓ run 3 (max — proves the cap-2 'r' didn't reset)
+    a(t0 + 8, "sa", "n"),                  // 'n' + picked==target → ✗ run 0
+    a(t0 + 9, "za", "n"),                  // 'n' + picked!=target → ✓ run 1
     a(Date.UTC(2026, 5, 4, 9, 0, 0), "sa"),// yesterday → excluded
-    a(t0 + 9, "sa", "p"),                  // play → ignored
+    a(t0 + 10, "sa", "p"),                 // play → ignored
   ];
-  assert.deepEqual(dayStats(events, day, 0), { correct: 5, total: 7, maxRun: 2 });
+  // maxRun 3 only if the cap-3 'r' reset (else run would reach 4) AND the cap-2 'r' didn't (else 2).
+  assert.deepEqual(dayStats(events, day, 0), { correct: 6, total: 7, maxRun: 3 });
 });
 
 test("dueNudge: start hour fires only with no answers today", () => {

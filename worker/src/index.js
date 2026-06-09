@@ -17,7 +17,7 @@ import { nameOf } from "./voicemap.js";
 import { MIGRATIONS } from "./migrations.js";
 import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/shared/skill.js";
 import { confusionRecord } from "../../src/shared/tally.js";
-import { isAnswerEv, answeredRight } from "../../src/shared/events.js";
+import { isAnswerEv, answeredRight, isPenalizedRelisten } from "../../src/shared/events.js";
 import { VAPID_PUBLIC_KEY } from "../../src/shared/vapid.js";
 import { localStamp, dueNudge, vapidAuth, encryptPayload, sendPush, NUDGE_TEXT, START_HOUR, DONE_HOUR } from "./push.js";
 
@@ -239,7 +239,7 @@ async function runReminders(env, now) {
     if (hour !== START_HOUR && hour !== DONE_HOUR) continue;
 
     const events = ((await env.mimi_stats.prepare(
-      "SELECT ts, target, picked, ev FROM events WHERE uid = ? AND ts >= ?"
+      "SELECT ts, target, picked, ev, cap FROM events WHERE uid = ? AND ts >= ?"
     ).bind(sub.uid, since).all()).results) || [];
     const due = dueNudge(sub, events, now);
     if (!due) continue;
@@ -697,7 +697,7 @@ async function handleAdminUserStats(req, env, url) {
     // the streak/decay rules in pure SQL. ORDER BY uid keeps each user's
     // sequence contiguous so the JS loop below can compute incrementally.
     db.prepare(
-      `SELECT uid, ts, target, picked, ev FROM events
+      `SELECT uid, ts, target, picked, ev, cap FROM events
        WHERE (${ANSWER_EVS} OR ev = 'r') AND ${EXCLUDE_TEST}
        ORDER BY uid, ts ASC`
     ).all(),
@@ -750,8 +750,8 @@ async function handleAdminUserStats(req, env, url) {
       const day = new Date(e.ts + (tzOf[e.uid] ?? 540) * 60000).toISOString().slice(0, 10);
       (userDays[e.uid] = userDays[e.uid] || new Set()).add(day);
       cur[v] = answeredRight(e) ? onCorrect(c) : onWrong(c);
-    } else {
-      cur[v] = onRelisten(c);   // 'r' — drop to the start of the current level
+    } else if (isPenalizedRelisten(e)) {
+      cur[v] = onRelisten(c);   // 'r' at cap >= 3 — drop to the start of the current level (free re-listens don't penalize)
     }
   }
 
