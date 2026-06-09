@@ -21,6 +21,9 @@ import { daysAgo } from "../../src/shared/dates.js";
 const getEvents = async (uid) =>
   (await (await fetch(`${WORKER}/v1/user/${encodeURIComponent(uid)}/events`)).json()).events || [];
 
+const getUserRole = async (uid) =>
+  (await (await fetch(`${WORKER}/v1/user/${encodeURIComponent(uid)}/events`)).json()).role;
+
 const postEvents = (uid, events, tz) =>
   fetch(`${WORKER}/v1/events`, {
     method: "POST",
@@ -97,6 +100,27 @@ test("app: ?nativeTester prompts and persists the native-mode flag", { skip: LIV
   t.after(close);
   assert.equal(asked, 1, "prompted for a nickname");
   assert.equal(win.localStorage.nativeMode, "1", "native-mode flag persisted");
+});
+
+// skip on LIVE: would tag a prod user role 2.
+test("app: a native-mode device re-asserts role 2 on boot (self-heals a missed ?nativeTester POST)", { skip: LIVE }, async (t) => {
+  // Device stuck in native mode locally but role 0 on the server — its one-time
+  // ?nativeTester POST never landed (the fetch swallows errors).
+  const uid = randomUUID();
+  await fetch(`${WORKER}/v1/user`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ uid, nickname: "Native" }),
+  });
+  assert.equal(await getUserRole(uid), 0, "starts role 0");
+
+  // A plain boot (no ?nativeTester) under that uid should self-heal it to role 2.
+  const { close } = await openPage("/", { setup: (w) => {
+    w.localStorage.setItem("uid", uid);
+    w.localStorage.setItem("nativeMode", "1");
+    w.localStorage.setItem("nick", "Native");
+  } });
+  t.after(close);
+  await waitFor(async () => (await getUserRole(uid)) === 2 || null, WAIT);
 });
 
 // skip on LIVE: opening a fresh "/" would create a role-0 prod user.

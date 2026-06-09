@@ -298,6 +298,13 @@ body {
     font-family: ui-monospace, Menlo, monospace;
 }
 
+/* Native-testing tag prefixes the Device-ID line. Kept on one piece (no
+   break-all) and ahead of the UUID, so it rides the existing label line and
+   adds no extra wrapped row — the UUID wraps to fill the line either way. */
+#overview .uid #nativebadge {
+    white-space: nowrap;
+}
+
 .stats {
     display: flex;
     flex-wrap: wrap;

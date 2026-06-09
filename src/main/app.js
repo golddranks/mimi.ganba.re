@@ -614,10 +614,22 @@ async function loadAsUser(targetUid) {
   render();
 }
 
-// Nickname: prompt for one (unless already set) and persist it locally + to
-// /v1/user. `extra` carries optional fields (e.g. role for the native-tester
-// opt-in). Returns the nickname now in effect. Ignored in view-as mode so you
-// can't rename someone you're inspecting. Reused by the ?nativeTester flow.
+// Fire-and-forget POST of this device's registration row: nickname (may be empty),
+// tz, and any extra fields (e.g. { role: 2 }). The POST lives here so both the nick
+// prompt and the native-mode boot re-assert use one code path. Ignored in view-as
+// mode so you can't re-register someone you're inspecting.
+function registerUser(extra) {
+  if (viewMode || !STATS_URL) return;
+  fetch(STATS_URL + "/v1/user", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ uid, nickname: localStorage.nick || "", tz: -new Date().getTimezoneOffset(), ...extra }),
+  }).catch(() => { });
+}
+
+// Prompt for a nickname (unless already set), persist it locally, and register
+// via registerUser. `extra` carries optional fields (e.g. role for the native-
+// tester opt-in). Returns the nickname now in effect.
 function promptForNick(message, extra) {
   if (viewMode || !STATS_URL) return localStorage.nick || null;
   if (!localStorage.nick) {
@@ -626,13 +638,7 @@ function promptForNick(message, extra) {
   }
   // POST when there's a nickname to record or an extra field (role) to apply —
   // a returning native tester keeps their nick but still needs the role set.
-  if (localStorage.nick || extra) {
-    fetch(STATS_URL + "/v1/user", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ uid, nickname: localStorage.nick || "", tz: -new Date().getTimezoneOffset(), ...extra }),
-    }).catch(() => { });
-  }
+  if (localStorage.nick || extra) registerUser(extra);
   return localStorage.nick || null;
 }
 
@@ -682,5 +688,13 @@ if (viewMode) {
   render();
   flushEvents();
   scheduleReminders();
-  if (nativeMode) loadNativePairs();   // prefetch the first ranked batch
+  if (nativeMode) {
+    // Re-assert role 2 each boot: the one-time ?nativeTester POST may have failed
+    // (its fetch swallows errors) or predated the role feature, leaving the device
+    // in native mode locally but role 0 on the server — never badged, never excluded
+    // from production aggregates. Silent (no prompt); the worker upserts role via
+    // COALESCE so this only ever sets it, never clears it.
+    registerUser({ role: 2 });
+    loadNativePairs();               // prefetch the first ranked batch
+  }
 }
