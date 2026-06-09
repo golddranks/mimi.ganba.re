@@ -77,7 +77,11 @@ CREATE TABLE IF NOT EXISTS events (
   -- thresholds or the on-correct/on-wrong/on-relisten transitions) can't
   -- retroactively rewrite historical levels — which are otherwise reconstructed
   -- by replaying the event stream. NULL on older rows and on 'r'/'p' events.
-  skill  INTEGER
+  skill  INTEGER,
+  -- `start_ts` is the question's start (unix ms), the same on every event of one
+  -- question, so (uid, target, start_ts) is an exact per-question key. ms = ts -
+  -- start_ts (one clock read). NULL on pre-migration rows; group those by event order.
+  start_ts INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_uid    ON events(uid);

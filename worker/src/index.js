@@ -267,8 +267,8 @@ async function handleEvents(req, env) {
   }
 
   const insertEvent = env.mimi_stats.prepare(
-    "INSERT INTO events (uid, ts, target, idx, picked, cap, ms, ev, voice, opts, skill) " +
-    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO events (uid, ts, target, idx, picked, cap, ms, ev, voice, opts, skill, start_ts) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
   const inserts = body.events.map((e) => {
     const ev = ["a", "g", "r", "p", "y", "n"].includes(e.ev) ? e.ev : "a";
@@ -299,6 +299,7 @@ async function handleEvents(req, env) {
       nameOf(moraOfPlayed, idx),
       opts,
       skill,
+      e.start_ts != null ? +e.start_ts : null,   // the question's start; an exact per-question key
     );
   });
   const now = Date.now();
@@ -337,7 +338,7 @@ async function handleGetEvents(req, env, url) {
   const uid = decodeURIComponent(url.pathname.split("/")[3]);
   const [rows, user] = await Promise.all([
     env.mimi_stats.prepare(
-      "SELECT ts, target, idx, picked, cap, ms, ev, voice, opts FROM events WHERE uid = ? ORDER BY ts ASC"
+      "SELECT ts, target, idx, picked, cap, ms, ev, voice, opts, start_ts FROM events WHERE uid = ? ORDER BY ts ASC"
     ).bind(uid).all(),
     env.mimi_stats.prepare("SELECT tz_offset, delete_after FROM users WHERE uid = ?").bind(uid).first(),
   ]);

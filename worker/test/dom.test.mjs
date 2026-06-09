@@ -1129,6 +1129,13 @@ test("dashboard view-as: shows a declined reminder opt-in (not just on/off)", { 
 
 // delete_after is computed on the write path (handleEvents / registration), so it's
 // exercised over HTTP — no cron, no local SQL.
+test("events: start_ts round-trips (the per-question key)", { skip: LIVE }, async () => {
+  const uid = await freshTestUser();
+  await postEvents(uid, [{ ts: Date.now(), target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0, start_ts: 1234567 }]);
+  const ev = (await getEvents(uid)).find((e) => e.target === "sa");
+  assert.equal(ev.start_ts, 1234567, "worker stores and returns the question's start_ts");
+});
+
 test("delete_after: registration stamps a +30d baseline", { skip: LIVE }, async () => {
   const uid = randomUUID();
   const t0 = Date.now();

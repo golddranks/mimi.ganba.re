@@ -74,11 +74,9 @@ export function tallyFromEvents(events) {
 //   afterPlayed — that kana was tapped to replay during review (ev 'p', picked = it).
 //   reListened  — the question had a re-listen (ev 'r'). A re-listen is about the
 //                 sound, not a pick, so it's counted against EVERY kana the question
-//                 offered. A re-listen always *precedes* its answer in time, so it's
-//                 grouped by order: walk in ts order and let the next answer of that
-//                 sound consume it. (NOT by (target, ts - ms): the app stamps ts and
-//                 ms from separate clock reads, so they're a few ms apart and never
-//                 match exactly — which silently dropped every re-listen.)
+//                 offered. Paired with its answer by start_ts (the exact per-question
+//                 key) when present, else by order (a re-listen precedes its answer).
+//                 NOT by ts - ms, which jitters (ts and ms are separate clock reads).
 // "Slow reaction": an answer among the slowest of THIS user's *engaged* reactions —
 // under 6s, since beyond that they'd stepped away, not hesitated — at/above their
 // 96th percentile (slowest ~4%). Per-user, so a fast and a slow user each judge
@@ -96,7 +94,7 @@ export function confusionExtras(events) {
   const guessed = {}, afterPlayed = {}, reListened = {}, slow = {};
   const bump1 = (m, t, p) => { m[`${t}/${p}`] = (m[`${t}/${p}`] || 0) + 1; };
   const answers = [], engaged = [];   // for the slow-reaction percentile
-  let relistenedTarget = null;        // a re-listen waiting for its answer (by ts order)
+  let pending = null;                 // a re-listen awaiting its answer: { target, q }
   for (const e of [...events].sort((a, b) => a.ts - b.ts)) {
     const rec = confusionRecord(e);   // non-null for a/g/y/n
     if (rec) {
@@ -105,10 +103,15 @@ export function confusionExtras(events) {
         answers.push({ t: rec.target, p: rec.picked, ms: e.ms });
         if (e.ms < SLOW_CAP_MS) engaged.push(e.ms);
       }
-      // this answer ends the question; if it re-listened, credit every offered kana
-      if (relistenedTarget === rec.target) for (const p of rec.opts) bump1(reListened, rec.target, p);
-      relistenedTarget = null;
-    } else if (e.ev === "r") relistenedTarget = e.target;
+      // This answer ends the question; if it re-listened, credit every offered kana.
+      // Same sound, and — when both rows carry start_ts — the same start_ts, so a
+      // re-listen from a question that was refreshed away isn't mis-credited to a
+      // later same-sound question (older rows lack start_ts → order alone).
+      if (pending && pending.target === rec.target &&
+          (pending.q == null || e.start_ts == null || pending.q === e.start_ts))
+        for (const p of rec.opts) bump1(reListened, rec.target, p);
+      pending = null;
+    } else if (e.ev === "r") pending = { target: e.target, q: e.start_ts };
     else if (e.ev === "p") bump1(afterPlayed, e.target, e.picked);
   }
   const p96 = nearestRankPctile(engaged, SLOW_PCTL);

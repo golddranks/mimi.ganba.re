@@ -356,9 +356,10 @@ function ynSubmit(yes, asGuess = false) {
   relisten.hidden = true;   // answered — nothing to replay until the next question
   const { target, idx, displayed, startTs, skill: level } = current;
   const correct = yes ? (displayed === target) : (displayed !== target);
-  const ms = Date.now() - startTs;
+  const now = Date.now();   // one read: ts and ms (= ts - startTs) stay consistent
+  const ms = now - startTs;
   record(correct, target.slice(-1));
-  pushEvent({ ts: Date.now(), target, idx, picked: displayed, cap: 2, ms, ev: yes ? "y" : "n", skill: level });
+  pushEvent({ ts: now, target, idx, picked: displayed, cap: 2, ms, ev: yes ? "y" : "n", skill: level, start_ts: startTs });
   // Feed the day-start probe tally too, so a Y/N confusion drills like a
   // multi-choice one (same synthesis the dashboard matrix uses).
   const rec = confusionRecord({ ev: yes ? "y" : "n", target, picked: displayed });
@@ -403,7 +404,8 @@ function replayYN(btn, random = false) {
   const mora = btn === ynyes ? displayed : target;
   const i = (mora === target && !random) ? idx : rand(mora);
   play(path(mora, i));
-  pushEvent({ ts: Date.now(), target, idx: i, picked: mora, cap, ms: Date.now() - startTs, ev: "p" });
+  const now = Date.now();
+  pushEvent({ ts: now, target, idx: i, picked: mora, cap, ms: now - startTs, ev: "p", start_ts: startTs });
 }
 
 // Long-press = "guess": if right, counts as correct but stays in review mode
@@ -476,10 +478,11 @@ function guess(btn) {
   const picked = btn.dataset.mora;
   const { target, idx, cap, startTs, opts, skill: level } = current;
   if (picked !== target) { submit(picked, btn, true); return; }
-  const ms = Date.now() - startTs;
+  const now = Date.now();
+  const ms = now - startTs;
   record(true, target.slice(-1));
   tallyAnswer(target, picked, opts);
-  pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: "g", opts, skill: level });
+  pushEvent({ ts: now, target, idx, picked, cap, ms, ev: "g", opts, skill: level, start_ts: startTs });
   btn.classList.add("correct");
   locked = true;
   primary.textContent = "Next";
@@ -493,10 +496,11 @@ function replay(m, btn, random = false) {
   const i = random ? rand(m) : +btn.dataset.idx;
   play(path(m, i));
   const { target, cap, startTs } = current;
-  // For 'p' events, idx describes what was *played*: the voice sample of the
-  // tapped mora `m` (= picked). The question's voice is implicit via the
-  // sibling 'a'/'g' event at (uid, target, ts - ms). See worker/schema.sql.
-  pushEvent({ ts: Date.now(), target, idx: i, picked: m, cap, ms: Date.now() - startTs, ev: "p" });
+  // For 'p' events, idx describes what was *played*: the voice sample of the tapped
+  // mora `m` (= picked). The question's own voice is on its sibling 'a'/'g' event,
+  // paired by the shared start_ts (the per-question key). See worker/schema.sql.
+  const now = Date.now();
+  pushEvent({ ts: now, target, idx: i, picked: m, cap, ms: now - startTs, ev: "p", start_ts: startTs });
 }
 
 function submit(picked, btn, wasGuess = false) {
@@ -504,10 +508,11 @@ function submit(picked, btn, wasGuess = false) {
   relisten.hidden = true;   // answered — nothing to replay until the next question
   const { target, idx, cap, startTs, opts, skill: level } = current;
   const correct = picked === target;
-  const ms = Date.now() - startTs;
+  const now = Date.now();
+  const ms = now - startTs;
   record(correct, target.slice(-1));
   tallyAnswer(target, picked, opts);
-  pushEvent({ ts: Date.now(), target, idx, picked, cap, ms, ev: wasGuess ? "g" : "a", opts, skill: level });
+  pushEvent({ ts: now, target, idx, picked, cap, ms, ev: wasGuess ? "g" : "a", opts, skill: level, start_ts: startTs });
   if (correct) {
     btn.classList.add("correct");
     current = null;                          // lock out further clicks
@@ -559,7 +564,8 @@ function relistenCurrent() {
   applyRelisten(target.slice(-1));
   save();
   render();
-  pushEvent({ ts: Date.now(), target, idx, picked: "", cap, ms: Date.now() - startTs, ev: "r" });
+  const now = Date.now();
+  pushEvent({ ts: now, target, idx, picked: "", cap, ms: now - startTs, ev: "r", start_ts: startTs });
   play(current.voice);
 }
 

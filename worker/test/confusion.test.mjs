@@ -29,6 +29,23 @@ test("confusionExtras: guessed (incl. correct→diagonal), after-played, re-list
   assert.equal(afterPlayed["sa/sa"], undefined, "no stray after-play");
 });
 
+test("confusionExtras: start_ts pairs a re-listen with its own question, not a later one", () => {
+  const events = [
+    // Q1 (start_ts 1000): re-listen, then ABANDONED (refresh — no answer for it).
+    { target: "sa", ts: 1200, ms: 200, ev: "r", picked: "", start_ts: 1000 },
+    // Q2 (start_ts 2000, same sound): answered, with no re-listen of its own.
+    { target: "sa", ts: 2400, ms: 400, ev: "a", picked: "za", opts: "sa,za", start_ts: 2000 },
+    // Q3 (start_ts 3000): re-listen then its own answer → credited.
+    { target: "su", ts: 3100, ms: 100, ev: "r", picked: "", start_ts: 3000 },
+    { target: "su", ts: 3500, ms: 500, ev: "a", picked: "su", opts: "su,tu", start_ts: 3000 },
+  ];
+  const { reListened } = confusionExtras(events);
+  assert.equal(reListened["sa/za"], undefined, "abandoned re-listen not credited to a later same-sound question");
+  assert.equal(reListened["sa/sa"], undefined, "...nor its diagonal");
+  assert.equal(reListened["su/su"], 1, "a re-listen with its matching answer (same start_ts) is credited");
+  assert.equal(reListened["su/tu"], 1, "...to every offered kana");
+});
+
 test("confusionExtras: slow = slowest engaged (<6s) reactions at the 96th pct", () => {
   // 10 sa→za picks at ms 100..1000 (engaged) + one 7000ms (away, not hesitating).
   // 96th pct of the engaged set is the slowest (1000), so only that pick is "slow";

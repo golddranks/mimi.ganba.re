@@ -77,4 +77,12 @@ export const MIGRATIONS = [
     up: "ALTER TABLE users ADD COLUMN delete_after INTEGER",
     down: "ALTER TABLE users DROP COLUMN delete_after",
   },
+  {
+    // The question's start (unix ms), stamped on every event of that question — an
+    // exact per-question key (uid, target, start_ts). Replaces the imprecise ts - ms
+    // (ts and ms come from separate clock reads). NULL on pre-migration rows.
+    id: 9,
+    up: "ALTER TABLE events ADD COLUMN start_ts INTEGER",
+    down: "ALTER TABLE events DROP COLUMN start_ts",
+  },
 ];
