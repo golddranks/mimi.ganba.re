@@ -70,8 +70,8 @@ async function load(uid) {
     renderOverview(data);
     renderHourly(data.hourly);
     renderMora(data.by_mora);
-    renderVoiceConfusion(data.by_voice_shown, data.by_voice_offered);
-    renderConfusion(data.confusion_shown, data.confusion_offered);
+    renderVoiceConfusion(data);
+    renderConfusion(data);
   } catch (e) {
     msg.textContent = "Error: " + (e && e.message);
   }
@@ -110,8 +110,8 @@ async function reloadConfusion() {
     const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid) + confusionParams());
     if (!res.ok) return;
     const data = await res.json();
-    renderConfusion(data.confusion_shown, data.confusion_offered);
-    renderVoiceConfusion(data.by_voice_shown, data.by_voice_offered);
+    renderConfusion(data);
+    renderVoiceConfusion(data);
   } catch { /* leave the current matrices in place */ }
 }
 // Two synced copies of the control: one inline in the confusion h2, one in the
@@ -191,54 +191,94 @@ function drawConsMora() {
   drawBars(consmorachart, cc, maxN, displayMode);
 }
 
-// ---------- sound-file confusion matrix (per recording) ----------
-let voiceShownData = [];       // [{t, v, p, n}] — picks among opts-bearing answers
-let voiceOfferedData = [];     // [{t, v, k, n}] — times kana k offered for (recording)
+// ---------- confusion (same metric switch as the user dashboard; counts are
+// server-aggregated rather than computed from a local event stream) ----------
+// Each server row is { t, <p|k>, n }; fold into a t/<x> -> n map. The metric switch
+// (confMetric) picks which numerator + denominator + colour scheme to show, exactly
+// like the dashboard — see src/dashboard/dashboard.js and src/shared/tally.js.
+const mapOf = (rows, key) => { const m = {}; for (const r of rows || []) m[`${r.t}/${r[key]}`] = r.n; return m; };
+const mapOf3 = (rows, key) => { const m = {}; for (const r of rows || []) m[`${r.t}/${r.v}/${r[key]}`] = r.n; return m; };
 
-function renderVoiceConfusion(shownRows, offeredRows) {
-  voiceShownData = shownRows || [];
-  voiceOfferedData = offeredRows || [];
-  vcmin.oninput = drawVoiceConfusion;
-  vcwrong.oninput = drawVoiceConfusion;
+let confusionShown = null, confusionOffered = null, confusionGuessed = null,
+    confusionAfterplayed = null, confusionRelistened = null, confusionRelistenedOffered = null, confusionSlow = null;
+
+// The metric switch (one in the confusion h2, a synced copy in the sound-file h2)
+// is a pure re-render — all metrics ride in the one response, so no refetch.
+let confMetric = wireSwitchGroup(document.querySelectorAll('[data-switch="metric"]'), (m) => {
+  confMetric = m;
+  drawConfusion();
   drawVoiceConfusion();
-}
+});
+const confNumerator = () => ({
+  answered: confusionShown, guessed: confusionGuessed, relistened: confusionRelistened,
+  afterplayed: confusionAfterplayed, slow: confusionSlow,
+}[confMetric] || confusionShown);
+// Re-listen normalises by all questions that offered the kana (its own denominator);
+// the others by answered offers. Re-listen / after-play drop the right/wrong colours.
+const confDenominator = () => confMetric === "relistened" ? confusionRelistenedOffered : confusionOffered;
+const confScheme = () => (confMetric === "relistened" || confMetric === "afterplayed") ? "neutral" : "outcome";
 
-// Thin wrapper over the shared renderer — reads the page's filter inputs + mode.
-function drawVoiceConfusion() {
-  renderVoiceConf(voiceconf, voiceShownData, voiceOfferedData, {
-    mode: displayMode,
-    minA: Math.max(0, parseInt(vcmin.value, 10) || 0),
-    minW: Math.max(0, parseInt(vcwrong.value, 10) || 0),
-  });
-}
-
-// ---------- confusion (same shape as user dashboard, server-side counts) ----------
-// A pick is normalised by how often that confuser kana was actually offered (the
-// true pairwise confusion); answers with no offered set don't appear.
-let confusionShown = null;      // t/p -> picks among opts-bearing answers (numerator)
-let confusionOffered = null;    // t/p -> times kana p was on screen when t was asked (denominator)
-
-function renderConfusion(shownRows, offeredRows) {
-  const shown = {}, offered = {};
-  for (const r of shownRows || []) shown[`${r.t}/${r.p}`] = r.n;
-  for (const r of offeredRows || []) offered[`${r.t}/${r.k}`] = r.n;
-  confusionShown = shown;
-  confusionOffered = offered;
+function renderConfusion(data) {
+  confusionShown = mapOf(data.confusion_shown, "p");
+  confusionOffered = mapOf(data.confusion_offered, "k");
+  confusionGuessed = mapOf(data.confusion_guessed, "p");
+  confusionAfterplayed = mapOf(data.confusion_afterplayed, "p");
+  confusionRelistened = mapOf(data.confusion_relistened, "k");
+  confusionRelistenedOffered = mapOf(data.confusion_relistened_offered, "k");
+  confusionSlow = mapOf(data.confusion_slow, "p");
   drawConfusion();
 }
 
 function drawConfusion() {
   if (!confusionShown) return;
-  const maps = { shown: confusionShown, offered: confusionOffered };
-  fillConfusionCells(confchart.querySelectorAll("td[data-t]"), maps, displayMode);
+  const maps = { shown: confNumerator(), offered: confDenominator() };
+  fillConfusionCells(confchart.querySelectorAll("td[data-t]"), maps, displayMode, confScheme());
   drawConsonantConfusion();
 }
 
 // Consonant matrix: collapses every vowel into confusion between the six
-// consonant classes (s z ts sh j ch). Same data/display mode as the per-vowel
-// matrix above, aggregated by consonant.
+// consonant classes (s z ts sh j ch). Same metric/mode as the per-vowel matrix.
 function drawConsonantConfusion() {
   if (!confusionShown) return;
-  const maps = aggregateByConsonant({ shown: confusionShown, offered: confusionOffered });
-  fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, displayMode);
+  const maps = aggregateByConsonant({ shown: confNumerator(), offered: confDenominator() });
+  fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, displayMode, confScheme());
+}
+
+// ---------- sound-file confusion matrix (per recording) ----------
+// Same metric switch drives it; the server precomputes every metric per recording.
+let voiceMetricMaps = null;
+
+function renderVoiceConfusion(data) {
+  voiceMetricMaps = {
+    answered: mapOf3(data.by_voice_shown, "p"),
+    offered: mapOf3(data.by_voice_offered, "k"),
+    guessed: mapOf3(data.by_voice_guessed, "p"),
+    afterplayed: mapOf3(data.by_voice_afterplayed, "p"),
+    relistened: mapOf3(data.by_voice_relistened, "k"),
+    relistenedOffered: mapOf3(data.by_voice_relistened_offered, "k"),
+    slow: mapOf3(data.by_voice_slow, "p"),
+  };
+  vcmin.oninput = drawVoiceConfusion;
+  vcwrong.oninput = drawVoiceConfusion;
+  drawVoiceConfusion();
+}
+
+function drawVoiceConfusion() {
+  if (!voiceMetricMaps) return;
+  const num = voiceMetricMaps[confMetric] || voiceMetricMaps.answered;
+  const den = confMetric === "relistened" ? voiceMetricMaps.relistenedOffered : voiceMetricMaps.offered;
+  const rows = (m, key) => Object.entries(m).map(([s, n]) => {
+    const [t, v, x] = s.split("/");
+    return { t, v, [key]: x, n };
+  });
+  // Only "answered" has a wrong axis (off-diagonal); the rest count the diagonal too.
+  const answered = confMetric === "answered";
+  vcwronglabel.textContent = answered ? "min % wrong" : "min %";
+  renderVoiceConf(voiceconf, rows(num, "p"), rows(den, "k"), {
+    mode: displayMode,
+    minA: Math.max(0, parseInt(vcmin.value, 10) || 0),
+    minW: Math.max(0, parseInt(vcwrong.value, 10) || 0),
+    scheme: confScheme(),
+    diagIsSignal: !answered,
+  });
 }

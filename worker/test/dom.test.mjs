@@ -822,6 +822,41 @@ test("stats: normal/native population toggle defaults to normal and syncs both c
   await waitFor(() => cellTxt() !== normalCell ? true : null, WAIT);
 });
 
+test("stats: the confusion metric switch (synced copy) drives both aggregate matrices", { skip: LIVE }, async (t) => {
+  // Role-0 uid so it counts in the global aggregate. A guess of za, plus a re-listen
+  // + its answer, so the alternate metrics have data. The aggregate is global, so
+  // assert >= our contribution, not exact counts.
+  const uid = randomUUID();
+  const t0 = Date.now();
+  await postEvents(uid, [
+    { ts: t0 + 1, start_ts: t0, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: "g", opts: ["sa", "za"], skill: 0 },
+    { ts: t0 + 11, start_ts: t0 + 10, target: "sa", idx: 0, picked: "", cap: 2, ms: 100, ev: "r", opts: ["sa", "za"] },
+    { ts: t0 + 12, start_ts: t0 + 10, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 },
+  ]);
+  grantPowerUser(uid, 1);
+  const { win, close } = await openPage(`/stats/?uid=${uid}`);
+  t.after(close);
+
+  const cell = () => win.confchart.querySelector('td[data-t="sa"][data-p="za"]');
+  const main = (v) => win.confmetric.querySelector(`input[value="${v}"]`);
+  const voice = (v) => win.confmetricv.querySelector(`input[value="${v}"]`);
+  await waitFor(() => /\d+\/\d+/.test(cell()?.textContent || "") ? true : null, WAIT);
+
+  assert.ok(voice("answered").checked, "the sound-file metric copy starts synced (answered)");
+  assert.equal(win.vcwronglabel.textContent, "min % wrong", "answered → 'min % wrong'");
+
+  // Switch to guessed via the main copy → the voice copy syncs and sa/za shows the guess.
+  const g = main("guessed"); g.checked = true; g.dispatchEvent(new win.Event("change", { bubbles: true }));
+  await waitFor(() => voice("guessed").checked ? true : null, WAIT);
+  const m = (cell().textContent || "").match(/^(\d+)\/(\d+)$/);
+  assert.ok(m && Number(m[1]) >= 1, `guessed za >= 1 (got ${cell().textContent})`);
+
+  // A non-answered metric relabels the filter, and flipping the voice copy syncs back.
+  const r = voice("relistened"); r.checked = true; r.dispatchEvent(new win.Event("change", { bubbles: true }));
+  await waitFor(() => main("relistened").checked ? true : null, WAIT);
+  assert.equal(win.vcwronglabel.textContent, "min %", "non-answered → 'min %'");
+});
+
 test("stats: overview shows app-wide totals (level-1, no device IDs)", { skip: LIVE }, async (t) => {
   // The overview counters moved to /stats/ (power_user >= 1), read from
   // /v1/admin/stats. Global aggregate, so assert the 6 sa answers are present

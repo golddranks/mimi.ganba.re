@@ -554,7 +554,8 @@ async function handleAdminStats(req, env, url) {
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
-  const [hourly, byMora, optsConf, ynConf, byVoiceOpts, totals, active] = await Promise.all([
+  const [hourly, byMora, optsConf, ynConf, byVoiceOpts, totals, active,
+         apConf, apVoice, relConf, relVoice, slowConf, slowVoice] = await Promise.all([
     db.prepare(
       // Hour-of-day in each user's *own* local time: shift the timestamp by their
       // tz_offset (minutes east of UTC) before bucketing, defaulting to JST (540)
@@ -580,9 +581,9 @@ async function handleAdminStats(req, env, url) {
     // how often the sound was asked. SQLite can't unnest the comma-joined opts,
     // so we expand it in JS below. opts is null on pre-migration / 'r' / 'p'.
     db.prepare(
-      `SELECT target AS t, opts AS o, picked AS p, COUNT(*) AS n
+      `SELECT target AS t, opts AS o, picked AS p, ev AS e, COUNT(*) AS n
        FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${POP} ${ACC_FILTER}
-       GROUP BY target, opts, picked`
+       GROUP BY target, opts, picked, ev`
     ).all(),
     // Y/N answers have no offered set; we synthesise one per (target, picked, ev)
     // group in JS below (confusionRecord), the same mapping the dashboard uses.
@@ -596,9 +597,9 @@ async function handleAdminStats(req, env, url) {
     // often that kana was offered for this recording, not by how often the
     // recording was asked. Expanded in JS below.
     db.prepare(
-      `SELECT target AS t, voice AS v, opts AS o, picked AS p, COUNT(*) AS n
+      `SELECT target AS t, voice AS v, opts AS o, picked AS p, ev AS e, COUNT(*) AS n
        FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND voice IS NOT NULL AND ${POP} ${ACC_FILTER}
-       GROUP BY target, voice, opts, picked`
+       GROUP BY target, voice, opts, picked, ev`
     ).all(),
     // Overview counters — app-wide aggregates with no device identifiers, so they
     // belong to this level-1 tier. `days` = distinct UTC days with any answer (the
@@ -618,20 +619,78 @@ async function handleAdminStats(req, env, url) {
          (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d7,
          (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d30`
     ).bind(d7, d30).first(),
+    // ---- the alternate confusion metrics (the server-side mirror of confusionExtras,
+    // for the /stats/ metric switch). Each shares the answered `offered` denominator,
+    // except re-listen, which has its own (every question that offered the kana). ----
+    // after-played: a choice replayed during review (ev 'p'); picked = the kana tapped.
+    db.prepare(
+      `SELECT target AS t, picked AS p, COUNT(*) AS n
+       FROM events WHERE ev = 'p' AND ${POP} ${ACC_FILTER}
+       GROUP BY target, picked`
+    ).all(),
+    // after-played per recording: a 'p' row's own voice is the *tapped* kana's, so
+    // join to the question's a/g event (same uid/target/start_ts) for its recording.
+    db.prepare(
+      `SELECT a.target AS t, a.voice AS v, pp.picked AS p, COUNT(*) AS n
+       FROM (SELECT uid, target, start_ts, picked FROM events
+             WHERE ev = 'p' AND start_ts IS NOT NULL AND ${POP} ${ACC_FILTER}) pp
+       JOIN events a ON a.uid = pp.uid AND a.target = pp.target AND a.start_ts = pp.start_ts
+                    AND a.ev IN ('a','g') AND a.voice IS NOT NULL
+       GROUP BY a.target, a.voice, pp.picked`
+    ).all(),
+    // re-listen: per question (uid,target,start_ts), whether it was re-listened (rel)
+    // and the offered set; tot = every question offering the kana (the denominator).
+    // opts/voice are constant per question, taken via MAX (voice from a/g/r — not the
+    // tapped 'p' voice). Y/N questions carry no opts, so they drop out (o IS NOT NULL).
+    db.prepare(
+      `SELECT t, o, SUM(had_r) AS rel, COUNT(*) AS tot FROM (
+         SELECT target AS t, MAX(opts) AS o,
+                MAX(CASE WHEN ev = 'r' THEN 1 ELSE 0 END) AS had_r
+         FROM events WHERE start_ts IS NOT NULL AND ev IN ('a','g','r','p') AND ${POP} ${ACC_FILTER}
+         GROUP BY uid, target, start_ts
+       ) WHERE o IS NOT NULL GROUP BY t, o`
+    ).all(),
+    db.prepare(
+      `SELECT t, v, o, SUM(had_r) AS rel, COUNT(*) AS tot FROM (
+         SELECT target AS t, MAX(opts) AS o,
+                MAX(CASE WHEN ev IN ('a','g','r') THEN voice END) AS v,
+                MAX(CASE WHEN ev = 'r' THEN 1 ELSE 0 END) AS had_r
+         FROM events WHERE start_ts IS NOT NULL AND ev IN ('a','g','r','p') AND ${POP} ${ACC_FILTER}
+         GROUP BY uid, target, start_ts
+       ) WHERE o IS NOT NULL AND v IS NOT NULL GROUP BY t, v, o`
+    ).all(),
+    // slow: each user's slowest engaged reactions (<6s) at/above their 96th percentile
+    // (PERCENT_RANK per user) — approximates the dashboard's exact nearest-rank.
+    db.prepare(
+      `SELECT t, p, COUNT(*) AS n FROM (
+         SELECT target AS t, picked AS p,
+                PERCENT_RANK() OVER (PARTITION BY uid ORDER BY ms) AS pr
+         FROM events WHERE ev IN ('a','g') AND ms > 0 AND ms < 6000 AND ${POP} ${ACC_FILTER}
+       ) WHERE pr >= 0.96 GROUP BY t, p`
+    ).all(),
+    db.prepare(
+      `SELECT t, v, p, COUNT(*) AS n FROM (
+         SELECT target AS t, voice AS v, picked AS p,
+                PERCENT_RANK() OVER (PARTITION BY uid ORDER BY ms) AS pr
+         FROM events WHERE ev IN ('a','g') AND voice IS NOT NULL AND ms > 0 AND ms < 6000 AND ${POP} ${ACC_FILTER}
+       ) WHERE pr >= 0.96 GROUP BY t, v, p`
+    ).all(),
   ]);
 
   // Expand the grouped opts sets into pairwise counts: offered[t/k] = times kana
   // k was on screen when t was asked; shown[t/p] = times p was picked among those
   // (p is always in opts, so shown <= offered and the ratio stays in [0,1]).
-  const offered = {}, shown = {};
+  const offered = {}, shown = {}, guessed = {}, afterplayed = {}, relistened = {}, relistenedOffered = {}, slow = {};
   for (const r of optsConf.results || []) {
-    shown[`${r.t}/${r.p}`] = (shown[`${r.t}/${r.p}`] || 0) + r.n;
+    shown[`${r.t}/${r.p}`] = (shown[`${r.t}/${r.p}`] || 0) + r.n;            // answered = a + g
+    if (r.e === "g") guessed[`${r.t}/${r.p}`] = (guessed[`${r.t}/${r.p}`] || 0) + r.n;
     for (const k of r.o.split(",")) offered[`${r.t}/${k}`] = (offered[`${r.t}/${k}`] || 0) + r.n;
   }
 
-  // Fold Y/N answers in via the shared synthesis (same mapping as the dashboard):
-  // each (target, picked, ev) group lands on the diagonal, and a wrong-kana prompt
-  // also on the confuser. Scales each synthesised pick by the group's row count.
+  // Fold Y/N answers into answered/offered only (Y/N has no g/p, and its 'r' carries
+  // no choice set — so it can't enter guessed/after-played/re-listened/slow): each
+  // (target, picked, ev) group lands on the diagonal, a wrong-kana prompt also on the
+  // confuser, scaled by the group's row count.
   for (const r of ynConf.results || []) {
     const rec = confusionRecord({ ev: r.e, target: r.t, picked: r.p });
     if (!rec) continue;
@@ -639,13 +698,29 @@ async function handleAdminStats(req, env, url) {
     for (const k of rec.opts) offered[`${rec.target}/${k}`] = (offered[`${rec.target}/${k}`] || 0) + r.n;
   }
 
-  // Per-recording version of the same: vShown[t/v/p] = picks of p when (t,v) was
-  // the question; vOffered[t/v/k] = times k was offered for it. (Voice names carry
-  // no "/", so the 3-part key splits cleanly.)
-  const vOffered = {}, vShown = {};
+  // Alternate metrics (mirror confusionExtras): after-played / slow are picks like
+  // shown; re-listen credits every offered kana of a re-listened question (rel) over
+  // a denominator of all questions offering it (tot).
+  for (const r of apConf.results || []) afterplayed[`${r.t}/${r.p}`] = (afterplayed[`${r.t}/${r.p}`] || 0) + r.n;
+  for (const r of slowConf.results || []) slow[`${r.t}/${r.p}`] = (slow[`${r.t}/${r.p}`] || 0) + r.n;
+  for (const r of relConf.results || []) for (const k of r.o.split(",")) {
+    relistenedOffered[`${r.t}/${k}`] = (relistenedOffered[`${r.t}/${k}`] || 0) + r.tot;
+    if (r.rel) relistened[`${r.t}/${k}`] = (relistened[`${r.t}/${k}`] || 0) + r.rel;
+  }
+
+  // Per-recording (t,v,…) versions of all of the above. (Voice names carry no "/",
+  // so the 3-part key splits cleanly.)
+  const vOffered = {}, vShown = {}, vGuessed = {}, vAfterplayed = {}, vRelistened = {}, vRelistenedOffered = {}, vSlow = {};
   for (const r of byVoiceOpts.results || []) {
     vShown[`${r.t}/${r.v}/${r.p}`] = (vShown[`${r.t}/${r.v}/${r.p}`] || 0) + r.n;
+    if (r.e === "g") vGuessed[`${r.t}/${r.v}/${r.p}`] = (vGuessed[`${r.t}/${r.v}/${r.p}`] || 0) + r.n;
     for (const k of r.o.split(",")) vOffered[`${r.t}/${r.v}/${k}`] = (vOffered[`${r.t}/${r.v}/${k}`] || 0) + r.n;
+  }
+  for (const r of apVoice.results || []) vAfterplayed[`${r.t}/${r.v}/${r.p}`] = (vAfterplayed[`${r.t}/${r.v}/${r.p}`] || 0) + r.n;
+  for (const r of slowVoice.results || []) vSlow[`${r.t}/${r.v}/${r.p}`] = (vSlow[`${r.t}/${r.v}/${r.p}`] || 0) + r.n;
+  for (const r of relVoice.results || []) for (const k of r.o.split(",")) {
+    vRelistenedOffered[`${r.t}/${r.v}/${k}`] = (vRelistenedOffered[`${r.t}/${r.v}/${k}`] || 0) + r.tot;
+    if (r.rel) vRelistened[`${r.t}/${r.v}/${k}`] = (vRelistened[`${r.t}/${r.v}/${k}`] || 0) + r.rel;
   }
 
   const rowsOf = (m, key) => Object.entries(m).map(([pair, n]) => {
@@ -662,10 +737,20 @@ async function handleAdminStats(req, env, url) {
     active,
     hourly:    hourly.results     || [],
     by_mora:   byMora.results     || [],
-    confusion_shown:   rowsOf(shown, "p"),
-    confusion_offered: rowsOf(offered, "k"),
-    by_voice_shown:     rowsOf3(vShown, "p"),
-    by_voice_offered:   rowsOf3(vOffered, "k"),
+    confusion_shown:              rowsOf(shown, "p"),
+    confusion_offered:            rowsOf(offered, "k"),
+    confusion_guessed:            rowsOf(guessed, "p"),
+    confusion_afterplayed:        rowsOf(afterplayed, "p"),
+    confusion_relistened:         rowsOf(relistened, "k"),
+    confusion_relistened_offered: rowsOf(relistenedOffered, "k"),
+    confusion_slow:               rowsOf(slow, "p"),
+    by_voice_shown:               rowsOf3(vShown, "p"),
+    by_voice_offered:             rowsOf3(vOffered, "k"),
+    by_voice_guessed:             rowsOf3(vGuessed, "p"),
+    by_voice_afterplayed:         rowsOf3(vAfterplayed, "p"),
+    by_voice_relistened:          rowsOf3(vRelistened, "k"),
+    by_voice_relistened_offered:  rowsOf3(vRelistenedOffered, "k"),
+    by_voice_slow:                rowsOf3(vSlow, "p"),
   });
 }
 
