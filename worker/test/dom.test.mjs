@@ -803,6 +803,42 @@ test("dashboard: no drift notice when viewing someone else's data", { skip: LIVE
   assert.equal(win.uidform.hidden, true, "level-1 viewer can view a shared link but gets no load-as form");
 });
 
+test("dashboard: a Y/N diagonal-miss doesn't keep drifting after a sync", async (t) => {
+  // Regression: a Y/N "no" on a correct-kana prompt (heard the right kana, said
+  // no) is a diagonal miss with no confuser. The matrix once hand-rolled its own
+  // shown map and logged a phantom `sa/` key the grind tally never produces, so
+  // the drift notice stuck even right after Sync — "sync and refresh, same
+  // message". Now matrix + tally are one projection of one tally, so it settles.
+  const uid = await freshTestUser();
+  const t0 = Date.now();
+  const yn = (i, ev, picked) => ({ ts: t0 + i, target: "sa", idx: 0, picked, cap: 2, ms: 500, ev });
+  const events = [
+    yn(1, "y", "sa"),   // diagonal hit
+    yn(2, "n", "sa"),   // diagonal MISS, no confuser — the phantom-key trigger
+    yn(3, "y", "za"),   // wrong-kana, wrong → confused sa→za
+  ];
+  assert.equal((await postEvents(uid, events)).status, 200);
+
+  // First load with an empty tally → drift; Sync rebuilds it from the events.
+  const cellReady = (w) => w.confchart.querySelector('td[data-t="sa"][data-p="za"]')?.textContent?.includes("/") ? true : null;
+  const first = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => { w.localStorage.setItem("uid", uid); w.localStorage.setItem("grind_tally", "{}"); },
+  });
+  t.after(first.close);
+  await waitFor(() => cellReady(first.win), WAIT);
+  assert.equal(first.win.syncnotice.hidden, false, "empty tally vs server data drifts");
+  first.win.syncbtn.click();
+  const synced = first.win.localStorage.getItem("grind_tally");
+
+  // The "refresh" the user did: reload carrying the just-synced tally → settled.
+  const second = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => { w.localStorage.setItem("uid", uid); w.localStorage.setItem("grind_tally", synced); },
+  });
+  t.after(second.close);
+  await waitFor(() => cellReady(second.win), WAIT);
+  assert.equal(second.win.syncnotice.hidden, true, "after Sync + reload the drift notice is gone");
+});
+
 test("dashboard: viewing another user's dashboard is denied without power", async (t) => {
   const other = randomUUID();   // a uid we don't own
   const me = randomUUID();      // a normal (non-power) viewer

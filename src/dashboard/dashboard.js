@@ -1,7 +1,7 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { dateKey, dayKey } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, consonantCounts, fillConfusionCells } from "../shared/confusion.js";
-import { tallyFromEvents, tallyMaps, confusionRecord } from "../shared/tally.js";
+import { tallyFromEvents, tallyMaps, confusionMaps, confusionRecord } from "../shared/tally.js";
 import { HIRAGANA } from "../shared/kana.js";
 import { isAnswerEv, answeredRight } from "../shared/events.js";
 import { pushSupported, currentSubscription, subscribe, unsubscribe } from "../shared/push.js";
@@ -405,24 +405,22 @@ let cellSeries = [];
 let cellDiag = false;   // is the shown cell on the diagonal — there a ✕ is a wrong pick, so the tapped mark surfaces which kana was chosen
 
 function renderConfusion(events) {
-  const shown = {}, offered = {};
+  // The matrix is one projection (confusionMaps) of one tally (tallyFromEvents) —
+  // the exact tally the app builds live and the drift check compares against, so
+  // the displayed matrix and the grind tally can't disagree. (Hand-rolling the
+  // shown/offered maps here is what let them drift, flagging "out of sync"
+  // forever.) The per-event loop below is only for the cell-history strip, which
+  // needs each answer's timestamp/pick — detail a tally aggregates away.
+  const { shown, offered } = confusionMaps(tallyFromEvents(events));
   confusionEvents = [];
   for (const e of events) {
     // confusionRecord normalises multi-choice (a/g) and Y/N (y/n) into the same
-    // { target, picked, opts } shape — see shared/tally.js. Y/N: a correct
-    // judgement reads as picking the target (diagonal); a wrong one as the
-    // confuser (wrong-kana prompt) or a diagonal miss (correct-kana prompt). The
-    // confuser kana is offered only when it was the one shown, so a wrong-kana
-    // answer lands on both the diagonal and the confuser cell. Answers with no
-    // offered set (pre-`opts`) yield no record and simply don't appear.
+    // { target, picked, opts } shape — see shared/tally.js. A Y/N diagonal-miss
+    // (heard the right kana, said "no") has picked "" with no confuser; it's still
+    // a ✕ on the diagonal cell (opts includes the target), so keep the event even
+    // though it adds nothing to shown. Answers with no offered set yield no record.
     const r = confusionRecord(e);
-    if (r) {
-      // picked is always in opts (or "" for a Y/N miss), so shown[T/P] <=
-      // offered[T/P] and the ratio stays in [0,1].
-      shown[`${r.target}/${r.picked}`] = (shown[`${r.target}/${r.picked}`] || 0) + 1;
-      for (const k of r.opts) offered[`${r.target}/${k}`] = (offered[`${r.target}/${k}`] || 0) + 1;
-      confusionEvents.push({ ...e, picked: r.picked, opts: r.opts.join(",") });
-    }
+    if (r) confusionEvents.push({ ...e, picked: r.picked, opts: r.opts.join(",") });
   }
   confusionEvents.sort((a, b) => a.ts - b.ts);
   confusionShown = shown;
@@ -621,19 +619,18 @@ confchart.addEventListener("click", (e) => {
 // ---------- local drill-tally drift ----------
 // The app keeps a localStorage `grind_tally` (built from your answers) that the
 // day-start probe reads; it never re-syncs with the server, so after local DB
-// resets it can drift from what this dashboard shows. Detect that and offer a
+// resets it can drift from what the server's events say. Detect that and offer a
 // one-click resync that rebuilds the tally from these events. Only when viewing
 // your OWN uid — the tally is the viewer's, so comparing it to someone else's
-// events would be meaningless. The tally build (tallyFromEvents) and the
-// shown/offered projection (tallyMaps) come from shared/tally.js — the same code
-// the app uses, so what we compare against is exactly what the app would build.
+// events would be meaningless. Drift = the stored tally and the events-rebuilt
+// tally project to different confusion maps; both go through tally.js's tallyMaps
+// — the same projection the matrix renders (confusionMaps) and the app builds —
+// so a settled sync stays settled.
 
 const sameMap = (a, b) => {
   const ak = Object.keys(a);
   return ak.length === Object.keys(b).length && ak.every((k) => a[k] === b[k]);
 };
-// The confusion maps include the diagonal; the tally never does — drop it to compare like-for-like.
-const offDiag = (m) => Object.fromEntries(Object.entries(m).filter(([k]) => { const [t, p] = k.split("/"); return t !== p; }));
 
 let pendingSync = null;   // tally rebuilt from the DB, written on Sync
 
@@ -641,9 +638,10 @@ function checkTallyDrift(events) {
   if (uid !== viewerUid) { syncnotice.hidden = true; pendingSync = null; return; }  // own data only
   let stored = {};
   try { stored = JSON.parse(localStorage.grind_tally) || {}; } catch { }
-  const s = tallyMaps(stored);
-  const drift = !sameMap(s.shown, offDiag(confusionShown)) || !sameMap(s.offered, offDiag(confusionOffered));
-  pendingSync = drift ? tallyFromEvents(events) : null;
+  const server = tallyFromEvents(events);
+  const a = tallyMaps(stored), b = tallyMaps(server);
+  const drift = !sameMap(a.shown, b.shown) || !sameMap(a.offered, b.offered);
+  pendingSync = drift ? server : null;
   syncnotice.hidden = !drift;
 }
 

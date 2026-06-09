@@ -78,3 +78,18 @@ export function tallyMaps(tally) {
   }
   return { shown, offered };
 }
+
+// The confusion matrix the dashboard *renders* — tallyMaps plus the diagonal:
+// shown[T/T] = correct picks, offered[T/T] = total answers for T (T is always
+// offered, so it's the per-sound denominator). Built on tallyMaps, so its
+// off-diagonal is the drift check's basis by construction — the dashboard's
+// matrix and the grind tally are one projection of one tally, never two that can
+// disagree (that divergence was the permanent-"out of sync" bug).
+export function confusionMaps(tally) {
+  const { shown, offered } = tallyMaps(tally);
+  for (const target of Object.keys(tally)) {
+    shown[`${target}/${target}`] = tally[target].correct || 0;
+    offered[`${target}/${target}`] = tally[target].n || 0;
+  }
+  return { shown, offered };
+}
