@@ -134,6 +134,57 @@ export function confusionExtras(events) {
   return { guessed, afterPlayed, reListened, reListenedOffered, slow };
 }
 
+// Per-recording (target, voice) versions of every confusion metric — the
+// sound-file matrix's counterpart of confusionExtras + confusionMaps, each map
+// keyed `target/voice/kana`. `answered`/`offered` come straight from a/g answers
+// (so they cover pre-start_ts rows the way the matrix always has). The rest need
+// the per-question key: a re-listen is counted once per question, and an after-play
+// must attribute to the QUESTION's recording — its own `voice` is the *tapped*
+// kana's — so the recording comes from the start_ts group (any a/g/r event of it).
+// relistenedOffered is the re-listen denominator (every question that offered the
+// kana, answered or not); the others normalise by `offered`.
+export function confusionExtrasByVoice(events) {
+  const answered = {}, guessed = {}, relistened = {}, afterplayed = {}, slow = {}, offered = {}, relistenedOffered = {};
+  const bump = (m, t, v, p) => { const k = `${t}/${v}/${p}`; m[k] = (m[k] || 0) + 1; };
+  const reactions = [], engaged = [];   // for the slow-reaction percentile (same as confusionExtras, per recording)
+  for (const e of events) {
+    if ((e.ev !== "a" && e.ev !== "g") || !e.voice) continue;
+    const r = confusionRecord(e);
+    if (!r) continue;
+    bump(answered, r.target, e.voice, r.picked);
+    if (e.ev === "g") bump(guessed, r.target, e.voice, r.picked);
+    for (const k of r.opts) bump(offered, r.target, e.voice, k);
+    if (typeof e.ms === "number") {
+      reactions.push({ t: r.target, v: e.voice, p: r.picked, ms: e.ms });
+      if (e.ms < SLOW_CAP_MS) engaged.push(e.ms);
+    }
+  }
+  const p96 = nearestRankPctile(engaged, SLOW_PCTL);
+  if (p96 != null) for (const a of reactions) if (a.ms >= p96 && a.ms < SLOW_CAP_MS) bump(slow, a.t, a.v, a.p);
+  // Per-question pass: the question's recording (voice) carries the re-listen and
+  // every after-play of that question, regardless of which kana was tapped.
+  const Q = new Map();   // start_ts -> { target, voice, opts, relistened, plays:[…] }
+  for (const e of events) {
+    if (e.start_ts == null) continue;
+    const q = Q.get(e.start_ts) || { target: e.target, voice: null, opts: null, relistened: false, plays: [] };
+    if ((e.ev === "a" || e.ev === "g" || e.ev === "r") && e.voice) q.voice = e.voice;
+    if (e.opts) q.opts = e.opts.split(",");
+    if (e.ev === "r") q.relistened = true;
+    if (e.ev === "p") q.plays.push(e.picked);
+    Q.set(e.start_ts, q);
+  }
+  for (const q of Q.values()) {
+    if (!q.voice) continue;
+    for (const p of q.plays) bump(afterplayed, q.target, q.voice, p);
+    if (!q.opts) continue;
+    for (const k of q.opts) {
+      bump(relistenedOffered, q.target, q.voice, k);
+      if (q.relistened) bump(relistened, q.target, q.voice, k);
+    }
+  }
+  return { answered, guessed, relistened, afterplayed, slow, offered, relistenedOffered };
+}
+
 // Build the shown[T/P] (wrong picks) and offered[T/P] (offers) maps the target
 // classifier expects from a tally. The diagonal (T/T) is never present — bump
 // records correct picks only as `correct`, never in conf/offered.

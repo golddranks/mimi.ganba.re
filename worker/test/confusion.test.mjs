@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { pAbove20, confusionTargets, logisticFit, logisticAt, logisticTrend } from "../../src/shared/confusion.js";
-import { confusionExtras } from "../../src/shared/tally.js";
+import { confusionExtras, confusionExtrasByVoice } from "../../src/shared/tally.js";
 
 test("confusionExtras: guessed (incl. correct→diagonal), after-played, re-listened", () => {
   const ev = (q, ts, kind, picked, opts) => ({ target: "sa", ts, ms: ts - q, ev: kind, picked, opts: opts && opts.join(","), start_ts: q });
@@ -54,6 +54,27 @@ test("confusionExtras: a re-listen is scoped to its own question, not a later sa
   const { reListened, reListenedOffered } = confusionExtras(events);
   assert.equal(reListened["su/su"], 1, "only the re-listened question (Q2) counts, not Q1");
   assert.equal(reListenedOffered["su/su"], 2, "both questions in the denominator");
+});
+
+test("confusionExtrasByVoice: per-recording metrics; after-play uses the question's recording", () => {
+  const events = [
+    // Q1 (start_ts 1000): recording v1 of sa, offered [sa,za]; answered sa, then
+    // after-played za. The 'p' event's OWN voice is za's recording 'vza', but it
+    // must attribute to the question's recording v1.
+    { target: "sa", ts: 1010, ms: 10, ev: "a", picked: "sa", opts: "sa,za", voice: "v1", start_ts: 1000 },
+    { target: "sa", ts: 1020, ms: 20, ev: "p", picked: "za", voice: "vza", start_ts: 1000 },
+    // Q2 (start_ts 2000): recording v1 again; re-listened then abandoned (no answer).
+    { target: "sa", ts: 2010, ms: 10, ev: "r", picked: "", opts: "sa,za", voice: "v1", start_ts: 2000 },
+    // Q3 (start_ts 3000): recording v2; guessed za (wrong).
+    { target: "sa", ts: 3010, ms: 10, ev: "g", picked: "za", opts: "sa,za", voice: "v2", start_ts: 3000 },
+  ];
+  const m = confusionExtrasByVoice(events);
+  assert.equal(m.answered["sa/v1/sa"], 1, "answered keyed by the question's recording");
+  assert.equal(m.guessed["sa/v2/za"], 1, "guess on recording v2");
+  assert.equal(m.afterplayed["sa/v1/za"], 1, "after-play attributes to v1 (the question), not vza (the tapped kana)");
+  assert.equal(m.relistened["sa/v1/za"], 1, "abandoned re-listen on v1 credited");
+  assert.equal(m.relistenedOffered["sa/v1/za"], 2, "v1 offered za in Q1 (answered) + Q2 (re-listened)");
+  assert.equal(m.offered["sa/v1/za"], 1, "the answered-offers denominator counts only Q1");
 });
 
 test("confusionExtras: slow = slowest engaged (<6s) reactions at the 96th pct", () => {

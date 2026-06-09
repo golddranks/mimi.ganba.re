@@ -1,7 +1,7 @@
 import { LEVELS, levelIdx, capFor, onCorrect, onWrong, onRelisten } from "../shared/skill.js";
 import { pad2, dayKeyTz } from "../shared/dates.js";
 import { confusionTargets, logisticTrend, logisticAt, aggregateByConsonant, consonantCounts, fillConfusionCells } from "../shared/confusion.js";
-import { tallyFromEvents, tallyMaps, confusionMaps, confusionRecord, confusionExtras } from "../shared/tally.js";
+import { tallyFromEvents, tallyMaps, confusionMaps, confusionRecord, confusionExtras, confusionExtrasByVoice } from "../shared/tally.js";
 import { HIRAGANA } from "../shared/kana.js";
 import { isAnswerEv, answeredRight, isPenalizedRelisten } from "../shared/events.js";
 import { pushSupported, currentSubscription, subscribe, unsubscribe } from "../shared/push.js";
@@ -430,7 +430,8 @@ let confusionGuessed = null, confusionAfterplayed = null, confusionRelistened = 
 // Rings/cell-history/drift always use the picks (confusionShown), regardless.
 let confMetric = wireSwitchGroup(document.querySelectorAll('[data-switch="metric"]'), (m) => {
   confMetric = m;
-  drawConfusion();   // redraws the vowel + consonant matrices with the new numerator
+  drawConfusion();   // vowel + consonant matrices
+  drawVoiceConf();   // and the sound-file matrix (same metric, its own selector stays in sync)
 });
 const confNumerator = () => ({
   answered: confusionShown, guessed: confusionGuessed, relistened: confusionRelistened,
@@ -505,33 +506,28 @@ function drawConsonantConfusion() {
 
 // ---------- per-recording (sound-file) confusion ----------
 // The viewer's own version of the admin matrix: which recordings they confuse
-// with which kana. Computed from the same opts-bearing a/g answers as the main
-// matrix, but keyed by the question's recording (e.voice) too — matching the
-// server's by_voice_shown/offered. Y/N answers carry no recording, so excluded.
-let voiceShownRows = [], voiceOfferedRows = [];
+// with which kana, keyed by the question's recording (e.voice) — matching the
+// server's by_voice_shown/offered. Same metric switch as the main matrix
+// (confMetric), so confusionExtrasByVoice precomputes every metric's maps and
+// drawVoiceConf picks the selected one. Y/N answers carry no recording, so excluded.
+let voiceMetricMaps = null;
 
 function renderVoiceConfusion(events) {
-  const shown = {}, offered = {};
-  for (const e of events) {
-    if ((e.ev !== "a" && e.ev !== "g") || !e.voice) continue;
-    const r = confusionRecord(e);
-    if (!r) continue;   // no offered set
-    shown[`${r.target}/${e.voice}/${r.picked}`] = (shown[`${r.target}/${e.voice}/${r.picked}`] || 0) + 1;
-    for (const k of r.opts) offered[`${r.target}/${e.voice}/${k}`] = (offered[`${r.target}/${e.voice}/${k}`] || 0) + 1;
-  }
-  const rows = (m, key) => Object.entries(m).map(([s, n]) => {
-    const [t, v, x] = s.split("/");
-    return { t, v, [key]: x, n };
-  });
-  voiceShownRows = rows(shown, "p");
-  voiceOfferedRows = rows(offered, "k");
+  voiceMetricMaps = confusionExtrasByVoice(events);
   vcmin.oninput = drawVoiceConf;
   vcwrong.oninput = drawVoiceConf;
   drawVoiceConf();
 }
 
 function drawVoiceConf() {
-  renderVoiceConf(voiceconf, voiceShownRows, voiceOfferedRows, {
+  if (!voiceMetricMaps) return;
+  const num = voiceMetricMaps[confMetric] || voiceMetricMaps.answered;
+  const den = confMetric === "relistened" ? voiceMetricMaps.relistenedOffered : voiceMetricMaps.offered;
+  const rows = (m, key) => Object.entries(m).map(([s, n]) => {
+    const [t, v, x] = s.split("/");
+    return { t, v, [key]: x, n };
+  });
+  renderVoiceConf(voiceconf, rows(num, "p"), rows(den, "k"), {
     mode: displayMode,
     minA: Math.max(0, parseInt(vcmin.value, 10) || 0),
     minW: Math.max(0, parseInt(vcwrong.value, 10) || 0),

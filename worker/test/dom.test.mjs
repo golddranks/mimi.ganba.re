@@ -601,6 +601,30 @@ test("dashboard: a re-listen with no answer still shows in the re-listen metric"
   assert.equal(cell().textContent, "1/2", "unanswered re-listen counts; denominator = both questions that offered za");
 });
 
+test("dashboard: the sound-file matrix has a synced metric switch that drives it", { skip: LIVE }, async (t) => {
+  const uid = await freshTestUser();
+  await postEvents(uid, saFixture(Date.now()));   // a/g answers (no guesses) → answered populated, guessed all-zero
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, { setup: (w) => w.localStorage.setItem("uid", uid) });
+  t.after(close);
+  const main = (v) => win.confmetric.querySelector(`input[value="${v}"]`);
+  const voice = (v) => win.confmetricv.querySelector(`input[value="${v}"]`);
+  await waitFor(() => win.voiceconf.querySelector("td") ? true : null, WAIT);
+
+  assert.ok(voice("answered").checked, "the duplicate selector starts in sync (answered)");
+  const answeredHtml = win.voiceconf.innerHTML;
+
+  // Flip the MAIN switch → the voice copy syncs AND the sound-file matrix re-renders.
+  const g = main("guessed"); g.checked = true; g.dispatchEvent(new win.Event("change", { bubbles: true }));
+  await waitFor(() => voice("guessed").checked ? true : null, WAIT);
+  assert.ok(voice("guessed").checked, "the voice selector synced to guessed");
+  assert.notEqual(win.voiceconf.innerHTML, answeredHtml, "the sound-file matrix re-rendered for the new metric");
+
+  // Flip the VOICE copy → the main one syncs back.
+  const r = voice("relistened"); r.checked = true; r.dispatchEvent(new win.Event("change", { bubbles: true }));
+  await waitFor(() => main("relistened").checked ? true : null, WAIT);
+  assert.ok(main("relistened").checked, "the main selector synced from the voice copy");
+});
+
 test("dashboard: a one-sided cell reads 'consistent', not 'no clear trend'", async (t) => {
   // 8 sa-questions with za offered, always answered sa → never confused (0/8).
   const uid = await freshTestUser();

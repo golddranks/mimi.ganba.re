@@ -132,6 +132,15 @@
         <section class="card span2">
             <details id="voiceconfdetails">
                 <summary>Sound-file confusion matrix <span class="sub">— per recording, grouped by sound</span></summary>
+                <!-- A second copy of the main matrix's metric switch; wireSwitchGroup
+                     finds every [data-switch="metric"] and keeps them in sync. -->
+                <span class="modeswitch" data-switch="metric" id="confmetricv">
+                    <label><input type="radio" name="confmetricv" value="answered" checked>answered</label>
+                    <label><input type="radio" name="confmetricv" value="guessed">guessed</label>
+                    <label><input type="radio" name="confmetricv" value="relistened">re-listened</label>
+                    <label><input type="radio" name="confmetricv" value="afterplayed">after-played</label>
+                    <label><input type="radio" name="confmetricv" value="slow">slow</label>
+                </span>
                 <!--include:voice-confusion-body.html vcmin="1" vcwrong="0" minacc="" pop=""-->
             </details>
         </section>
