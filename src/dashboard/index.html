@@ -25,9 +25,8 @@
 
     <main id="dash">
         <section id="overview" class="card span2">
-            <div class="uid">Device ID: <span class="uid-value"></span></div>
+            <div class="uid">Device ID: <span class="uid-value"></span><span id="nativebadge" hidden> · native testing mode</span></div>
             <script>document.currentScript.previousElementSibling.querySelector(".uid-value").textContent=new URLSearchParams(location.search).get("uid")||localStorage.getItem("uid")||"";</script>
-            <div class="uid" id="retention" hidden></div>
             <div class="stats">
                 <div class="stat"><div class="n" data-stat="answers">0</div><div class="l">answers</div></div>
                 <div class="stat"><div class="n" data-stat="correct">0</div><div class="l">correct</div></div>
@@ -37,6 +36,7 @@
                 <div class="stat"><div class="n" data-stat="relisten">0</div><div class="l">re-listens</div></div>
                 <div class="stat"><div class="n" data-stat="first">—</div><div class="l">first seen</div></div>
                 <div class="stat"><div class="n" data-stat="last">—</div><div class="l">last seen</div></div>
+                <div class="stat" id="retention" hidden><div class="n" data-stat="kept">—</div><div class="l">kept until</div></div>
             </div>
             <div id="reminders" hidden>
                 <span id="reminderstatus"></span>

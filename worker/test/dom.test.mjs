@@ -1205,7 +1205,19 @@ test("dashboard: shows the data-kept-until date", { skip: LIVE }, async (t) => {
   });
   t.after(close);
   await waitFor(() => win.retention && !win.retention.hidden ? true : null, WAIT);
-  assert.match(win.retention.textContent, /Data kept until \d{4}-\d{2}-\d{2}/, "retention line shows a date");
+  assert.match(win.retention.querySelector('[data-stat="kept"]').textContent, /^\d{4}-\d{2}-\d{2}$/, "kept-until stat shows a date");
+});
+
+test("dashboard: native testers (role 2) get a native-testing badge", { skip: LIVE }, async (t) => {
+  const uid = await freshTestUser();
+  await postEvents(uid, saFixture(Date.now()));
+  localSql(`UPDATE users SET role=2 WHERE uid='${uid}'`);
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),
+  });
+  t.after(close);
+  await waitFor(() => win.nativebadge && !win.nativebadge.hidden ? true : null, WAIT);
+  assert.match(win.nativebadge.textContent, /native testing mode/);
 });
 
 // Runs LAST: triggering /__scheduled drops this process's keep-alive socket to the

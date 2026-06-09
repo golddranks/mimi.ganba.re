@@ -340,15 +340,17 @@ async function handleGetEvents(req, env, url) {
     env.mimi_stats.prepare(
       "SELECT ts, target, idx, picked, cap, ms, ev, voice, opts, start_ts FROM events WHERE uid = ? ORDER BY ts ASC"
     ).bind(uid).all(),
-    env.mimi_stats.prepare("SELECT tz_offset, delete_after FROM users WHERE uid = ?").bind(uid).first(),
+    env.mimi_stats.prepare("SELECT tz_offset, delete_after, role FROM users WHERE uid = ?").bind(uid).first(),
   ]);
   // tz_offset (minutes east of UTC) lets the dashboard bucket this user's hour-of-day
   // in their own local time; delete_after is the retention horizon shown on the
-  // dashboard. Both null only for a user with no row yet.
+  // dashboard; role surfaces the native-testing badge (role 2). All null only for a
+  // user with no row yet.
   return json({
     events: rows.results || [],
     tz_offset: user ? user.tz_offset : null,
     delete_after: user ? user.delete_after : null,
+    role: user ? user.role : null,
   });
 }
 
