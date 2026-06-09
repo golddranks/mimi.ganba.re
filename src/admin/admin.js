@@ -1,4 +1,5 @@
 import { dayBarChart, dayTip, calendarSpan } from "../shared/daychart.js";
+import { dayKey } from "../shared/dates.js";
 
 // Level-2 admin panel: per-user / uid-drilldown stats — everything here carries
 // device identifiers. Fetches one endpoint into the static skeleton in
@@ -82,11 +83,12 @@ function showUnauthorized(page) {
 // stack reveals the contributing uids — same pattern as the histograms.
 function renderDaily(daily, uids) {
   if (!daily || daily.length === 0) { dailychart.textContent = "(no data)"; return; }
-  // Calendar-uniform across the server's day range (it already reaches "today"
-  // via cross-user activity, so — unlike the per-user dashboard — there's no
-  // missing-current-week issue to extend past it).
+  // Calendar-uniform across the server's day range, extended to today (in the
+  // viewer's local day) so the current day always shows a slot — early in the
+  // day there may be no activity yet, like the per-user dashboard does.
   const map = new Map(daily.map((r) => [r.d, r]));
-  const days = calendarSpan(daily[0].d, daily[daily.length - 1].d, (k) => {
+  const lastKey = [daily[daily.length - 1].d, dayKey(Date.now())].sort().pop();
+  const days = calendarSpan(daily[0].d, lastKey, (k) => {
     const r = map.get(k) || { n: 0, correct: 0 };
     return { n: r.n, correct: r.correct };
   });
