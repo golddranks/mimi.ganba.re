@@ -7,6 +7,7 @@
 // aggregates exclude (EXCLUDE_TEST in src/index.js). Prune prod rows with:
 //   wrangler d1 execute mimi-stats --remote \
 //     --command="DELETE FROM events WHERE uid='00000000-0000-4000-8000-000000000000'"
+import "./retry-fetch.mjs";   // tolerate wrangler dev's occasional keep-alive socket resets
 import { test } from "node:test";
 import assert from "node:assert/strict";
 

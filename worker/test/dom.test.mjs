@@ -10,6 +10,7 @@
 // events and the exact-count assertions hold against prod too. The admin test
 // is the lone exception (it needs power_user via local SQL *and* its rows must
 // stay in the aggregate), so it skips in live mode.
+import "./retry-fetch.mjs";   // tolerate wrangler dev's occasional keep-alive socket resets
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
