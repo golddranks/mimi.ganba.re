@@ -3,7 +3,7 @@
 // best-grind / probe selection the dashboard borders and grind mode rely on.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pAbove20, confusionTargets, logisticFit, logisticAt, logisticTrend } from "../../src/shared/confusion.js";
+import { pAbove20, confusionTargets, logisticFit, logisticAt, logisticTrend, confusionBg } from "../../src/shared/confusion.js";
 import { confusionExtras, confusionExtrasByVoice } from "../../src/shared/tally.js";
 
 test("confusionExtras: guessed (incl. correct→diagonal), after-played, re-listened", () => {
@@ -75,6 +75,14 @@ test("confusionExtrasByVoice: per-recording metrics; after-play uses the questio
   assert.equal(m.relistened["sa/v1/za"], 1, "abandoned re-listen on v1 credited");
   assert.equal(m.relistenedOffered["sa/v1/za"], 2, "v1 offered za in Q1 (answered) + Q2 (re-listened)");
   assert.equal(m.offered["sa/v1/za"], 1, "the answered-offers denominator counts only Q1");
+});
+
+test("confusionBg: neutral scheme drops the right/wrong hues for one accent colour", () => {
+  assert.match(confusionBg(1, true, 1, 1, "outcome"), /--good/);     // diagonal = correct
+  assert.match(confusionBg(1, false, 1, 1, "outcome"), /--bad/);     // off-diagonal = wrong
+  assert.match(confusionBg(1, true, 1, 1, "neutral"), /--accent/);   // no right/wrong: accent for both
+  assert.match(confusionBg(1, false, 1, 1, "neutral"), /--accent/);
+  assert.doesNotMatch(confusionBg(1, false, 1, 1, "neutral"), /--bad/);
 });
 
 test("confusionExtras: slow = slowest engaged (<6s) reactions at the 96th pct", () => {

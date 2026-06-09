@@ -25,7 +25,7 @@ export function playVoice(mora, voice) {
 // removed ones drop out). `minA` = min times asked, `minW` = min worst-confusion
 // %, `mode` = "pct"|"count". Cells show the same pairwise pick-when-offered value
 // as the main confusion matrix; rows are ordered hardest-first within each sound.
-export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, minA, minW }) {
+export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, minA, minW, scheme = "outcome" }) {
   const map = window.VOICE_MAP || {};
   const shown = {}, offered = {};
   for (const r of shownRows) shown[`${r.t}/${r.v}/${r.p}`] = r.n;
@@ -111,7 +111,7 @@ export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, mi
         const diag = row.m === p;
         const cls = ((diag ? "diag" : "") + (val.raw === 0 ? " empty" : "")).trim();
         // No-data cells: no inline bg, so the .empty CSS (light grey) shows.
-        const style = val.raw === 0 ? "" : ` style="background:${confusionBg(val.mag, diag, maxOn, maxOff)}"`;
+        const style = val.raw === 0 ? "" : ` style="background:${confusionBg(val.mag, diag, maxOn, maxOff, scheme)}"`;
         body += `<td class="${cls}"${style} title="${row.m} (${row.voice}) → ${p}: ${val.raw}">${val.display}</td>`;
       }
       body += `</tr>`;

@@ -440,6 +440,9 @@ const confNumerator = () => ({
 // Re-listen counts against every question that offered the kana (answered or not),
 // so it uses its own denominator; the others normalise by answered offers.
 const confDenominator = () => confMetric === "relistened" ? confusionRelistenedOffered : confusionOffered;
+// Re-listen / after-play have no wrong axis, so they drop the red/green right-wrong
+// colouring for a single neutral hue (see confusionBg). The others keep it.
+const confScheme = () => (confMetric === "relistened" || confMetric === "afterplayed") ? "neutral" : "outcome";
 
 // Confusion-bearing answers (multi-choice + the synthesised Y/N picks), kept
 // chronological for the click-to-inspect cell history. Each carries the
@@ -481,7 +484,7 @@ function drawConfusion() {
   if (!confusionShown) return;
   const maps = { shown: confNumerator(), offered: confDenominator() };
   const cells = confchart.querySelectorAll("td[data-t]");
-  fillConfusionCells(cells, maps, displayMode);
+  fillConfusionCells(cells, maps, displayMode, confScheme());
 
   // Grind/probe rings are a property of the pick-when-offered data, not the
   // display mode, so they're marked in every mode (see shared/confusion.js). The
@@ -501,7 +504,7 @@ function drawConfusion() {
 function drawConsonantConfusion() {
   if (!confusionShown) return;
   const maps = aggregateByConsonant({ shown: confNumerator(), offered: confDenominator() });
-  fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, displayMode);
+  fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, displayMode, confScheme());
 }
 
 // ---------- per-recording (sound-file) confusion ----------
@@ -531,6 +534,7 @@ function drawVoiceConf() {
     mode: displayMode,
     minA: Math.max(0, parseInt(vcmin.value, 10) || 0),
     minW: Math.max(0, parseInt(vcwrong.value, 10) || 0),
+    scheme: confScheme(),
   });
 }
 

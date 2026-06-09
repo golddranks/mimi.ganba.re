@@ -176,10 +176,15 @@ export function confusionValue(maps, t, p, mode) {
 
 // Cell background for a magnitude, normalised within its category (diagonal vs
 // off-diagonal) so off-diagonal errors aren't drowned out by big correct counts.
-export function confusionBg(mag, diag, maxOn, maxOff) {
+// `scheme` "outcome" colours by correctness — diagonal green (--good), off-diagonal
+// red (--bad), reading as right/wrong (answered, guessed, slow). "neutral" uses one
+// accent hue for both: re-listened / after-played have no wrong axis (a re-listen is
+// counted on every offered kana; an after-play just replays a choice), so red/green
+// would imply a "wrong" that isn't there. Only the hue changes; intensity is the same.
+export function confusionBg(mag, diag, maxOn, maxOff, scheme = "outcome") {
   if (!(mag > 0)) return "transparent";
   const a = diag ? (maxOn ? mag / maxOn : 0) : (maxOff ? mag / maxOff : 0);
-  const base = diag ? "var(--good)" : "var(--bad)";
+  const base = scheme === "neutral" ? "var(--accent)" : (diag ? "var(--good)" : "var(--bad)");
   const pct = Math.round((diag ? 15 : 20) + a * (diag ? 55 : 60));
   return `color-mix(in srgb, ${base} ${pct}%, transparent)`;
 }
@@ -187,7 +192,7 @@ export function confusionBg(mag, diag, maxOn, maxOff) {
 // Paint a set of td[data-t][data-p] cells from `maps`: two passes (find the
 // per-category maxima, then colour). Sets background, textContent and .empty.
 // Grind/probe marking is left to the caller (dashboard's per-vowel matrix only).
-export function fillConfusionCells(cells, maps, mode) {
+export function fillConfusionCells(cells, maps, mode, scheme = "outcome") {
   let maxOn = 0, maxOff = 0;
   const seen = [];
   for (const td of cells) {
@@ -199,7 +204,7 @@ export function fillConfusionCells(cells, maps, mode) {
   for (const [td, diag, v] of seen) {
     // No-data cells (never offered): clear the inline bg so the .empty CSS — a
     // light grey fill — shows, instead of pinning transparent over it.
-    td.style.background = v.raw === 0 ? "" : confusionBg(v.mag, diag, maxOn, maxOff);
+    td.style.background = v.raw === 0 ? "" : confusionBg(v.mag, diag, maxOn, maxOff, scheme);
     td.textContent = v.display;
     td.classList.toggle("empty", v.raw === 0);
   }
