@@ -404,6 +404,7 @@ test("dashboard: clicking a confusion cell shows its history strip", async (t) =
   const detail = win.document.getElementById("confdetail");
 
   await waitFor(() => cell()?.textContent === "3/6", WAIT);   // matrix rendered (shown: za picked 3 of 6 offered)
+  assert.equal(win.statslink.hidden, true, "a non-power viewer gets no stats link");
   assert.ok(detail.hidden, "history hidden until a cell is clicked");
   assert.equal(win.confhint.hidden, false, "the 'tap a cell' hint shows until the first tap");
   cell().click();
@@ -868,6 +869,8 @@ test("dashboard: no drift notice when viewing someone else's data", { skip: LIVE
   await waitFor(() => cell("sa", "za")?.textContent === "3/5", WAIT);
   assert.equal(win.syncnotice.hidden, true, "another user's matrix never flags local drift");
   assert.equal(win.uidform.hidden, true, "level-1 viewer can view a shared link but gets no load-as form");
+  assert.equal(win.statslink.hidden, false, "level-1 viewer gets the aggregate-stats link");
+  assert.equal(win.statslink.getAttribute("href"), "../stats/", "stats link authorises by the viewer's own uid — no viewed ?uid");
 });
 
 test("dashboard: a Y/N diagonal-miss doesn't keep drifting after a sync", async (t) => {

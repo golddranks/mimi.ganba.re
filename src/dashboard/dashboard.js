@@ -47,6 +47,7 @@ const uid = params.get("uid") || viewerUid;
 // throwing on a window global that's gone — which in tests surfaces as an
 // "uidform/reminders is not defined" rejection when the page is torn down mid-fetch.
 const uidform = document.getElementById("uidform");
+const statslink = document.getElementById("statslink");
 const reminders = document.getElementById("reminders");
 const reminderstatus = document.getElementById("reminderstatus");
 const reminderbtn = document.getElementById("reminderbtn");
@@ -182,8 +183,12 @@ renderReminders();
 // Reveal it synchronously from the remembered level first (this script runs
 // before first paint), so it doesn't flash in after the async check on every
 // refresh; the check then confirms or corrects (and records the level).
+// The aggregate-stats (/stats/) link is a level-1 feature, same gate as view-as;
+// it carries no uid (the page authorises by the viewer's own uid). Same synchronous
+// reveal-from-cache as the form, confirmed by the async check.
+if (viewerUid && +localStorage.dashLevel >= 1) statslink.hidden = false;
 if (viewerUid && +localStorage.dashLevel >= 2) uidform.hidden = false;
-viewerLevel().then((level) => { uidform.hidden = level < 2; });
+viewerLevel().then((level) => { statslink.hidden = level < 1; uidform.hidden = level < 2; });
 
 // First paint shows the dash skeleton (zeros + reserved chart space). #msg
 // stays empty (and therefore display:none) during the loading window, so the
