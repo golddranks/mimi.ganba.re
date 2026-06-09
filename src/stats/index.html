@@ -101,6 +101,8 @@
                             />per-sound %</label
                         >
                     </span>
+                </h2>
+                <div class="voicefilter">
                     <span class="minaccfilter"
                         >min user accuracy:
                         <input
@@ -135,7 +137,7 @@
                             />natives</label
                         >
                     </span>
-                </h2>
+                </div>
                 <div id="confchart">
                     <!--include:confusion-vowel-tables.html-->
                 </div>
@@ -146,7 +148,7 @@
 
             <section class="card span2">
                 <h2>
-                    Sound-file confusion matrix
+                    Sound-file confusion matrix <span class="sub">— per recording, grouped by sound</span>
                     <span class="modeswitch" data-switch="metric" id="confmetricv">
                         <label><input type="radio" name="confmetricv" value="answered" checked />answered</label>
                         <label><input type="radio" name="confmetricv" value="guessed" />guessed</label>
@@ -175,10 +177,6 @@
                             />per-sound %</label
                         >
                     </span>
-                    <span class="sub"
-                        >— per recording; soundfiles grouped by sound within
-                        each vowel group</span
-                    >
                 </h2>
                 <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" minacc="<span class='minaccfilter'>min user accuracy: <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</span>" pop="<span class='modeswitch' data-switch='pop' id='confpop2'><label><input type='radio' name='confpop2' value='0' checked>normal users</label><label><input type='radio' name='confpop2' value='2'>natives</label></span>"-->
             </section>
