@@ -490,6 +490,7 @@ test("dashboard: hour-of-day buckets in the viewed user's timezone, not the view
   await waitFor(() => titles().length ? titles() : null, WAIT);
   assert.ok(titles().some((s) => s.startsWith("11:00") && s.includes("2/2")), "the two answers bucket at JST 11:00");
   assert.ok(!titles().some((s) => s.startsWith("02:00")), "not at the raw UTC hour (02:00)");
+  assert.match(win.hourtz.textContent, /UTC\+9\b/, "the heading names the timezone the hours are in");
 });
 
 test("dashboard: Y/N answers feed the confusion matrix (diagonal + confuser)", async (t) => {

@@ -349,7 +349,14 @@ function renderDaily(events) {
 // shifts each UTC timestamp onto their clock. Falls back to viewer-local only when
 // the user has no tz on record (pre-tz_offset rows); on your own dashboard the two
 // agree anyway.
+// "UTC+9" / "UTC+5:30" / "UTC-8" / "UTC+0" from minutes east of UTC.
+const tzLabel = (min) => {
+  const a = Math.abs(min);
+  return "UTC" + (min < 0 ? "-" : "+") + Math.floor(a / 60) + (a % 60 ? ":" + pad2(a % 60) : "");
+};
+
 function renderHourly(events, tzMin) {
+  hourtz.textContent = "— local time (" + (tzMin == null ? "tz unknown" : tzLabel(tzMin)) + ")";
   const hrs = Array.from({ length: 24 }, () => ({ correct: 0, total: 0 }));
   const hourOf = tzMin == null
     ? (ts) => new Date(ts).getHours()
