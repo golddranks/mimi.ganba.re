@@ -37,6 +37,7 @@ const EXCLUDE_TEST = "uid NOT IN (SELECT uid FROM users WHERE role != 0)";
 // the JS the dashboard and push use. Hard-coded, never user input.
 const ANSWER_EVS = "ev IN ('a','g','y','n')";
 const CORRECT = "CASE WHEN ev = 'n' THEN picked <> target ELSE picked = target END";
+const DAY_MS = 86400000;
 
 // users.power_user for a uid, 0 if unknown. The admin endpoints gate on this.
 // In local dev (scripts/dev.sh runs `wrangler dev --var DEV:1`) every uid is
@@ -312,7 +313,21 @@ async function handleEvents(req, env) {
     "tz_offset = COALESCE(excluded.tz_offset, tz_offset), remind_state = COALESCE(excluded.remind_state, remind_state)"
   ).bind(body.uid, now, now, tz, remindState);
 
-  await env.mimi_stats.batch([...inserts, userTouch]);
+  // Recompute this user's delete_after (retention horizon) here — the one place its
+  // inputs change. max of two arms, each = 30 days + 1 day per 10 answers, anchored on:
+  //   first_seen — a lifetime-loyalty floor (total answers; a fixed date that expires), and
+  //   last_seen  — recency (answers in the trailing 30 days; extends with each visit).
+  // So engaged/recent users keep their history longer, but an idle user always
+  // expires (both arms become fixed). Runs after the inserts above, so the counts
+  // include this batch. Answer events are a/g/y/n (ANSWER_EVS).
+  const deleteAfter = env.mimi_stats.prepare(
+    `UPDATE users SET delete_after = MAX(
+       first_seen + ${30 * DAY_MS} + (SELECT COUNT(*) FROM events e WHERE e.uid = users.uid AND ${ANSWER_EVS}) * ${DAY_MS / 10},
+       last_seen  + ${30 * DAY_MS} + (SELECT COUNT(*) FROM events e WHERE e.uid = users.uid AND ${ANSWER_EVS} AND e.ts >= users.last_seen - ${30 * DAY_MS}) * ${DAY_MS / 10})
+     WHERE uid = ?`
+  ).bind(body.uid);
+
+  await env.mimi_stats.batch([...inserts, userTouch, deleteAfter]);
   return json({ ok: true, count: body.events.length });
 }
 
@@ -322,11 +337,16 @@ async function handleGetEvents(req, env, url) {
     env.mimi_stats.prepare(
       "SELECT ts, target, idx, picked, cap, ms, ev, voice, opts FROM events WHERE uid = ? ORDER BY ts ASC"
     ).bind(uid).all(),
-    env.mimi_stats.prepare("SELECT tz_offset FROM users WHERE uid = ?").bind(uid).first(),
+    env.mimi_stats.prepare("SELECT tz_offset, delete_after FROM users WHERE uid = ?").bind(uid).first(),
   ]);
-  // tz_offset (minutes east of UTC) lets the dashboard bucket this user's
-  // hour-of-day in their own local time, not the viewer's. Null = not yet reported.
-  return json({ events: rows.results || [], tz_offset: user ? user.tz_offset : null });
+  // tz_offset (minutes east of UTC) lets the dashboard bucket this user's hour-of-day
+  // in their own local time; delete_after is the retention horizon shown on the
+  // dashboard. Both null only for a user with no row yet.
+  return json({
+    events: rows.results || [],
+    tz_offset: user ? user.tz_offset : null,
+    delete_after: user ? user.delete_after : null,
+  });
 }
 
 // Per-recording answer counts so the app can prefer the least-judged recording
@@ -433,10 +453,13 @@ async function handleUser(req, env) {
   // (a plain nickname update mustn't reset a native tester back to normal).
   const role = [0, 1, 2].includes(body.role) ? body.role : null;
   const now = Date.now();
+  // delete_after baseline (+30d) for a brand-new register-only user (e.g. a native
+  // tester who hasn't answered yet); a later events POST recomputes it in full.
+  // Left untouched on conflict — the events path owns it once they've trained.
   await env.mimi_stats.prepare(
-    "INSERT INTO users (uid, nickname, role, first_seen, last_seen) VALUES (?, ?, COALESCE(?, 0), ?, ?) " +
+    "INSERT INTO users (uid, nickname, role, first_seen, last_seen, delete_after) VALUES (?, ?, COALESCE(?, 0), ?, ?, ?) " +
     "ON CONFLICT(uid) DO UPDATE SET nickname = excluded.nickname, role = COALESCE(?, role), last_seen = excluded.last_seen"
-  ).bind(body.uid, nickname, role, now, now, role).run();
+  ).bind(body.uid, nickname, role, now, now, now + 30 * DAY_MS, role).run();
   return json({ ok: true });
 }
 

@@ -1089,18 +1089,51 @@ test("dashboard view-as: shows a declined reminder opt-in (not just on/off)", { 
   assert.match(win.reminderstatus.textContent, /declined by this user/);
 });
 
+// delete_after is computed on the write path (handleEvents / registration), so it's
+// exercised over HTTP — no cron, no local SQL.
+test("delete_after: registration stamps a +30d baseline", { skip: LIVE }, async () => {
+  const uid = randomUUID();
+  const t0 = Date.now();
+  await registerTestUser(uid);   // POST /v1/user (role 1), no events yet
+  const { delete_after } = await (await fetch(`${WORKER}/v1/user/${encodeURIComponent(uid)}/events`)).json();
+  assert.ok(Math.abs(delete_after - (t0 + 30 * 86400000)) < 60000, `≈ now + 30d (got ${delete_after})`);
+});
+
+test("delete_after: an events POST recomputes it (30d + 1d per 10 answers)", { skip: LIVE }, async () => {
+  const uid = await freshTestUser();
+  const t0 = Date.now();
+  // 50 answers, all "now" (so recent == total) → both arms = now + 30d + 50/10 d = now + 35d.
+  const evs = Array.from({ length: 50 }, (_, i) =>
+    ({ ts: t0 + i, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }));
+  await postEvents(uid, evs);
+  const { delete_after } = await (await fetch(`${WORKER}/v1/user/${encodeURIComponent(uid)}/events`)).json();
+  assert.ok(Math.abs(delete_after - (t0 + 35 * 86400000)) < 60000, `≈ now + 35d (got ${delete_after})`);
+});
+
+test("dashboard: shows the data-kept-until date", { skip: LIVE }, async (t) => {
+  const uid = await freshTestUser();
+  await postEvents(uid, saFixture(Date.now()));
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, {
+    setup: (w) => w.localStorage.setItem("uid", uid),   // own dashboard
+  });
+  t.after(close);
+  await waitFor(() => win.retention && !win.retention.hidden ? true : null, WAIT);
+  assert.match(win.retention.textContent, /Data kept until \d{4}-\d{2}-\d{2}/, "retention line shows a date");
+});
+
 // Runs LAST: triggering /__scheduled drops this process's keep-alive socket to the
 // worker, so a following fetch in this file would fail (undici reuses the dead
 // socket). The separate api.test.mjs process has its own pool, so it's unaffected.
-// skip on LIVE: seeds rows with backdated timestamps via local SQL and fires the cron.
+// skip on LIVE: seeds backdated rows via local SQL and fires the cron.
 test("janitor: the cron purges idle role-1 test users and their data", { skip: LIVE }, async () => {
   const old = "janitor-old-" + randomUUID();
   const fresh = "janitor-new-" + randomUUID();
   const real = "janitor-real-" + randomUUID();
   const t2h = Date.now() - 2 * 60 * 60 * 1000, now = Date.now();
-  // old role-1 (idle 2h) + fresh role-1 (just now) + an old role-0; the role-1s get an event.
+  const evRow = (uid, ts) => `('${uid}',${ts},'sa',0,'sa',2)`;
+  // old role-1 (idle 2h) + fresh role-1 (now) + an old role-0; the role-1s get an event.
   localSql(`INSERT INTO users (uid, first_seen, last_seen, role) VALUES ('${old}',${t2h},${t2h},1),('${fresh}',${now},${now},1),('${real}',${t2h},${t2h},0)`);
-  localSql(`INSERT INTO events (uid, ts, target, idx, picked, cap) VALUES ('${old}',${t2h},'sa',0,'sa',2),('${fresh}',${now},'sa',0,'sa',2)`);
+  localSql(`INSERT INTO events (uid, ts, target, idx, picked, cap) VALUES ${evRow(old, t2h)},${evRow(fresh, now)}`);
 
   await fetch(`${WORKER}/__scheduled`);   // run scheduled() → runJanitor (reminders no-op without VAPID)
 

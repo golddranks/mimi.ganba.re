@@ -68,4 +68,13 @@ export const MIGRATIONS = [
     up: "ALTER TABLE users ADD COLUMN remind_state TEXT",
     down: "ALTER TABLE users DROP COLUMN remind_state",
   },
+  {
+    // Retention horizon (unix ms): when this user becomes eligible for deletion.
+    // Computed on each events POST from first_seen/last_seen + answer counts (see
+    // handleEvents); registration stamps a +30d baseline so register-only users
+    // aren't null. A future janitor pass will delete WHERE delete_after < now.
+    id: 8,
+    up: "ALTER TABLE users ADD COLUMN delete_after INTEGER",
+    down: "ALTER TABLE users DROP COLUMN delete_after",
+  },
 ];

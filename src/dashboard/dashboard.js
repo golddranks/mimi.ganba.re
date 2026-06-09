@@ -58,6 +58,7 @@ const statslink = document.getElementById("statslink");
 const reminders = document.getElementById("reminders");
 const reminderstatus = document.getElementById("reminderstatus");
 const reminderbtn = document.getElementById("reminderbtn");
+const retention = document.getElementById("retention");
 const msg = document.getElementById("msg");
 const dash = document.getElementById("dash");
 
@@ -218,8 +219,9 @@ async function load(uid) {
       reminders.hidden = false;
     }
     if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
-    const { events, tz_offset } = await res.json();
+    const { events, tz_offset, delete_after } = await res.json();
     if (tz_offset != null) { viewedTzMin = tz_offset; tzKnown = true; }
+    if (delete_after != null) { retention.textContent = "Data kept until " + dayKeyTz(delete_after, viewedTzMin); retention.hidden = false; }
     events.sort((a, b) => a.ts - b.ts);
     if (events.length === 0) {
       msg.textContent = "No events for this user.";
