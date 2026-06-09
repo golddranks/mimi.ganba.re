@@ -21,15 +21,19 @@ import { isAnswerEv, answeredRight, isPenalizedRelisten } from "../../src/shared
 import { VAPID_PUBLIC_KEY } from "../../src/shared/vapid.js";
 import { localStamp, dueNudge, vapidAuth, encryptPayload, sendPush, NUDGE_TEXT, START_HOUR, DONE_HOUR } from "./push.js";
 
-// Production aggregates show only normal users (role 0): non-normal roles —
-// 1 = automatic (e2e/seed) test users, 2 = native test users (forced-pair
-// drilling, which would skew normal stats) — are excluded. uids with no users
-// row (shouldn't happen; every event POST upserts one) count as normal.
-// SQL-injection note: hard-coded fragment, never user-input. Two other role
-// predicates exist for their own contexts: roleFilter() for the confusion
-// matrices (role 0 XOR role 2 via the admin toggle) and the native pair-ranking
-// (role != 1).
+// The /stats/ confusion matrices and difficult-kana table show only normal users
+// (role 0): natives (role 2) do forced-pair drilling that would skew those
+// signals, and e2e/seed bots (role 1) are pure noise. uids with no users row
+// (shouldn't happen; every event POST upserts one) count as normal.
+// SQL-injection note: hard-coded fragment, never user-input. Related predicates:
+// the natives toggle (role 0 XOR role 2) on the confusion matrices, and
+// EXCLUDE_AUTO below.
 const EXCLUDE_TEST = "uid NOT IN (SELECT uid FROM users WHERE role != 0)";
+// Keeps natives (role 2) in — only the automatic e2e/seed bots (role 1) are
+// excluded. The admin user-stats page and the native pair-ranking use this:
+// natives are real humans whose activity belongs in those views (the role-0-only
+// exclusion was only ever meant for the /stats/ confusion + difficulty signals).
+const EXCLUDE_AUTO = "uid NOT IN (SELECT uid FROM users WHERE role = 1)";
 
 // SQL mirror of src/shared/events.js: which events are answers, and the 1/0
 // "answered right" expression (the Y/N "no" inverts — right when picked != target).
@@ -381,18 +385,17 @@ async function handleVoiceAttempts(req, env) {
 // ranked by wrong-rate (random tie-break); the top 200 become a no-repeat session.
 async function handleNativePairs(req, env) {
   const db = env.mimi_stats;
-  const NOT_AUTO = "uid NOT IN (SELECT uid FROM users WHERE role = 1)";
-  const EXPERT = `uid IN (SELECT uid FROM events WHERE ${ANSWER_EVS} AND ${NOT_AUTO}
+  const EXPERT = `uid IN (SELECT uid FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_AUTO}
        GROUP BY uid HAVING SUM(${CORRECT}) * 100.0 / COUNT(*) > 90)`;
   const [allRows, expertRows] = await Promise.all([
     db.prepare(
       `SELECT target AS t, idx AS i, opts AS o, picked AS p, COUNT(*) AS n
-       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${NOT_AUTO}
+       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${EXCLUDE_AUTO}
        GROUP BY target, idx, opts, picked`
     ).all(),
     db.prepare(
       `SELECT target AS t, idx AS i, opts AS o, COUNT(*) AS n
-       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${NOT_AUTO} AND ${EXPERT}
+       FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${EXCLUDE_AUTO} AND ${EXPERT}
        GROUP BY target, idx, opts`
     ).all(),
   ]);
@@ -777,7 +780,7 @@ async function handleAdminUserStats(req, env, url) {
               COUNT(*) AS n,
               SUM(${CORRECT}) AS correct
        FROM events e JOIN users u ON u.uid = e.uid
-       WHERE ${ANSWER_EVS} AND u.role = 0
+       WHERE ${ANSWER_EVS} AND u.role != 1
        GROUP BY d ORDER BY d`
     ).all(),
     // Raw event stream for per-user skill replay. Cheaper than expressing
@@ -785,15 +788,15 @@ async function handleAdminUserStats(req, env, url) {
     // sequence contiguous so the JS loop below can compute incrementally.
     db.prepare(
       `SELECT uid, ts, target, picked, ev, cap FROM events
-       WHERE (${ANSWER_EVS} OR ev = 'r') AND ${EXCLUDE_TEST}
+       WHERE (${ANSWER_EVS} OR ev = 'r') AND ${EXCLUDE_AUTO}
        ORDER BY uid, ts ASC`
     ).all(),
     // User-set nicknames. Emitted as a flat uid→nickname map so the admin
     // frontend can annotate the uid-drill-down popups without a second round
-    // trip. EXCLUDE_TEST keeps the seed fixture out.
+    // trip. EXCLUDE_AUTO keeps the seed fixture out.
     db.prepare(
       `SELECT uid, nickname FROM users
-       WHERE nickname IS NOT NULL AND nickname != '' AND ${EXCLUDE_TEST}`
+       WHERE nickname IS NOT NULL AND nickname != '' AND ${EXCLUDE_AUTO}`
     ).all(),
     // (date, uid) pairs for the daily-activity bar drill-down. One row per
     // user who answered something that day — JS folds it into a {date: [uid]}
@@ -801,7 +804,7 @@ async function handleAdminUserStats(req, env, url) {
     db.prepare(
       `SELECT date((e.ts + COALESCE(u.tz_offset, 540) * 60000) / 1000, 'unixepoch') AS d, e.uid AS uid
        FROM events e JOIN users u ON u.uid = e.uid
-       WHERE ${ANSWER_EVS} AND u.role = 0
+       WHERE ${ANSWER_EVS} AND u.role != 1
        GROUP BY d, e.uid`
     ).all(),
     // uid → timezone offset (minutes east of UTC). Primary source: users.tz_offset
@@ -809,11 +812,11 @@ async function handleAdminUserStats(req, env, url) {
     // fallback for users who subscribed but haven't been active since it shipped.
     db.prepare(
       `SELECT uid, tz_offset FROM users
-       WHERE tz_offset IS NOT NULL AND ${EXCLUDE_TEST}`
+       WHERE tz_offset IS NOT NULL AND ${EXCLUDE_AUTO}`
     ).all(),
     db.prepare(
       `SELECT uid, tz_offset FROM push_subs
-       WHERE tz_offset IS NOT NULL AND ${EXCLUDE_TEST}
+       WHERE tz_offset IS NOT NULL AND ${EXCLUDE_AUTO}
        GROUP BY uid`
     ).all(),
   ]);
