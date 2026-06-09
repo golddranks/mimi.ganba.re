@@ -509,10 +509,16 @@ async function handleAdminStats(req, env, url) {
   // Add caching here if events grows several orders of magnitude.
   const [hourly, byMora, optsConf, ynConf, byVoiceOpts, totals, active] = await Promise.all([
     db.prepare(
-      `SELECT CAST(strftime('%H', ts/1000, 'unixepoch') AS INTEGER) AS h,
+      // Hour-of-day in each user's *own* local time: shift the timestamp by their
+      // tz_offset (minutes east of UTC) before bucketing, defaulting to JST (540)
+      // for users with none on record. So the aggregate shows when people train in
+      // their own day, not against one wall clock. (u.role = 0 = EXCLUDE_TEST, but
+      // unambiguous now that uid is in two joined tables.)
+      `SELECT CAST(strftime('%H', (e.ts + COALESCE(u.tz_offset, 540) * 60000) / 1000, 'unixepoch') AS INTEGER) AS h,
               COUNT(*) AS n,
               SUM(${CORRECT}) AS correct
-       FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
+       FROM events e JOIN users u ON u.uid = e.uid
+       WHERE ${ANSWER_EVS} AND u.role = 0
        GROUP BY h ORDER BY h`
     ).all(),
     db.prepare(

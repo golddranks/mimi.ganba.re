@@ -61,7 +61,7 @@ export function render() {
   if (nativeMode) {
     // Native testers aren't learning — they're validating audio — so the
     // learner-progress messaging doesn't apply; thank them instead.
-    text = "音声の品質向上にご参加いただき、ありがとうございます！";
+    text = "音声の品質向上にご協力いただき、ありがとうございます！";
   } else if (mastered()) {
     cls = "mastered";
     text = "You mastered this. Maybe try learning something else?";

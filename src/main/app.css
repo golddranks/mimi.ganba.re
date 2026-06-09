@@ -82,7 +82,7 @@ body {
     font-family: "Tahoma", sans-serif;
     font-size: 1.15rem;
     font-weight: bold;
-    letter-spacing: 0.5em;
+    letter-spacing: 0.3em;
     color: var(--fg);
     z-index: 11;
 }
@@ -345,8 +345,13 @@ body {
 
 /* Week (Monday) / month (1st) guides at the bin's leading edge — inset shadow
    so they don't shift the flex layout. Dim for weeks, stronger for months. */
-.bar-bin.wk { box-shadow: inset 1px 0 0 color-mix(in srgb, var(--muted) 22%, transparent); }
-.bar-bin.mo { box-shadow: inset 1px 0 0 color-mix(in srgb, var(--muted) 55%, transparent); }
+.bar-bin.wk {
+    box-shadow: inset 1px 0 0 color-mix(in srgb, var(--muted) 22%, transparent);
+}
+
+.bar-bin.mo {
+    box-shadow: inset 1px 0 0 color-mix(in srgb, var(--muted) 55%, transparent);
+}
 
 .bar-stack {
     width: 70%;

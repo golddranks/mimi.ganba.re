@@ -150,7 +150,7 @@ test("app: native mode drills forced 2-choice pairs from the ranking", { skip: L
   const uid = win.localStorage.uid;
 
   // Native testers see a thank-you, not the learner-progress message.
-  assert.equal(win.message.textContent, "音声の品質向上にご参加いただき、ありがとうございます！");
+  assert.equal(win.message.textContent, "音声の品質向上にご協力いただき、ありがとうございます！");
 
   win.primary.click();
   const btns = await waitFor(() => {
@@ -618,6 +618,20 @@ test("stats: overview shows app-wide totals (level-1, no device IDs)", { skip: L
   assert.ok(Number(stat("answers")) >= 6, `answers >= 6 (got ${stat("answers")})`);
   assert.ok(Number(stat("users")) >= 1, "at least one user counted");
   assert.match(stat("days"), /^[1-9]/, "days of data populated from totals.days, not a per-day series");
+});
+
+test("stats: aggregate hour-of-day buckets each user's local hour (JST default)", { skip: LIVE }, async () => {
+  // An answer at 02:30 UTC by a user with no tz on record → defaults to JST (+540),
+  // so it belongs at hour 11, not the raw UTC hour 2.
+  const uid = randomUUID();
+  const ts = Date.UTC(2026, 0, 1, 2, 30, 0);
+  await postEvents(uid, [{ ts, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }]);
+  grantPowerUser(uid, 1);
+
+  const { hourly } = await (await fetch(`${WORKER}/v1/admin/stats?uid=${encodeURIComponent(uid)}`)).json();
+  const at = (h) => (hourly.find((r) => r.h === h) || { n: 0 }).n;
+  assert.ok(at(11) >= 1, "the JST-11:00 answer is in the aggregate hourly");
+  if (ISOLATED) assert.equal(at(2), 0, "nothing left at the raw UTC hour (02:00)");
 });
 
 test("admin: level-2 page renders per-user histograms, no overview/confusion", { skip: LIVE }, async (t) => {
