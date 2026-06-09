@@ -1,19 +1,16 @@
-import { aggregateByConsonant, consonantCounts, fillConfusionCells } from "../shared/confusion.js";
 import { dayBarChart, dayTip, calendarSpan } from "../shared/daychart.js";
-import { drawBars, drawHourly, wireSwitchGroup } from "../shared/charts.js";
-import { playVoice, drawVoiceConfusion as renderVoiceConf } from "../shared/voiceconf.js";
 
-// Power-user-only app-wide aggregate dashboard. Fans two endpoints into the
-// static skeleton declared in admin/index.html. Auth is the requester's own
-// uid (URL ?uid= or localStorage.uid); the worker checks users.power_user.
-//   /v1/admin/stats        (power_user >= 1) — sound / aggregate sections only
-//   /v1/admin/stats/users  (power_user >= 2) — overview, per-user histograms,
-//                                              daily activity, uid drilldowns
-// A level-1 user gets the aggregate sections; the .l2only sections stay hidden
-// because the second fetch 403s for them.
+// Level-2 admin panel: per-user / uid-drilldown stats — everything here carries
+// device identifiers. Fetches one endpoint into the static skeleton in
+// admin/index.html:
+//   /v1/admin/stats/users   (power_user >= 2) — per-user histograms, daily
+//                                               activity, uid drilldowns
+// The aggregate, identifier-free sections (the overview counters, hourly,
+// per-sound, confusion matrices) live on the level-1 /stats/ page, which reads
+// /v1/admin/stats instead.
 
 // When served from localhost (via scripts/dev.sh) hit the local wrangler dev
-// worker so the admin panel reflects local-DB events rather than production.
+// worker so the panel reflects local-DB events rather than production.
 const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
   ? `http://${location.hostname}:8787`
   : "https://mimi-stats.golddranks.workers.dev";
@@ -24,135 +21,60 @@ const STATS_URL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
 let nicknames = {};
 let timezones = {};
 
-// Display mode shared across the three count/per-sound-% toggles (per-sound,
-// confusion matrix, sound-file confusion). Clicking any of them updates
-// every switch and re-renders all three sections.
-let displayMode = "count";
-// Confusion population: "0" normal users, "2" native testers. A two-button switch
-// (like the count/% one), mirrored in the sound-file matrix's filter row. Starts
-// at "0" to match the page's default fetch — so a refresh resets cleanly.
-let confpopRole = "0";
-
 // uid resolution mirrors the no-uid head script so first paint matches behaviour.
 // Pulled from localStorage by default (set by the main app); ?uid=… overrides
 // for cases like a fresh browser or testing as a different power user.
 const uid = new URLSearchParams(location.search).get("uid") || localStorage.getItem("uid") || "";
 
-// The confusion query string: min-accuracy (number input) + the population
-// toggle. Used by the initial load and every re-filter, so the first paint
-// matches the controls — which the browser persists across a soft reload (and
-// clears on a hard reload), exactly like the number-input filters.
-const confusionParams = () =>
-  "&minacc=" + Math.max(0, Math.min(100, parseInt(confminacc.value, 10) || 0))
-  + (confpopRole === "2" ? "&natives=1" : "");
-
-// Seed the count/% and normal/natives toggles from their restored-or-default
-// state and wire user changes — before the first load(), so its fetch + render
-// reflect the controls. (onPick fires only on a user change, by when data has
-// loaded; the returned value is the current selection.)
-displayMode = wireSwitchGroup(document.querySelectorAll('[data-switch="mode"]'), (m) => {
-  displayMode = m;
-  drawMora();
-  drawConsMora();
-  drawConfusion();
-  drawVoiceConfusion();
-});
-confpopRole = wireSwitchGroup(document.querySelectorAll('[data-switch="pop"]'), (p) => {
-  confpopRole = p;
-  reloadConfusion();
-});
-
+// No uid (e.g. a private window that never opened the app) can't be authorized,
+// so skip the fetch and say so directly — otherwise load() never runs and the
+// page would fall back to the bare CSS "Unauthorized." pseudo-element.
 if (uid) load(uid);
+else showUnauthorized("admin");
 
 async function load(uid) {
   try {
-    const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid) + confusionParams());
+    const res = await fetch(STATS_URL + "/v1/admin/stats/users?uid=" + encodeURIComponent(uid));
     if (res.status === 403) {
-      msg.replaceChildren(
-        `Your Device ID (${uid}) is unauthorized to view the admin page. `,
-        "Ask the administrator for the rights, or use the personal ",
-        Object.assign(document.createElement("a"), {
-          href: "https://mimi.ganba.re/dashboard/",
-          textContent: "Dashboard",
-        }),
-        " instead.",
-      );
-      dash.style.display = "none";
+      showUnauthorized("admin");
       return;
     }
     if (!res.ok) { msg.textContent = `Fetch failed: HTTP ${res.status}`; return; }
     const data = await res.json();
-    // Aggregate sections — available to every power user (level 1+).
-    renderHourly(data.hourly);
-    renderMora(data.by_mora);
-    renderVoiceConfusion(data.by_voice_shown, data.by_voice_offered);
-    renderConfusion(data.confusion_shown, data.confusion_offered);
-    // Per-user / uid-drilldown sections — only if level-2 authorizes them.
-    loadUserStats(uid);
+    nicknames = data.nicknames || {};
+    timezones = data.timezones || {};
+    renderLevelHist(data.level_hist, data.level_hist_uids);
+    renderDaysHist(data.days_hist, data.days_hist_uids);
+    renderActivityHist(data.activity_hist, data.activity_hist_uids);
+    renderDaily(data.daily, data.daily_uids);
   } catch (e) {
     msg.textContent = "Error: " + (e && e.message);
   }
 }
 
-// Re-fetch just the confusion matrices (the only sections min-accuracy and the
-// population toggle gate server-side) and re-render them. Debounced for minacc so
-// typing in the number field doesn't fire a request per keystroke.
-async function reloadConfusion() {
-  try {
-    const res = await fetch(STATS_URL + "/v1/admin/stats?uid=" + encodeURIComponent(uid) + confusionParams());
-    if (!res.ok) return;
-    const data = await res.json();
-    renderConfusion(data.confusion_shown, data.confusion_offered);
-    renderVoiceConfusion(data.by_voice_shown, data.by_voice_offered);
-  } catch { /* leave the current matrices in place */ }
-}
-// Two synced copies of the control: one inline in the confusion h2, one in the
-// sound-file matrix's filter row (the filter gates both matrices). Editing either
-// mirrors the value to the other and debounce-reloads.
-let accTimer = null;
-const onMinacc = (src) => {
-  confminacc.value = confminacc2.value = src.value;
-  clearTimeout(accTimer);
-  accTimer = setTimeout(reloadConfusion, 400);
-};
-confminacc.oninput = () => onMinacc(confminacc);
-confminacc2.oninput = () => onMinacc(confminacc2);
-
-// Second-tier fetch. 403 (level-1 user) or any failure silently leaves the
-// .l2only sections hidden — the page still shows the aggregate sections.
-async function loadUserStats(uid) {
-  try {
-    const res = await fetch(STATS_URL + "/v1/admin/stats/users?uid=" + encodeURIComponent(uid));
-    if (!res.ok) return;
-    const data = await res.json();
-    nicknames = data.nicknames || {};
-    timezones = data.timezones || {};
-    renderOverview(data);
-    renderLevelHist(data.level_hist, data.level_hist_uids);
-    renderDaysHist(data.days_hist, data.days_hist_uids);
-    renderActivityHist(data.activity_hist, data.activity_hist_uids);
-    renderDaily(data.daily, data.daily_uids);
-    for (const s of document.querySelectorAll(".l2only")) s.hidden = false;
-  } catch (e) { /* keep the l2only sections hidden */ }
-}
-
-// ---------- overview ----------
-const setStat = (k, v) => overview.querySelector(`[data-stat="${k}"]`).textContent = v;
-
-function renderOverview(data) {
-  const t = data.totals || {};
-  const a = data.active || {};
-  const correct = t.correct || 0;
-  const answers = t.answers || 0;
-  const acc = answers ? correct / answers : 0;
-  setStat("events", t.events || 0);
-  setStat("users", t.users || 0);
-  setStat("answers", answers);
-  setStat("accuracy", (acc * 100).toFixed(1) + "%");
-  setStat("relisten", t.relisten || 0);
-  setStat("active7", a.d7 || 0);
-  setStat("active30", a.d30 || 0);
-  setStat("days", (data.daily || []).length);
+// Hide the dashboard skeleton and explain why. Two cases: a uid that the worker
+// rejected (403) names the device ID — a text node, so it can't inject HTML;
+// no uid at all (private window, never opened the app) has none to report. Both
+// point at the personal dashboard. `page` names the panel hit — this page and
+// /stats/ share the wording bar that one word.
+function showUnauthorized(page) {
+  dash.style.display = "none";
+  const dashboard = Object.assign(document.createElement("a"), {
+    href: "https://mimi.ganba.re/dashboard/",
+    textContent: "Dashboard",
+  });
+  if (uid) {
+    msg.replaceChildren(
+      `Your Device ID (${uid}) is unauthorized to view the ${page} page. `,
+      "Ask the administrator for the rights, or use the personal ",
+      dashboard, " instead.",
+    );
+  } else {
+    msg.replaceChildren(
+      `This device has no Device ID, so it can't view the ${page} page. Use the personal `,
+      dashboard, " instead.",
+    );
+  }
 }
 
 // ---------- daily ----------
@@ -358,103 +280,4 @@ function hideUidPopup() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !popup.hidden) hideUidPopup();
   });
-
-  // Click-to-play delegation on the sound-file confusion matrix (its row
-  // headers play the recording). Bound on the stable parent so it survives each
-  // redraw (which replaces only the inner HTML).
-  voiceconf.addEventListener("click", (e) => {
-    const th = e.target.closest("th.vname");
-    if (!th) return;
-    playVoice(th.dataset.mora, th.dataset.voice);
-  });
 })();
-
-// ---------- hourly (UTC) ----------
-function renderHourly(hourly) {
-  const hrs = Array.from({ length: 24 }, () => ({ correct: 0, total: 0 }));
-  for (const r of hourly || []) hrs[r.h] = { correct: r.correct, total: r.n };
-  drawHourly(hourlychart, hrs, " UTC");
-}
-
-// ---------- per-sound difficulty ----------
-// Fills the static .mrow elements (keyed by data-mora) via the shared drawBars,
-// which orders them hardest-first; renderMora just normalises the server's
-// {m, n, correct} rows into {correct, total}.
-let moraCounts = null;
-let moraMaxN = 1;
-
-function renderMora(byMora) {
-  const counts = {};
-  for (const r of byMora || []) counts[r.m] = { correct: r.correct, total: r.n };
-  moraCounts = counts;
-  moraMaxN = Math.max(1, ...Object.values(counts).map((c) => c.total || 0));
-  drawMora();
-  drawConsMora();
-}
-
-function drawMora() {
-  if (moraCounts) drawBars(morachart, moraCounts, moraMaxN, displayMode);
-}
-
-// The consonant-level twin of per-sound: same bars, morae summed by consonant.
-function drawConsMora() {
-  if (!moraCounts) return;
-  const cc = consonantCounts(moraCounts);
-  const maxN = Math.max(1, ...Object.values(cc).map((c) => c.total));
-  drawBars(consmorachart, cc, maxN, displayMode);
-}
-
-// ---------- sound-file confusion matrix (per recording) ----------
-let voiceShownData = [];       // [{t, v, p, n}] — picks among opts-bearing answers
-let voiceOfferedData = [];     // [{t, v, k, n}] — times kana k offered for (recording)
-
-function renderVoiceConfusion(shownRows, offeredRows) {
-  voiceShownData = shownRows || [];
-  voiceOfferedData = offeredRows || [];
-  vcmin.oninput = drawVoiceConfusion;
-  vcwrong.oninput = drawVoiceConfusion;
-  drawVoiceConfusion();
-}
-
-// Thin wrapper over the shared renderer — reads the page's filter inputs + mode.
-function drawVoiceConfusion() {
-  renderVoiceConf(voiceconf, voiceShownData, voiceOfferedData, {
-    mode: displayMode,
-    minA: Math.max(0, parseInt(vcmin.value, 10) || 0),
-    minW: Math.max(0, parseInt(vcwrong.value, 10) || 0),
-  });
-}
-
-// ---------- confusion (same shape as user dashboard, server-side counts) ----------
-// A pick is normalised by how often that confuser kana was actually offered (the
-// true pairwise confusion); answers with no offered set don't appear.
-let confusionShown = null;      // t/p -> picks among opts-bearing answers (numerator)
-let confusionOffered = null;    // t/p -> times kana p was on screen when t was asked (denominator)
-
-function renderConfusion(shownRows, offeredRows) {
-  const shown = {}, offered = {};
-  for (const r of shownRows || []) shown[`${r.t}/${r.p}`] = r.n;
-  for (const r of offeredRows || []) offered[`${r.t}/${r.k}`] = r.n;
-  confusionShown = shown;
-  confusionOffered = offered;
-  drawConfusion();
-}
-
-function drawConfusion() {
-  if (!confusionShown) return;
-  const maps = { shown: confusionShown, offered: confusionOffered };
-  fillConfusionCells(confchart.querySelectorAll("td[data-t]"), maps, displayMode);
-  drawConsonantConfusion();
-}
-
-// Consonant matrix: collapses every vowel into confusion between the six
-// consonant classes (s z ts sh j ch). Same data/display mode as the per-vowel
-// matrix above, aggregated by consonant.
-function drawConsonantConfusion() {
-  if (!confusionShown) return;
-  const maps = aggregateByConsonant({ shown: confusionShown, offered: confusionOffered });
-  fillConfusionCells(conschart.querySelectorAll("td[data-t]"), maps, displayMode);
-}
-
-// ---------- helpers ----------
-// (niceTicks now in src/shared/daychart.js)

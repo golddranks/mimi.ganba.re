@@ -14,25 +14,13 @@
     <header id="hdr">
         <a class="back" href="../">← back</a>
         <h1>ADMIN</h1>
+        <a class="back" href="../stats/">aggregate stats →</a>
     </header>
 
     <div id="msg"></div>
 
     <main id="dash">
-        <section id="overview" class="card span2 l2only" hidden>
-            <div class="stats">
-                <div class="stat"><div class="n" data-stat="events">0</div><div class="l">total events</div></div>
-                <div class="stat"><div class="n" data-stat="users">0</div><div class="l">users</div></div>
-                <div class="stat"><div class="n" data-stat="answers">0</div><div class="l">answers</div></div>
-                <div class="stat"><div class="n" data-stat="accuracy">0%</div><div class="l">accuracy</div></div>
-                <div class="stat"><div class="n" data-stat="relisten">0</div><div class="l">re-listens</div></div>
-                <div class="stat"><div class="n" data-stat="active7">0</div><div class="l">active 7d</div></div>
-                <div class="stat"><div class="n" data-stat="active30">0</div><div class="l">active 30d</div></div>
-                <div class="stat"><div class="n" data-stat="days">0</div><div class="l">days of data</div></div>
-            </div>
-        </section>
-
-        <section class="card span2 l2only" hidden>
+        <section class="card span2">
             <h2>Users by button count per vowel <span class="sub">— how many users currently see this many choice buttons (2..6)</span></h2>
             <div id="levelhist">
                 <div class="lvlcol" data-vowel="a">
@@ -118,59 +106,19 @@
             </div>
         </section>
 
-        <section class="card span2 l2only" hidden>
+        <section class="card span2">
             <h2>Daily activity</h2>
             <div id="dailychart"></div>
         </section>
 
-        <div class="stack">
-            <section class="card">
-                <h2>Hour of day <span class="sub">(UTC)</span></h2>
-                <div id="hourlychart"></div>
-            </section>
-
-            <section class="card l2only" hidden>
-                <h2>Days trained <span class="sub">— users by number of distinct days with answers (last bucket = 31+)</span></h2>
-                <div id="dayshist"><svg></svg></div>
-            </section>
-
-            <section class="card l2only" hidden>
-                <h2>Activity distribution <span class="sub">— users by total answers</span></h2>
-                <div id="activityhist"><svg></svg></div>
-            </section>
-        </div>
-
-        <div class="rstack">
-            <!--include:per-sound-card.html noun="difficulty"-->
-            <!--include:by-consonant-card.html-->
-        </div>
-
-        <section class="card span2">
-            <h2>Confusion matrix
-                <span class="modeswitch" data-switch="mode" id="confmode">
-                    <label><input type="radio" name="confmode" value="count" checked>counts</label>
-                    <label><input type="radio" name="confmode" value="pct">per-sound %</label>
-                </span>
-                <span class="minaccfilter">min user accuracy:
-                    <input id="confminacc" type="number" min="0" max="100" value="0" inputmode="numeric" title="exclude users whose overall correct rate is below this % from every confusion matrix — this one and the sound-file matrix below">%</span>
-                <span class="modeswitch" data-switch="pop" id="confpop" title="which population's confusions to show — gates both this matrix and the sound-file one">
-                    <label><input type="radio" name="confpop" value="0" checked>normal users</label>
-                    <label><input type="radio" name="confpop" value="2">natives</label>
-                </span>
-            </h2>
-            <div id="confchart"><!--include:confusion-vowel-tables.html--></div>
-            <div id="conschart"><!--include:confusion-consonant-table.html--></div>
+        <section class="card">
+            <h2>Days trained <span class="sub">— users by number of distinct days with answers (last bucket = 31+)</span></h2>
+            <div id="dayshist"><svg></svg></div>
         </section>
 
-        <section class="card span2">
-            <h2>Sound-file confusion matrix
-                <span class="modeswitch" data-switch="mode" id="voiceconfmode">
-                    <label><input type="radio" name="voiceconfmode" value="count" checked>counts</label>
-                    <label><input type="radio" name="voiceconfmode" value="pct">per-sound %</label>
-                </span>
-                <span class="sub">— per recording; soundfiles grouped by sound within each vowel group</span>
-            </h2>
-            <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" minacc="<span class='minaccfilter'>min user accuracy: <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</span>" pop="<span class='modeswitch' data-switch='pop' id='confpop2'><label><input type='radio' name='confpop2' value='0' checked>normal users</label><label><input type='radio' name='confpop2' value='2'>natives</label></span>"-->
+        <section class="card">
+            <h2>Activity distribution <span class="sub">— users by total answers</span></h2>
+            <div id="activityhist"><svg></svg></div>
         </section>
     </main>
 

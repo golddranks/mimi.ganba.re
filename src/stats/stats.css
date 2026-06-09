@@ -1,0 +1,5 @@
+/* Level-1 stats panel — app-wide aggregate sections (no device identifiers).
+   Shares the panel stylesheet with /admin/, plus the sound-file confusion
+   matrix styles (voiceconf.css), which only this page renders. */
+@import "../shared/panel.css";
+@import "../shared/voiceconf.css";   /* sound-file confusion matrix styles (shared with the dashboard) */

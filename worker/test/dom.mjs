@@ -105,7 +105,8 @@ export async function loadHtml(html, { url, workerBase, setup } = {}) {
 const distFileFor = (path) =>
   path.startsWith("/dashboard") ? "dashboard/index.html"
     : path.startsWith("/admin") ? "admin/index.html"
-      : "index.html";
+      : path.startsWith("/stats") ? "stats/index.html"
+        : "index.html";
 
 export async function openPage(path, { setup } = {}) {
   const url = SITE + path;

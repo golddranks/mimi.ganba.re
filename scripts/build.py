@@ -10,7 +10,8 @@ HTML templates under src/, writing:
       favicon.svg
       index.html             # css + js + window.VOICE_COUNTS inlined
       dashboard/index.html   # css + js inlined
-      admin/index.html       # css + js + window.VOICE_MAP inlined
+      stats/index.html       # css + js + window.VOICE_MAP inlined (level-1 aggregate)
+      admin/index.html       # css + js inlined (level-2 per-user)
       privacy/index.html     # css inlined
 
 esbuild is a single standalone binary (no node_modules); it's found at
@@ -153,12 +154,24 @@ def bundle_sw() -> None:
     (DIST / "sw.js").write_text(minify(SRC / "main" / "sw.js"), encoding="utf-8")
 
 
-def bundle_admin(voice_map: dict[str, list[str]]) -> None:
-    src = SRC / "admin"
+# Level-1 aggregate panel. Renders the sound-file confusion matrix, so it needs
+# VOICE_MAP (mora -> recordings) inlined like the dashboard.
+def bundle_stats(voice_map: dict[str, list[str]]) -> None:
+    src = SRC / "stats"
     voice_js = json.dumps(voice_map, ensure_ascii=False, separators=(",", ":"))
     html = inline((src / "index.html").read_text(encoding="utf-8"),
-                  src, "admin.css", "admin.js",
+                  src, "stats.css", "stats.js",
                   js_prelude=f"window.VOICE_MAP={voice_js};")
+    out = DIST / "stats"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "index.html").write_text(html, encoding="utf-8")
+
+
+# Level-2 per-user panel. No sound-file matrix here, so no VOICE_MAP needed.
+def bundle_admin() -> None:
+    src = SRC / "admin"
+    html = inline((src / "index.html").read_text(encoding="utf-8"),
+                  src, "admin.css", "admin.js")
     out = DIST / "admin"
     out.mkdir(parents=True, exist_ok=True)
     (out / "index.html").write_text(html, encoding="utf-8")
@@ -172,7 +185,8 @@ def main() -> None:
     bundle_index(voice_counts)
     bundle_dashboard(voice_map)
     bundle_privacy()
-    bundle_admin(voice_map)
+    bundle_stats(voice_map)
+    bundle_admin()
     bundle_sw()
 
     pages = list(DIST.rglob("index.html"))

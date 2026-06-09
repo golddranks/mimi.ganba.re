@@ -509,9 +509,9 @@ test("dashboard: Y/N answers count as activity (answers + accuracy)", async (t) 
   assert.equal(stat("correct"), "2", "the Y/N 'no' reject counts as correct");
 });
 
-test("admin: confusion matrix uses server-aggregated pick-when-offered counts", { skip: LIVE }, async (t) => {
+test("stats: confusion matrix uses server-aggregated pick-when-offered counts", { skip: LIVE }, async (t) => {
   // Local-only: needs power_user granted via local SQL, and unlike the rest its
-  // rows must stay *in* the aggregate (so its uid is NOT a TestUser). The admin
+  // rows must stay *in* the aggregate (so its uid is NOT a TestUser). The stats
   // matrix is global (all users), so we can't assert exact counts against a
   // snapshot — add the sa fixture and assert robust shape: "picked/offered" with
   // picked<=offered.
@@ -519,7 +519,7 @@ test("admin: confusion matrix uses server-aggregated pick-when-offered counts", 
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
   grantPowerUser(uid, 1);
 
-  const { win, close } = await openPage(`/admin/?uid=${uid}`);
+  const { win, close } = await openPage(`/stats/?uid=${uid}`);
   t.after(close);
 
   const cell = (tt, pp) => win.confchart.querySelector(`td[data-t="${tt}"][data-p="${pp}"]`);
@@ -535,11 +535,11 @@ test("admin: confusion matrix uses server-aggregated pick-when-offered counts", 
   assert.ok(offered >= 5, `offered >= 5 (got ${offered})`);
 });
 
-test("admin: normal/native population toggle defaults to normal and syncs both copies", { skip: LIVE }, async (t) => {
+test("stats: normal/native population toggle defaults to normal and syncs both copies", { skip: LIVE }, async (t) => {
   const uid = randomUUID();
   await postEvents(uid, saFixture(Date.now()));
   grantPowerUser(uid, 1);
-  const { win, close } = await openPage(`/admin/?uid=${uid}`);
+  const { win, close } = await openPage(`/stats/?uid=${uid}`);
   t.after(close);
 
   // Let the page's async load() settle (renders the matrix) before asserting, so
@@ -565,6 +565,59 @@ test("admin: normal/native population toggle defaults to normal and syncs both c
   // different/no native sa/za data, so the cell changes once it lands. Waiting
   // keeps the re-render from resolving against a torn-down window after the test.
   await waitFor(() => cellTxt() !== normalCell ? true : null, WAIT);
+});
+
+test("stats: overview shows app-wide totals (level-1, no device IDs)", { skip: LIVE }, async (t) => {
+  // The overview counters moved to /stats/ (power_user >= 1), read from
+  // /v1/admin/stats. Global aggregate, so assert the 6 sa answers are present
+  // (>=), not exact totals.
+  const uid = randomUUID();
+  assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
+  grantPowerUser(uid, 1);
+
+  const { win, close } = await openPage(`/stats/?uid=${uid}`);
+  t.after(close);
+
+  const overview = win.document.getElementById("overview");
+  const stat = (k) => overview.querySelector(`[data-stat="${k}"]`).textContent;
+  await waitFor(() => /^[1-9]/.test(stat("answers")) ? true : null, WAIT);
+  assert.ok(Number(stat("answers")) >= 6, `answers >= 6 (got ${stat("answers")})`);
+  assert.ok(Number(stat("users")) >= 1, "at least one user counted");
+  assert.match(stat("days"), /^[1-9]/, "days of data populated from totals.days, not a per-day series");
+});
+
+test("admin: level-2 page renders per-user histograms, no overview/confusion", { skip: LIVE }, async (t) => {
+  // The /admin/ page reads /v1/admin/stats/users (power_user >= 2). saFixture
+  // trains さ (vowel あ), so the あ button-count histogram counts at least this
+  // user — a global aggregate, so assert >= 1, not an exact total. The overview
+  // and confusion matrix moved to /stats/, so they're absent here. Also assert a
+  // clean render (no thrown errors in the boot scripts).
+  const uid = randomUUID();
+  assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
+  grantPowerUser(uid, 2);
+
+  const { win, logs, close } = await openPage(`/admin/?uid=${uid}`);
+  t.after(close);
+
+  const total = () => Number(win.document.querySelector('#levelhist .lvlcol[data-vowel="a"] .lvltotal').textContent);
+  await waitFor(() => total() >= 1 ? true : null, WAIT);
+  assert.equal(win.document.getElementById("overview"), null, "overview moved to /stats/");
+  assert.equal(win.document.getElementById("confchart"), null, "no confusion matrix on the admin page");
+  assert.deepEqual(logs.filter((l) => l.startsWith("ERROR")), [], "no errors during render");
+});
+
+test("admin: a uid-less device (private window) is told it has no Device ID", async (t) => {
+  // Regression: with no uid the page never calls load(), so the message must be
+  // shown directly — otherwise it falls back to the bare CSS "Unauthorized."
+  // pseudo-element. No worker call on this path, so it holds on LIVE too.
+  const { win, close } = await openPage("/admin/");   // no ?uid, fresh localStorage
+  t.after(close);
+  const msg = win.document.getElementById("msg");
+  await waitFor(() => /no Device ID/.test(msg.textContent) ? true : null, WAIT);
+  assert.match(msg.textContent, /can't view the admin page/);
+  const link = msg.querySelector("a");
+  assert.match(link?.getAttribute("href") || "", /\/dashboard\/?$/, "points at the dashboard");
+  assert.equal(win.document.getElementById("dash").style.display, "none", "dashboard skeleton hidden");
 });
 
 test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, async () => {

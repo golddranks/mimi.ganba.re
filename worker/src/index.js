@@ -7,10 +7,11 @@
 //   GET  /v1/admin/stats?uid=…      sound/aggregate stats with no device identifiers; requires power_user >= 1
 //   GET  /v1/admin/stats/users?uid=…  per-user / uid-drilldown stats; requires power_user >= 2
 //
-// power_user tiers: 0 = none, 1 = may see the aggregate-only admin sections
-// (hour-of-day, per-sound + sound-file difficulty, both confusion matrices),
-// 2 = may also see overview, the per-user histograms, daily activity, and the
-// uid drill-downs / nicknames. The two admin endpoints map 1:1 onto the tiers.
+// power_user tiers: 0 = none, 1 = may see the /stats/ page (the overview
+// counters, hour-of-day, per-sound + sound-file difficulty, both confusion
+// matrices), 2 = may also see the /admin/ page (the per-user histograms, daily
+// activity, and the uid drill-downs / nicknames). The two admin endpoints map
+// 1:1 onto the tiers.
 
 import { nameOf } from "./voicemap.js";
 import { MIGRATIONS } from "./migrations.js";
@@ -493,10 +494,15 @@ async function handleAdminStats(req, env, url) {
          GROUP BY uid HAVING SUM(${CORRECT}) * 100.0 / COUNT(*) >= ${minacc})`
     : "";
 
+  // Overview window bounds for the active-user counts.
+  const now = Date.now();
+  const d7 = now - 7 * 86400000;
+  const d30 = now - 30 * 86400000;
+
   // Parallel aggregations. Each scans/groups the events table on indexed
   // columns; on the current data size (~thousands of rows) this is sub-second.
   // Add caching here if events grows several orders of magnitude.
-  const [hourly, byMora, optsConf, ynConf, byVoiceOpts] = await Promise.all([
+  const [hourly, byMora, optsConf, ynConf, byVoiceOpts, totals, active] = await Promise.all([
     db.prepare(
       `SELECT CAST(strftime('%H', ts/1000, 'unixepoch') AS INTEGER) AS h,
               COUNT(*) AS n,
@@ -536,6 +542,24 @@ async function handleAdminStats(req, env, url) {
        FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND voice IS NOT NULL AND ${POP} ${ACC_FILTER}
        GROUP BY target, voice, opts, picked`
     ).all(),
+    // Overview counters — app-wide aggregates with no device identifiers, so they
+    // belong to this level-1 tier. `days` = distinct UTC days with any answer (the
+    // overview's "days of data"). Always normal users (EXCLUDE_TEST), like the
+    // difficulty/activity sections — never gated by minacc/natives.
+    db.prepare(
+      `SELECT COUNT(*)                                                       AS events,
+              COUNT(DISTINCT uid)                                            AS users,
+              SUM(CASE WHEN ${ANSWER_EVS} THEN 1 ELSE 0 END)                 AS answers,
+              SUM(CASE WHEN ${ANSWER_EVS} AND (${CORRECT}) THEN 1 ELSE 0 END) AS correct,
+              SUM(CASE WHEN ev = 'r' THEN 1 ELSE 0 END)                      AS relisten,
+              COUNT(DISTINCT CASE WHEN ${ANSWER_EVS} THEN date(ts/1000, 'unixepoch') END) AS days
+       FROM events WHERE ${EXCLUDE_TEST}`
+    ).first(),
+    db.prepare(
+      `SELECT
+         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d7,
+         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d30`
+    ).bind(d7, d30).first(),
   ]);
 
   // Expand the grouped opts sets into pairwise counts: offered[t/k] = times kana
@@ -576,6 +600,8 @@ async function handleAdminStats(req, env, url) {
   });
 
   return json({
+    totals,
+    active,
     hourly:    hourly.results     || [],
     by_mora:   byMora.results     || [],
     confusion_shown:   rowsOf(shown, "p"),
@@ -587,9 +613,10 @@ async function handleAdminStats(req, env, url) {
 
 // Per-user / uid-drilldown stats — the level-2 admin tier. Same soft-auth as
 // above but gated at power_user >= 2, because everything here carries device
-// identifiers (per-bucket uid lists, the daily-activity uid map, nicknames)
-// or app-wide business numbers (overview totals). A level-1 power user gets
-// 403 here even though they can read /v1/admin/stats — that's the access split.
+// identifiers (per-bucket uid lists, the daily-activity uid map, nicknames). The
+// identifier-free overview counters live one tier down on /v1/admin/stats. A
+// level-1 power user gets 403 here even though they can read /v1/admin/stats —
+// that's the access split.
 async function handleAdminUserStats(req, env, url) {
   const uid = url.searchParams.get("uid") || "";
   if (await powerLevel(env, uid) < 2) {
@@ -597,26 +624,8 @@ async function handleAdminUserStats(req, env, url) {
   }
 
   const db = env.mimi_stats;
-  const now = Date.now();
-  const d7 = now - 7 * 86400000;
-  const d30 = now - 30 * 86400000;
 
-  const [totals, active, daily, skillStream, nicks, dailyUidRows, userTzRows, tzRows] = await Promise.all([
-    db.prepare(
-      `SELECT
-         COUNT(*)                                                       AS events,
-         COUNT(DISTINCT uid)                                            AS users,
-         SUM(CASE WHEN ${ANSWER_EVS} THEN 1 ELSE 0 END)                 AS answers,
-         SUM(CASE WHEN ${ANSWER_EVS} AND (${CORRECT}) THEN 1 ELSE 0 END) AS correct,
-         SUM(CASE WHEN ev = 'r' THEN 1 ELSE 0 END)                      AS relisten
-       FROM events
-       WHERE ${EXCLUDE_TEST}`
-    ).first(),
-    db.prepare(
-      `SELECT
-         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d7,
-         (SELECT COUNT(DISTINCT uid) FROM events WHERE ts > ? AND ${EXCLUDE_TEST}) AS d30`
-    ).bind(d7, d30).first(),
+  const [daily, skillStream, nicks, dailyUidRows, userTzRows, tzRows] = await Promise.all([
     db.prepare(
       `SELECT date(ts/1000, 'unixepoch') AS d,
               COUNT(*) AS n,
@@ -720,8 +729,6 @@ async function handleAdminUserStats(req, env, url) {
   }
 
   return json({
-    totals,
-    active,
     daily: daily.results || [],
     level_hist,
     level_hist_uids,
