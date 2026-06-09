@@ -653,6 +653,20 @@ test("stats: aggregate hour-of-day buckets each user's local hour (JST default)"
   if (ISOLATED) assert.equal(at(2), 0, "nothing left at the raw UTC hour (02:00)");
 });
 
+test("admin: daily activity buckets each user's local day (JST default)", { skip: LIVE }, async () => {
+  // 16:00 UTC Jan 1 = 01:00 JST Jan 2; with no tz on record it defaults to JST → Jan 2.
+  const uid = randomUUID();
+  const ts = Date.UTC(2026, 0, 1, 16, 0, 0);
+  await postEvents(uid, [{ ts, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }]);
+  grantPowerUser(uid, 2);
+
+  // daily is a global aggregate (can't isolate this uid on the shared test DB), so
+  // assert per-uid via the drilldown map: this user lands on their JST day, not UTC.
+  const { daily_uids } = await (await fetch(`${WORKER}/v1/admin/stats/users?uid=${encodeURIComponent(uid)}`)).json();
+  assert.ok((daily_uids["2026-01-02"] || []).includes(uid), "user listed under their JST day (Jan 2)");
+  assert.ok(!(daily_uids["2026-01-01"] || []).includes(uid), "not under the raw UTC day (Jan 1)");
+});
+
 test("admin: level-2 page renders per-user histograms, no overview/confusion", { skip: LIVE }, async (t) => {
   // The /admin/ page reads /v1/admin/stats/users (power_user >= 2). saFixture
   // trains さ (vowel あ), so the あ button-count histogram counts at least this

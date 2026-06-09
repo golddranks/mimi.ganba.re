@@ -637,11 +637,15 @@ async function handleAdminUserStats(req, env, url) {
   const db = env.mimi_stats;
 
   const [daily, skillStream, nicks, dailyUidRows, userTzRows, tzRows] = await Promise.all([
+    // Daily activity bucketed in each user's own local day (shift ts by their
+    // tz_offset, JST 540 default), so a late-night JST session counts under the
+    // right calendar day — matching the user's own done/not-done frame.
     db.prepare(
-      `SELECT date(ts/1000, 'unixepoch') AS d,
+      `SELECT date((e.ts + COALESCE(u.tz_offset, 540) * 60000) / 1000, 'unixepoch') AS d,
               COUNT(*) AS n,
               SUM(${CORRECT}) AS correct
-       FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
+       FROM events e JOIN users u ON u.uid = e.uid
+       WHERE ${ANSWER_EVS} AND u.role = 0
        GROUP BY d ORDER BY d`
     ).all(),
     // Raw event stream for per-user skill replay. Cheaper than expressing
@@ -663,9 +667,10 @@ async function handleAdminUserStats(req, env, url) {
     // user who answered something that day — JS folds it into a {date: [uid]}
     // map for the popup.
     db.prepare(
-      `SELECT date(ts/1000, 'unixepoch') AS d, uid
-       FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_TEST}
-       GROUP BY d, uid`
+      `SELECT date((e.ts + COALESCE(u.tz_offset, 540) * 60000) / 1000, 'unixepoch') AS d, e.uid AS uid
+       FROM events e JOIN users u ON u.uid = e.uid
+       WHERE ${ANSWER_EVS} AND u.role = 0
+       GROUP BY d, e.uid`
     ).all(),
     // uid → timezone offset (minutes east of UTC). Primary source: users.tz_offset
     // (reported on every events POST — covers all users). push_subs.tz_offset is a
@@ -683,16 +688,21 @@ async function handleAdminUserStats(req, env, url) {
 
   // Replay the skill-state machine per user to derive each user's current
   // per-vowel skill. Rules live in src/shared/skill.js, shared with app + dashboard.
+  // uid → tz_offset (minutes east of UTC), so each user's distinct-days count is
+  // bucketed in their own local day (JST 540 default), like the daily chart above.
+  const tzOf = {};
+  for (const r of userTzRows.results || []) tzOf[r.uid] = r.tz_offset;
+
   const perUser = {};
   const userAnswers = {};   // per-user count of answer events (a/g/y/n)
-  const userDays = {};      // per-user set of YYYY-MM-DD strings (UTC) seen
+  const userDays = {};      // per-user set of YYYY-MM-DD strings (each user's local day)
   for (const e of skillStream.results || []) {
     const v = e.target.slice(-1);
     const cur = perUser[e.uid] || (perUser[e.uid] = {});
     const c = cur[v] || 0;
     if (isAnswerEv(e.ev)) {
       userAnswers[e.uid] = (userAnswers[e.uid] || 0) + 1;
-      const day = new Date(e.ts).toISOString().slice(0, 10);
+      const day = new Date(e.ts + (tzOf[e.uid] ?? 540) * 60000).toISOString().slice(0, 10);
       (userDays[e.uid] = userDays[e.uid] || new Set()).add(day);
       cur[v] = answeredRight(e) ? onCorrect(c) : onWrong(c);
     } else {
