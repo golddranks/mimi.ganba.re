@@ -42,7 +42,7 @@ if [ "$SEED" = snapshot ]; then
 else
   npx wrangler d1 execute mimi-stats --local --persist-to "$PERSIST" --file=schema.sql >/dev/null 2>&1
 fi
-npx wrangler dev --local --persist-to "$PERSIST" --port "$PORT" >/tmp/e2e-wrangler.log 2>&1 &
+npx wrangler dev --local --persist-to "$PERSIST" --port "$PORT" --test-scheduled >/tmp/e2e-wrangler.log 2>&1 &
 DEV_PID=$!
 
 for _ in $(seq 1 60); do

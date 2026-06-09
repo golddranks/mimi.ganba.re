@@ -51,12 +51,15 @@ const WAIT = { timeout: LIVE ? 20000 : 5000 };
 // power_user has no API setter (granted by hand via SQL), so poke the local D1
 // the dev worker reads. Local-only — the admin test that uses it skips live.
 // Honors WRANGLER_PERSIST so it targets the state dir e2e.sh booted on.
-const grantPowerUser = (uid, level = 1) => {
+// Run SQL against the local D1 the dev worker reads (honors WRANGLER_PERSIST).
+// Returns result rows (empty for writes). Local-only — callers skip live.
+const localSql = (sql) => {
   const args = ["wrangler", "d1", "execute", "mimi-stats", "--local"];
   if (process.env.WRANGLER_PERSIST) args.push("--persist-to", process.env.WRANGLER_PERSIST);
-  args.push("--command", `UPDATE users SET power_user=${level} WHERE uid='${uid}'`);
-  execFileSync("npx", args, { stdio: "ignore" });
+  args.push("--json", "--command", sql);
+  return JSON.parse(execFileSync("npx", args, { encoding: "utf8" }))[0].results || [];
 };
+const grantPowerUser = (uid, level = 1) => localSql(`UPDATE users SET power_user=${level} WHERE uid='${uid}'`);
 
 // Six deterministic answers for sound "sa", reused by the dashboard tests:
 // za picked 3x & offered 5x, sa picked 2x, sya picked 1x & offered 1x.
@@ -1084,4 +1087,32 @@ test("dashboard view-as: shows a declined reminder opt-in (not just on/off)", { 
   t.after(close);
   await waitFor(() => win.reminderstatus.textContent.includes("Daily reminders") ? true : null, WAIT);
   assert.match(win.reminderstatus.textContent, /declined by this user/);
+});
+
+// Runs LAST: triggering /__scheduled drops this process's keep-alive socket to the
+// worker, so a following fetch in this file would fail (undici reuses the dead
+// socket). The separate api.test.mjs process has its own pool, so it's unaffected.
+// skip on LIVE: seeds rows with backdated timestamps via local SQL and fires the cron.
+test("janitor: the cron purges idle role-1 test users and their data", { skip: LIVE }, async () => {
+  const old = "janitor-old-" + randomUUID();
+  const fresh = "janitor-new-" + randomUUID();
+  const real = "janitor-real-" + randomUUID();
+  const t2h = Date.now() - 2 * 60 * 60 * 1000, now = Date.now();
+  // old role-1 (idle 2h) + fresh role-1 (just now) + an old role-0; the role-1s get an event.
+  localSql(`INSERT INTO users (uid, first_seen, last_seen, role) VALUES ('${old}',${t2h},${t2h},1),('${fresh}',${now},${now},1),('${real}',${t2h},${t2h},0)`);
+  localSql(`INSERT INTO events (uid, ts, target, idx, picked, cap) VALUES ('${old}',${t2h},'sa',0,'sa',2),('${fresh}',${now},'sa',0,'sa',2)`);
+
+  await fetch(`${WORKER}/__scheduled`);   // run scheduled() → runJanitor (reminders no-op without VAPID)
+
+  const count = (tbl, uid) => localSql(`SELECT COUNT(*) AS c FROM ${tbl} WHERE uid='${uid}'`)[0].c;
+  try {
+    assert.equal(count("users", old), 0, "idle role-1 user deleted");
+    assert.equal(count("events", old), 0, "its events deleted");
+    assert.equal(count("users", fresh), 1, "recent role-1 user kept (no mid-verify deletion)");
+    assert.equal(count("events", fresh), 1, "recent role-1 user's events kept");
+    assert.equal(count("users", real), 1, "old role-0 user untouched (role filter)");
+  } finally {
+    localSql(`DELETE FROM events WHERE uid IN ('${old}','${fresh}','${real}')`);
+    localSql(`DELETE FROM users WHERE uid IN ('${old}','${fresh}','${real}')`);
+  }
 });

@@ -196,11 +196,29 @@ export default {
     return res;
   },
 
-  // Hourly cron (wrangler.toml [triggers]) → daily push reminders.
+  // Hourly cron (wrangler.toml [triggers]) → daily push reminders + the janitor.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runReminders(env, Date.now()).catch((e) => console.error("reminders:", (e && e.message) || e)));
+    const now = Date.now();
+    ctx.waitUntil(runReminders(env, now).catch((e) => console.error("reminders:", (e && e.message) || e)));
+    ctx.waitUntil(runJanitor(env, now).catch((e) => console.error("janitor:", (e && e.message) || e)));
   },
 };
+
+// Janitor (runs on the hourly cron): purge automatic e2e test users (role 1) and
+// their data. They're created by the post-deploy verify suite hitting prod, are
+// excluded from every aggregate, and have no lasting value. Age-gate on last_seen
+// so an in-flight verify run — which posts a test user then immediately reads it
+// back — is never deleted mid-pass; an hour dwarfs a verify pass.
+async function runJanitor(env, now) {
+  const cutoff = now - 60 * 60 * 1000;   // role-1 users idle > 1h
+  const stale = "uid IN (SELECT uid FROM users WHERE role = 1 AND last_seen < ?)";
+  // events + push_subs reference the rows, so clear them before the users themselves.
+  await env.mimi_stats.batch([
+    env.mimi_stats.prepare(`DELETE FROM events WHERE ${stale}`).bind(cutoff),
+    env.mimi_stats.prepare(`DELETE FROM push_subs WHERE ${stale}`).bind(cutoff),
+    env.mimi_stats.prepare("DELETE FROM users WHERE role = 1 AND last_seen < ?").bind(cutoff),
+  ]);
+}
 
 // Push a reminder to every subscription whose local time is a nudge hour and
 // whose events say they haven't started (19:00) / aren't done (22:00) today.
