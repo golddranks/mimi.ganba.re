@@ -172,9 +172,17 @@
     border: 1px solid var(--panel-2);
     font-size: 0.7rem;
     color: var(--fg);
-    /* Halo in the card colour so the number stays legible on a saturated cell fill
-       (which in dark mode can sit close to --fg's luminance — light on light). */
+    /* Dark mode only: a saturated cell fill can sit close to --fg's luminance
+       (light on light), so a card-coloured halo keeps the number legible. */
     text-shadow: 0 0 2px var(--panel), 0 0 2px var(--panel);
+}
+
+@media (prefers-color-scheme: light) {
+    .vconfgrid td {
+        /* In light mode the same halo is a white glow around dark glyphs — it
+           blurs them, and no light-mode fill gets near the text colour anyway. */
+        text-shadow: none;
+    }
 }
 
 .vconfgrid td.diag {

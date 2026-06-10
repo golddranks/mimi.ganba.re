@@ -443,10 +443,17 @@ body {
     border: 1px solid var(--panel-2);
     font-size: .72rem;
     color: var(--fg);
-    /* The cell fill (a teal/orange tint) can land close to --fg's luminance — light
-       on light in dark mode. A halo in the card colour keeps the number legible on
-       any cell intensity, in both themes. */
+    /* Dark mode only: a saturated cell fill can land close to --fg's luminance
+       (light on light), so a card-coloured halo keeps the number legible. */
     text-shadow: 0 0 2px var(--panel), 0 0 2px var(--panel);
+}
+
+@media (prefers-color-scheme: light) {
+    .confgrid td {
+        /* In light mode the same halo is a white glow around dark glyphs — it
+           blurs them, and no light-mode fill gets near the text colour anyway. */
+        text-shadow: none;
+    }
 }
 
 /* Consonant matrix: centered, with larger cells than the per-vowel grids
