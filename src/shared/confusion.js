@@ -188,12 +188,13 @@ export function confusionBg(mag, diag, maxOn, maxOff, scheme = "outcome") {
 }
 
 // Mix strength: the % of the base hue in the cell fill, normalised within the
-// cell's category (the same a as confusionBg). 5% floor — just enough that a
-// nonzero cell reads as data (vs the .empty grey), faint enough that a cell far
-// below the view's worst looks nearly white instead of alarmingly colourful.
+// cell's category (the same a as confusionBg). No floor: the scale runs from
+// pure white (rate ≈ 0) to the 70/80% ceiling at the view's worst. Has-data vs
+// no-data isn't this gradient's job — a 0-rate cell is white WITH text, while
+// never-offered cells get the .empty grey.
 function mixPct(mag, diag, maxOn, maxOff) {
   const a = diag ? (maxOn ? mag / maxOn : 0) : (maxOff ? mag / maxOff : 0);
-  return Math.round(5 + a * (diag ? 65 : 75));
+  return Math.round(a * (diag ? 70 : 80));
 }
 
 // Whether a cell's fill is strong enough that light mode's near-black text reads
