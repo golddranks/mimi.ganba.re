@@ -41,22 +41,28 @@ export function niceTicks(max) {
 // arrive as percentages (see below) to append "%" to; optional
 // `annotate(max, X, Y)` adds a corner label; `grid` draws week/month date guides.
 export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = false) {
-  // Show only the most-recent days that fit the container at a legible bar pitch, so
-  // a long history doesn't render as hair-thin bars on a narrow screen. ~7px/day
-  // against the element's real width (the SVG is %-geometry, stretched to it).
-  const fitDays = Math.max(7, Math.floor(((el.clientWidth || 960) - 20) / 7));
-  if (days.length > fitDays) days = days.slice(-fitDays);
   const w = 960, innerH = h - 40, y0 = h - 20;
+  // The geometry distributes a LOGICAL 960-unit box across the element's real
+  // width, so the historical 18-unit bin cap — a desktop aesthetic — renders as a
+  // ~6px sliver on a phone however few days are drawn. Express the floor in
+  // physical pixels instead: bins are at least ~9px on screen (18 logical units
+  // when that's bigger, preserving the desktop look), and only the most recent
+  // days that fit at that pitch are shown. The bar cap scales with the bin so the
+  // bar:gap ratio stays the desktop 14:18.
+  const scale = w / (el.clientWidth || w);   // logical units per physical px
+  const binCap = Math.max(18, 9 * scale);
+  const fitDays = Math.max(7, Math.floor((w - 40) / binCap));
+  if (days.length > fitDays) days = days.slice(-fitDays);
   const max = Math.max(1, ...days.map(mag));
-  const binW = Math.min((w - 40) / Math.max(1, days.length), 18);
-  const barW = Math.min(binW * 0.8, 14);
+  const binW = Math.min((w - 40) / Math.max(1, days.length), binCap);
+  const barW = Math.min(binW * 0.8, 14 * binCap / 18);
   const xRightmost = w - 20 - barW;
   // Geometry stays in the logical 960×h box, but every coordinate is emitted as
   // a percentage (no viewBox) so the SVG stretches to fill its container with
   // crisp, non-scaling px text. `bar`/`annotate` callbacks receive percentages
   // (numbers) and append "%". X spans the width, Y the height.
   const X = (v) => Math.round(v / w * 1e4) / 100, Y = (v) => Math.round(v / h * 1e4) / 100;
-  let bars = "", labels = "", lastMonth = "", gridlines = "";
+  let bars = "", labels = "", lastMonth = "", gridlines = "", lastLabelX = -Infinity;
   for (let i = 0; i < days.length; i++) {
     const d = days[i];
     const x = xRightmost - (days.length - 1 - i) * binW;
@@ -67,7 +73,13 @@ export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = f
     const month = d.k.slice(0, 7);
     if (month !== lastMonth) {
       lastMonth = month;
-      labels += `<text x="${X(x)}%" y="${Y(h - 4)}%" fill="var(--muted)" font-size="10">${month}</text>`;
+      // The label text is fixed physical px (no viewBox scaling), so the spacing
+      // guard converts its ~52px footprint into logical units — on a narrow chart
+      // a month label is skipped rather than colliding with its neighbour.
+      if (x - lastLabelX >= 52 * scale) {
+        labels += `<text x="${X(x)}%" y="${Y(h - 4)}%" fill="var(--muted)" font-size="10">${month}</text>`;
+        lastLabelX = x;
+      }
     }
   }
   // Week/month guides across the FULL plot width — not just where bars are. Walk
