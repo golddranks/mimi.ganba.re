@@ -106,19 +106,23 @@
         </div>
 
         <section class="card span2">
-            <h2>Confusion matrix
-                <span class="modeswitch" data-switch="metric" id="confmetric">
-                    <label><input type="radio" name="confmetric" value="answered" checked>answered</label>
-                    <label><input type="radio" name="confmetric" value="guessed">guessed</label>
-                    <label><input type="radio" name="confmetric" value="slow">slow</label>
-                    <label><input type="radio" name="confmetric" value="relistened">re-listened</label>
-                    <label><input type="radio" name="confmetric" value="afterplayed">after-played</label>
-                </span>
-                <span class="modeswitch" data-switch="mode" id="confmode">
-                    <label><input type="radio" name="confmode" value="count" checked>counts</label>
-                    <label><input type="radio" name="confmode" value="pct">per-sound %</label>
-                </span>
-            </h2>
+            <h2>Confusion matrix</h2>
+            <div class="vccontrols">
+                <div class="vcgroup">
+                    <span class="vcgroup-label">data shown</span>
+                    <span class="modeswitch" data-switch="metric" id="confmetric">
+                        <label><input type="radio" name="confmetric" value="answered" checked>answered</label>
+                        <label><input type="radio" name="confmetric" value="guessed">guessed</label>
+                        <label><input type="radio" name="confmetric" value="slow">slow</label>
+                        <label><input type="radio" name="confmetric" value="relistened">re-listened</label>
+                        <label><input type="radio" name="confmetric" value="afterplayed">after-played</label>
+                    </span>
+                    <span class="modeswitch" data-switch="mode" id="confmode">
+                        <label><input type="radio" name="confmode" value="count" checked>counts</label>
+                        <label><input type="radio" name="confmode" value="pct">% offered</label>
+                    </span>
+                </div>
+            </div>
             <div id="syncnotice" hidden>
                 This device's local drill data is out of sync with the server.
                 <button type="button" id="syncbtn">Sync from server</button>

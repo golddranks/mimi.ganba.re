@@ -366,22 +366,6 @@ body {
     font-size: .85em;
 }
 
-/* The min-user-accuracy filter sits inline in the confusion h2 (next to the
-   toggle) and is mirrored in the sound-file matrix's filter row — same control
-   in both, kept in sync. Resets the h2's uppercase/spacing to read as a filter. */
-.minaccfilter {
-    text-transform: none;
-    letter-spacing: 0;
-    font-weight: normal;
-    font-size: .8rem;
-    color: var(--muted);
-    margin-left: .6rem;
-}
-
-.minaccfilter input {
-    width: 3.5rem;
-}
-
 /* ---- level histograms ---- */
 #levelhist {
     display: flex;

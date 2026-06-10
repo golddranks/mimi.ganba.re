@@ -1,7 +1,7 @@
 <!-- Sound-file confusion-matrix controls + grid, shared by stats (all users) and
      the dashboard (one user). The controls split into three labelled groups so the
      distinct concerns read at a glance:
-       · data shown   — which metric, and counts vs per-sound %
+       · data shown   — which metric, and counts vs % offered
        · data filters — thresholds on the displayed rows (min attempts, min % wrong)
        · user filters — which users' data feeds the matrix ({{userfilters}}: empty on
          the dashboard, which is already a single user)
@@ -21,7 +21,7 @@
         </span>
         <span class="modeswitch" data-switch="mode" id="confmodev">
             <label><input type="radio" name="confmodev" value="count" checked>counts</label>
-            <label><input type="radio" name="confmodev" value="pct">per-sound %</label>
+            <label><input type="radio" name="confmodev" value="pct">% offered</label>
         </span>
     </div>
     <div class="vcgroup">

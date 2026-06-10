@@ -2,30 +2,10 @@
    filter row, @imported by both the admin and the per-user dashboard so the
    component looks identical on both. */
 
-.voicefilter {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    margin: 0 0 .6rem;
-    font-size: .85rem;
-    color: var(--muted);
-}
-
-.voicefilter input,
-.minaccfilter input {
-    padding: .25rem .5rem;
-    border-radius: 4px;
-    border: 1px solid var(--panel-2);
-    background: var(--bg);
-    color: var(--fg);
-    font: inherit;
-    width: 4rem;
-}
-
-/* The sound-file matrix's controls, split into three labelled rows under the card
+/* The confusion matrices' controls, split into labelled rows under the card
    heading — "data shown" / "data filters" / "user filters" — so the kinds of
-   setting are obvious. Identical on stats and the dashboard (the dashboard just
-   omits the user-filters row). */
+   setting are obvious. A matrix shows only the rows it has: the kana matrix has no
+   "data filters"; the dashboard (one user) has no "user filters". */
 .vccontrols {
     display: flex;
     flex-direction: column;
