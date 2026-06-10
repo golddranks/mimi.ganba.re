@@ -123,7 +123,7 @@ export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = f
   el.style.position = "relative";
   el.innerHTML =
     `<div style="position:absolute;inset:0 0 0 26px;overflow:hidden">`
-    + `<svg style="position:absolute;top:0;right:0;height:100%;width:${w}px">${tickLines}${gridlines}${bars}${labels}${annotate(max, X, Y, w)}</svg>`
+    + `<svg style="position:absolute;top:0;left:auto;right:0;height:100%;width:${w}px">${tickLines}${gridlines}${bars}${labels}${annotate(max, X, Y, w)}</svg>`
     + `</div>`
     + `<svg style="position:absolute;left:0;top:0;width:26px;height:100%;overflow:visible">${tickText}</svg>`;
 }

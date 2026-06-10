@@ -345,8 +345,12 @@ body {
                              the SVG's 300×150 default replaced-element size */
 }
 
+/* Hourly/reaction-time only: stretchy %-geometry SVGs that fill their card.
+   NOT the streak chart — that's a dayBarChart, which lays out its own clipper
+   and right-anchored fixed-width plot; an inset:0 here injects left:0 under its
+   inline right:0 (over-constrained → right is dropped) and silently re-anchors
+   the plot to the empty padded past. */
 #hourlychart svg,
-#streakchart svg,
 #rtchart svg {
     position: absolute;
     inset: 0;
