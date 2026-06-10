@@ -45,12 +45,13 @@ export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = f
   // The geometry distributes a LOGICAL 960-unit box across the element's real
   // width, so the historical 18-unit bin cap — a desktop aesthetic — renders as a
   // ~6px sliver on a phone however few days are drawn. Express the floor in
-  // physical pixels instead: bins are at least ~9px on screen (18 logical units
+  // physical pixels instead: bins are at least ~16px on screen (18 logical units
   // when that's bigger, preserving the desktop look), and only the most recent
-  // days that fit at that pitch are shown. The bar cap scales with the bin so the
-  // bar:gap ratio stays the desktop 14:18.
+  // days that fit at that pitch are shown — a phone gets ~3 weeks of fat bars,
+  // not a month of hairlines. The bar cap scales with the bin so the bar:gap
+  // ratio stays the desktop 14:18.
   const scale = w / (el.clientWidth || w);   // logical units per physical px
-  const binCap = Math.max(18, 9 * scale);
+  const binCap = Math.max(18, 16 * scale);
   const fitDays = Math.max(7, Math.floor((w - 40) / binCap));
   if (days.length > fitDays) days = days.slice(-fitDays);
   const max = Math.max(1, ...days.map(mag));
