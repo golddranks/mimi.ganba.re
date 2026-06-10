@@ -195,9 +195,11 @@ function mixPct(mag, diag, maxOn, maxOff) {
 }
 
 // Whether a cell's fill is strong enough that light mode's near-black text reads
-// muddy on it — both painters tag such cells .deep, and light-mode CSS flips
-// their text to white. (Dark mode is unaffected: its strong fills are bright,
-// and the card-coloured halo covers them.)
+// muddy on it. Both painters tag such cells .deep; the shared CSS (voiceconf.css)
+// flips light mode's DIAGONAL deep cells to white text — the teal/accent hues are
+// genuinely dark there, while the off-diagonal orange is too light to carry
+// white. (Dark mode is unaffected: its strong fills are bright, and the
+// card-coloured halo covers them.)
 export const confusionDeep = (mag, diag, maxOn, maxOff) =>
   mag > 0 && mixPct(mag, diag, maxOn, maxOff) >= 60;
 

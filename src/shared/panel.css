@@ -443,23 +443,8 @@ body {
     border: 1px solid var(--panel-2);
     font-size: .72rem;
     color: var(--fg);
-    /* Dark mode only: a saturated cell fill can land close to --fg's luminance
-       (light on light), so a card-coloured halo keeps the number legible. */
-    text-shadow: 0 0 2px var(--panel), 0 0 2px var(--panel);
-}
-
-@media (prefers-color-scheme: light) {
-    .confgrid td {
-        /* In light mode the same halo is a white glow around dark glyphs — it
-           blurs them. */
-        text-shadow: none;
-    }
-
-    /* Strong fills (.deep, tagged by the painter) are dark enough that the
-       near-black text reads muddy — flip those cells to white text. */
-    .confgrid td.deep {
-        color: #fff;
-    }
+    /* halo / light-mode .deep text treatment lives in voiceconf.css — ONE block
+       for both matrices, so the pages can't drift apart */
 }
 
 /* Consonant matrix: centered, with larger cells than the per-vowel grids

@@ -177,21 +177,32 @@
     border: 1px solid var(--panel-2);
     font-size: 0.7rem;
     color: var(--fg);
-    /* Dark mode only: a saturated cell fill can sit close to --fg's luminance
-       (light on light), so a card-coloured halo keeps the number legible. */
+}
+
+/* ---- cell TEXT treatment, for BOTH confusion matrices ----
+   .confgrid (kana/consonant, on the dashboard and stats) and .vconfgrid (sound-
+   file) — defined ONCE here, in the stylesheet both pages import, so the two
+   matrices cannot drift apart (they did: the dashboard's kana copy missed both
+   rules below).
+   · Dark mode: a saturated fill can sit close to --fg's luminance (light on
+     light), so a card-coloured halo keeps the number legible.
+   · Light mode: the halo would be a white glow blurring dark glyphs — off. And
+     strong DIAGONAL fills (teal/accent, the genuinely dark hues; tagged .deep by
+     the painters) flip to white text. Off-diagonal deep cells stay dark-text:
+     light mode's orange is too light to carry white. */
+.confgrid td,
+.vconfgrid td {
     text-shadow: 0 0 2px var(--panel), 0 0 2px var(--panel);
 }
 
 @media (prefers-color-scheme: light) {
+    .confgrid td,
     .vconfgrid td {
-        /* In light mode the same halo is a white glow around dark glyphs — it
-           blurs them. */
         text-shadow: none;
     }
 
-    /* Strong fills (.deep, tagged by the painter) are dark enough that the
-       near-black text reads muddy — flip those cells to white text. */
-    .vconfgrid td.deep {
+    .confgrid td.diag.deep,
+    .vconfgrid td.diag.deep {
         color: #fff;
     }
 }
