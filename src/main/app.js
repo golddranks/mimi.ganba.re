@@ -306,7 +306,7 @@ function askChoices(target, idx, opts) {
 let nativePairs = [], nativePtr = 0;
 async function loadNativePairs() {
   try {
-    const r = await fetch(STATS_URL + "/v1/native/pairs");
+    const r = await fetch(STATS_URL + "/v1/native/pairs?uid=" + encodeURIComponent(uid));
     nativePairs = (r.ok && (await r.json()).pairs) || [];
   } catch { nativePairs = []; }
   nativePtr = 0;

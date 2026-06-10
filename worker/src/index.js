@@ -13,7 +13,7 @@
 // activity, and the uid drill-downs / nicknames). The two admin endpoints map
 // 1:1 onto the tiers.
 
-import { nameOf } from "./voicemap.js";
+import { nameOf, VOICE_MAP } from "./voicemap.js";
 import { MIGRATIONS } from "./migrations.js";
 import { levelIdx, onCorrect, onWrong, onRelisten } from "../../src/shared/skill.js";
 import { confusionRecord } from "../../src/shared/tally.js";
@@ -182,7 +182,7 @@ export default {
       } else if (req.method === "GET" && url.pathname === "/v1/voice-attempts") {
         res = await handleVoiceAttempts(req, env);
       } else if (req.method === "GET" && url.pathname === "/v1/native/pairs") {
-        res = await handleNativePairs(req, env);
+        res = await handleNativePairs(req, env, url);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+\/events$/)) {
         res = await handleGetEvents(req, env, url);
       } else if (req.method === "GET" && url.pathname.match(/^\/v1\/user\/[^/]+$/)) {
@@ -407,14 +407,19 @@ async function handleVoiceAttempts(req, env) {
 // /v1/voice-attempts groups on, so we group on it too rather than the voice name.
 // For each off-diagonal (recording, confuser kana):
 //   wrong-rate = times the confuser was picked ÷ times it was offered.
-// A pair is dropped once high-accuracy listeners (>90% overall) have been offered
-// it ≥5 times — treated as vetted, not worth a native's time. The survivors are
-// ranked by wrong-rate (random tie-break); the top 200 become a no-repeat session.
-async function handleNativePairs(req, env) {
+// The candidate universe is EVERY recording (VOICE_MAP) × its same-vowel confusers,
+// so pairs nobody has been offered yet (0/0) are included too. A pair is dropped if
+// (a) high-accuracy listeners (>90% overall) have been offered it ≥5 times (vetted),
+// or (b) the requesting native (?uid) has already been offered it — never re-drill a
+// pair they've seen. Ranked by wrong-rate desc, then fewest offered (an untested 0/0
+// pair beats a tested-but-unconfused 0/1), random among exact ties; top 200 → a
+// no-repeat session.
+async function handleNativePairs(req, env, url) {
   const db = env.mimi_stats;
+  const uid = url.searchParams.get("uid") || "";
   const EXPERT = `uid IN (SELECT uid FROM events WHERE ${ANSWER_EVS} AND ${EXCLUDE_AUTO}
        GROUP BY uid HAVING SUM(${CORRECT}) * 100.0 / COUNT(*) > 90)`;
-  const [allRows, expertRows] = await Promise.all([
+  const [allRows, expertRows, mineRows] = await Promise.all([
     db.prepare(
       `SELECT target AS t, idx AS i, opts AS o, picked AS p, COUNT(*) AS n
        FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${EXCLUDE_AUTO}
@@ -425,6 +430,14 @@ async function handleNativePairs(req, env) {
        FROM events WHERE ev IN ('a','g') AND opts IS NOT NULL AND ${EXCLUDE_AUTO} AND ${EXPERT}
        GROUP BY target, idx, opts`
     ).all(),
+    // Pairs this native has already been offered (opts expanded in JS) → skip set.
+    uid
+      ? db.prepare(
+          `SELECT target AS t, idx AS i, opts AS o FROM events
+           WHERE ev IN ('a','g') AND opts IS NOT NULL AND uid = ?
+           GROUP BY target, idx, opts`
+        ).bind(uid).all()
+      : Promise.resolve({ results: [] }),
   ]);
   // shown/offered over everyone; expertOffered restricted to >90% listeners.
   const shown = {}, offered = {}, expertOffered = {};
@@ -435,14 +448,25 @@ async function handleNativePairs(req, env) {
   for (const r of expertRows.results || []) {
     for (const k of r.o.split(",")) expertOffered[`${r.t}/${r.i}/${k}`] = (expertOffered[`${r.t}/${r.i}/${k}`] || 0) + r.n;
   }
+  const mine = new Set();
+  for (const r of mineRows.results || []) for (const k of r.o.split(",")) mine.add(`${r.t}/${r.i}/${k}`);
+
+  // Enumerate the full universe so untested pairs are candidates, not just the
+  // ones already in `offered`.
   const ranked = [];
-  for (const key in offered) {
-    const [t, i, c] = key.split("/");
-    if (c === t) continue;                          // off-diagonal only (confuser ≠ recording)
-    if ((expertOffered[key] || 0) >= 5) continue;   // vetted by high-accuracy listeners
-    ranked.push({ mora: t, idx: +i, confuser: c, rate: (shown[key] || 0) / offered[key], offered: offered[key], wrong: shown[key] || 0, rand: Math.random() });
+  for (const t in VOICE_MAP) {
+    const confusers = (VOWEL_GROUPS[t.slice(-1)] || []).filter((c) => c !== t);
+    for (let i = 0; i < VOICE_MAP[t].length; i++) {
+      for (const c of confusers) {
+        const key = `${t}/${i}/${c}`;
+        if (mine.has(key)) continue;                    // this native already saw it
+        if ((expertOffered[key] || 0) >= 5) continue;   // vetted by high-accuracy listeners
+        const off = offered[key] || 0;
+        ranked.push({ mora: t, idx: i, confuser: c, rate: off ? (shown[key] || 0) / off : 0, offered: off, wrong: shown[key] || 0, rand: Math.random() });
+      }
+    }
   }
-  ranked.sort((a, b) => b.rate - a.rate || b.rand - a.rand);
+  ranked.sort((a, b) => b.rate - a.rate || a.offered - b.offered || b.rand - a.rand);
   // offered/wrong (rate's denominator/numerator) ride along for debugging — the client ignores them.
   return json({ pairs: ranked.slice(0, 200).map(({ mora, idx, confuser, offered, wrong }) => ({ mora, idx, confuser, offered, wrong })) });
 }

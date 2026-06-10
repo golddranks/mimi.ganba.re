@@ -183,12 +183,49 @@ test("native pairs: keeps high-wrong recordings, drops expert-vetted ones", { sk
   const { pairs } = await (await fetch(`${WORKER}/v1/native/pairs`)).json();
   assert.ok(Array.isArray(pairs) && pairs.every((p) => p.mora && Number.isInteger(p.idx) && p.confuser),
     "returns well-formed {mora, idx, confuser} pairs");
-  assert.ok(pairs.every((p) => Number.isInteger(p.offered) && Number.isInteger(p.wrong) && p.wrong <= p.offered && p.offered > 0),
-    "each pair carries debug counts (wrong ≤ offered)");
+  assert.ok(pairs.every((p) => Number.isInteger(p.offered) && Number.isInteger(p.wrong) && p.wrong <= p.offered && p.offered >= 0),
+    "each pair carries debug counts (wrong ≤ offered; 0/0 untested pairs allowed)");
   if (!ISOLATED) return;   // exact ranking membership only holds on a fresh DB
-  const has = (c) => pairs.some((p) => p.mora === "zo" && p.confuser === c);
+  // Pin idx 0: the seeded data is on zo#0, and the universe now also offers the
+  // never-tested zo#1/syo… (0/0) pairs, so confuser alone isn't specific enough.
+  const has = (c) => pairs.some((p) => p.mora === "zo" && p.idx === 0 && p.confuser === c);
   assert.ok(has("so"), "kept the high-wrong, un-vetted pair");
   assert.ok(!has("syo"), "dropped the pair vetted by ≥5 expert offers");
+});
+
+test("native pairs: includes untested (0/0) pairs, ranked below confused but above tested-fine ones", { skip: LIVE }, async () => {
+  // Two ti#0 confusions at different wrong-rates so the list isn't all-zeros, then
+  // assert the whole returned list obeys: wrong-rate desc, then fewest-offered first
+  // — which is exactly "an untested 0/0 pair outranks a tested-but-unconfused 0/1".
+  await postEvents(await freshTestUser({ role: 0 }), [
+    { ts: Date.now(), target: "ti", idx: 0, picked: "si", cap: 2, ms: 500, ev: "a", opts: ["ti", "si"], skill: 0 },   // ti#0/si wrong
+    { ts: Date.now() + 1, target: "ti", idx: 0, picked: "ti", cap: 2, ms: 500, ev: "a", opts: ["ti", "zi"], skill: 0 },   // ti#0/zi right
+  ]);
+  const { pairs } = await (await fetch(`${WORKER}/v1/native/pairs`)).json();
+  if (!ISOLATED) return;
+  assert.ok(pairs.some((p) => p.offered === 0), "never-offered (0/0) pairs are candidates");
+  for (let j = 1; j < pairs.length; j++) {
+    const a = pairs[j - 1], b = pairs[j];
+    const rA = a.offered ? a.wrong / a.offered : 0, rB = b.offered ? b.wrong / b.offered : 0;
+    assert.ok(rA > rB || (rA === rB && a.offered <= b.offered), `ordered by rate desc then offered asc (at ${j})`);
+  }
+});
+
+test("native pairs: ?uid drops pairs the native has already been offered", { skip: LIVE }, async () => {
+  // tu#0/zu confused twice → a top-rate pair. It's offered to a native who hasn't
+  // seen it, but excluded for the one who drilled it (no re-testing the same pair).
+  const seen = await freshTestUser({ role: 0 });
+  await postEvents(seen, [
+    { ts: Date.now(), target: "tu", idx: 0, picked: "zu", cap: 2, ms: 500, ev: "a", opts: ["tu", "zu"], skill: 0 },
+    { ts: Date.now() + 1, target: "tu", idx: 0, picked: "zu", cap: 2, ms: 500, ev: "a", opts: ["tu", "zu"], skill: 0 },
+  ]);
+  const fresh = await freshTestUser({ role: 0 });   // a different native, hasn't seen it
+  const has = (pairs) => pairs.some((p) => p.mora === "tu" && p.idx === 0 && p.confuser === "zu");
+  const forFresh = (await (await fetch(`${WORKER}/v1/native/pairs?uid=${fresh}`)).json()).pairs;
+  const forSeen = (await (await fetch(`${WORKER}/v1/native/pairs?uid=${seen}`)).json()).pairs;
+  if (!ISOLATED) return;
+  assert.ok(has(forFresh), "offered to a native who hasn't drilled it");
+  assert.ok(!has(forSeen), "excluded for the native who already drilled it");
 });
 
 // skip on LIVE: posts role-0 seed data and role-0 native answers.
