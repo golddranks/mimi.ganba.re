@@ -1,4 +1,5 @@
-@import "../shared/voiceconf.css";   /* sound-file confusion matrix styles (shared with admin) */
+@import "../shared/voiceconf.css";
+/* sound-file confusion matrix styles (shared with admin) */
 
 :root {
     --bg: #0f1419;
@@ -7,9 +8,11 @@
     --fg: #e8eaed;
     --muted: #8893a3;
     --accent: #5da9ff;
-    --good: #3fc7b4;   /* blue-green / orange, luminance-distinct — see app.css */
+    --good: #3fc7b4;
+    /* blue-green / orange, luminance-distinct — see app.css */
     --bad: #e08544;
-    --bad-bar: color-mix(in srgb, var(--bad) 55%, var(--panel));   /* muted "wrong" bar fill — see app.css */
+    --bad-bar: color-mix(in srgb, var(--bad) 55%, var(--panel));
+    /* muted "wrong" bar fill — see app.css */
     font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", sans-serif;
 }
 
@@ -68,7 +71,7 @@ body {
     margin: 0;
     font-family: "Tahoma", sans-serif;
     font-size: 1.05rem;
-    letter-spacing: 0.4em;
+    letter-spacing: 0.3em;
 }
 
 #hdr .back {
@@ -140,7 +143,8 @@ body {
     display: grid;
     gap: 1rem;
     grid-template-columns: 1fr;
-    align-items: start;   /* cards size to content — don't stretch to match a taller neighbour (the per-sound card); the .stack opts back into stretch */
+    align-items: start;
+    /* cards size to content — don't stretch to match a taller neighbour (the per-sound card); the .stack opts back into stretch */
     /* Matches admin: wide enough for the sound-file confusion matrix's four
        vowel-group tables to sit side-by-side in one row. */
     max-width: 1400px;
@@ -152,7 +156,7 @@ body {
         grid-template-columns: 1fr 1fr;
     }
 
-    #dash > .span2 {
+    #dash>.span2 {
         grid-column: 1 / -1;
     }
 
@@ -160,7 +164,7 @@ body {
        column 1 beside the tall per-sound card. Stretch it to the per-sound
        card's height (the row's natural height) so it doesn't leave a gap
        below. */
-    #dash > .stack {
+    #dash>.stack {
         align-self: stretch;
     }
 }
@@ -178,7 +182,7 @@ body {
     min-height: 0;
 }
 
-.stack > .card {
+.stack>.card {
     min-height: 0;
     overflow: hidden;
     display: flex;
@@ -263,7 +267,8 @@ body {
 
 .card svg {
     width: 100%;
-    height: 100%;   /* fill the container; charts are authored viewBox-less with %
+    height: 100%;
+    /* fill the container; charts are authored viewBox-less with %
                        geometry, so they stretch to whatever box the container gives
                        them (an aspect-ratio box for daily, a flex box in .stack) */
     display: block;
@@ -353,7 +358,8 @@ body {
 #rtchart {
     flex: 1;
     min-height: 0;
-    position: relative;   /* the SVG fills via absolute inset:0 (below), so the
+    position: relative;
+    /* the SVG fills via absolute inset:0 (below), so the
                              chart contributes no intrinsic height — the stack
                              takes its height from the per-sound card, never from
                              the SVG's 300×150 default replaced-element size */
@@ -366,11 +372,28 @@ body {
     inset: 0;
 }
 
+/* On mobile (single column) the .stack isn't stretched to the per-sound card's
+   height, so its minmax(0, 1fr) rows would squash these absolutely-positioned
+   chart SVGs to nothing (just the heading showing). Let the rows size to content
+   and give each chart a legible floor. */
+@media (max-width: 879px) {
+    .stack {
+        grid-auto-rows: auto;
+    }
+
+    #hourlychart,
+    #streakchart,
+    #rtchart {
+        min-height: 9rem;
+    }
+}
+
 /* ---- skill levels ---- */
 #levels {
     display: grid;
     gap: .3rem;
-    container-type: inline-size;   /* so .lvlrow can reflow on its own width */
+    container-type: inline-size;
+    /* so .lvlrow can reflow on its own width */
 }
 
 .lvlrow {
@@ -494,7 +517,8 @@ body {
     background: var(--good);
     height: 100%;
     border-radius: 3px;
-    box-shadow: inset -1px 0 0 var(--bg);   /* hairline at the correct/total boundary */
+    box-shadow: inset -1px 0 0 var(--bg);
+    /* hairline at the correct/total boundary */
 }
 
 .mtxt {
@@ -516,7 +540,8 @@ body {
 }
 
 .confgroup {
-    --cell: 2.6rem;   /* single source for cell size; the title offset derives from it */
+    --cell: 2.6rem;
+    /* single source for cell size; the title offset derives from it */
 }
 
 .confgroup h3 {
@@ -575,36 +600,87 @@ body {
    adjacent probe cells' dashes keep a visible gutter instead of merging into one
    strong line. Neither box-shadow nor outline shifts layout; .selected (below)
    overrides probe's outline when a probe cell is clicked. See shared/confusion.js. */
-.confgrid td.grind { box-shadow: inset 0 0 0 3px var(--fg); }
+.confgrid td.grind {
+    box-shadow: inset 0 0 0 3px var(--fg);
+}
+
 .confgrid td.probe {
     outline: 1px dashed color-mix(in srgb, var(--fg) 45%, transparent);
     outline-offset: -4px;
 }
 
 /* Clicked cell + its history strip (red/green per-answer boxes + trend line). */
-.confgrid td { cursor: pointer; }
+.confgrid td {
+    cursor: pointer;
+}
 
 /* Consonant matrix: centered and non-clickable (no per-cell history). Cells are
    larger than the per-vowel ones because the vowel-merged counts are bigger. */
-#conschart { text-align: center; }
-#conschart .confgrid { margin-inline: auto; }
-#conschart .confgrid td { cursor: default; }
-#conschart .confgroup { --cell: 3rem; }   /* bigger cells (vowel-merged counts); title offset follows */
-.confgrid td.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+#conschart {
+    text-align: center;
+}
 
-#confdetail { margin-top: .6rem; overflow-x: auto; }
-#confdetail .cd-head { font-size: .8rem; color: var(--fg); margin-bottom: .3rem; }
+#conschart .confgrid {
+    margin-inline: auto;
+}
+
+#conschart .confgrid td {
+    cursor: default;
+}
+
+#conschart .confgroup {
+    --cell: 3rem;
+}
+
+/* bigger cells (vowel-merged counts); title offset follows */
+.confgrid td.selected {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+#confdetail {
+    margin-top: .6rem;
+    overflow-x: auto;
+}
+
+#confdetail .cd-head {
+    font-size: .8rem;
+    color: var(--fg);
+    margin-bottom: .3rem;
+}
+
 /* Filename of the last-played mark (click-to-replay). word-break so a long
    path/voice name wraps instead of forcing the card wider. */
-#confdetail .cd-file { font-size: .72rem; color: var(--muted); margin-bottom: .35rem; word-break: break-all; }
+#confdetail .cd-file {
+    font-size: .72rem;
+    color: var(--muted);
+    margin-bottom: .35rem;
+    word-break: break-all;
+}
+
 /* Keep the strip its natural size — the global `.card svg { width: 100% }`
    chart rule would otherwise stretch it to the card width (and ~280px tall). */
-#confdetail .cd-strip { display: block; width: auto; height: auto; }
+#confdetail .cd-strip {
+    display: block;
+    width: auto;
+    height: auto;
+}
+
 /* Each ○/✕ box is a clickable group; outline it on hover, accent the playing one
    (stroke draws into the inter-box gap, so boxes don't shift). */
-#confdetail .cd-mark { cursor: pointer; }
-#confdetail .cd-mark:hover rect { stroke: var(--fg); stroke-width: 2; }
-#confdetail .cd-mark.playing rect { stroke: var(--accent); stroke-width: 2.5; }
+#confdetail .cd-mark {
+    cursor: pointer;
+}
+
+#confdetail .cd-mark:hover rect {
+    stroke: var(--fg);
+    stroke-width: 2;
+}
+
+#confdetail .cd-mark.playing rect {
+    stroke: var(--accent);
+    stroke-width: 2.5;
+}
 
 /* Drift notice — shown only when this device's grind_tally disagrees with the
    server's confusion data (see checkTallyDrift). The global
@@ -620,6 +696,7 @@ body {
     font-size: .8rem;
     color: var(--bad);
 }
+
 #syncbtn {
     background: var(--accent);
     color: #fff;
@@ -641,6 +718,7 @@ body {
     font-size: .8rem;
     color: var(--muted);
 }
+
 #reminderbtn {
     background: var(--accent);
     color: #fff;
@@ -651,7 +729,11 @@ body {
     font: inherit;
     white-space: nowrap;
 }
-#reminderbtn:disabled { opacity: .6; cursor: default; }
+
+#reminderbtn:disabled {
+    opacity: .6;
+    cursor: default;
+}
 
 /* ---- legend ---- */
 .legend {
