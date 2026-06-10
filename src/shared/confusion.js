@@ -195,13 +195,14 @@ function mixPct(mag, diag, maxOn, maxOff) {
 }
 
 // Whether a cell's fill is strong enough that light mode's near-black text reads
-// muddy on it. Both painters tag such cells .deep; the shared CSS (voiceconf.css)
-// flips light mode's DIAGONAL deep cells to white text — the teal/accent hues are
-// genuinely dark there, while the off-diagonal orange is too light to carry
-// white. (Dark mode is unaffected: its strong fills are bright, and the
-// card-coloured halo covers them.)
+// muddy on it — both painters tag such cells .deep, and the shared CSS
+// (voiceconf.css) flips them to white text in light mode. The threshold is
+// hue-aware: the diagonal's teal/accent darkens quickly (white wins from a 60%
+// mix), while the off-diagonal orange is light — only its strongest fills (≥72%,
+// near the 80% ceiling) are dark enough to carry white. (Dark mode is unaffected:
+// its strong fills are bright, and the card-coloured halo covers them.)
 export const confusionDeep = (mag, diag, maxOn, maxOff) =>
-  mag > 0 && mixPct(mag, diag, maxOn, maxOff) >= 60;
+  mag > 0 && mixPct(mag, diag, maxOn, maxOff) >= (diag ? 60 : 72);
 
 // Paint a set of td[data-t][data-p] cells from `maps`: two passes (find the
 // per-category maxima, then colour). Sets background, textContent and .empty.

@@ -188,9 +188,9 @@
    · Dark mode: a saturated fill can sit close to --fg's luminance (light on
      light), so a card-coloured halo keeps the number legible.
    · Light mode: the halo would be a white glow blurring dark glyphs — off. And
-     strong DIAGONAL fills (teal/accent, the genuinely dark hues; tagged .deep by
-     the painters) flip to white text. Off-diagonal deep cells stay dark-text:
-     light mode's orange is too light to carry white. */
+     .deep cells (tagged by the painters, hue-aware threshold: teal/accent from a
+     60% mix, the lighter orange only near its ceiling — see confusionDeep) flip
+     to white text. */
 .confgrid td,
 .vconfgrid td {
     text-shadow: 0 0 2px var(--panel), 0 0 2px var(--panel);
@@ -202,8 +202,8 @@
         text-shadow: none;
     }
 
-    .confgrid td.diag.deep,
-    .vconfgrid td.diag.deep {
+    .confgrid td.deep,
+    .vconfgrid td.deep {
         color: #fff;
     }
 }
