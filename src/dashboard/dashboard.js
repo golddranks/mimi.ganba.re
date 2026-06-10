@@ -345,8 +345,10 @@ function drawDaily() {
   });
   // counts: bar height ∝ the day's answer volume. %: every day is a full-height
   // bar split by its accuracy, so days compare by rate rather than volume — the
-  // daily analogue of the per-sound card's % mode. The tooltip carries both.
-  const mag = displayMode === "pct" ? (d) => (d.total ? 100 : 0) : (d) => d.total;
+  // daily analogue of the per-sound card's % mode. Days with under 20 answers
+  // are shown as empty in %: an accuracy over a handful of answers is noise.
+  // The tooltip carries both numbers either way.
+  const mag = displayMode === "pct" ? (d) => (d.total >= 20 ? 100 : 0) : (d) => d.total;
   dayBarChart(dailychart, days, 200, mag, (d, x, barW, bh, y0) => {
     const cH = d.correct / d.total * bh;
     const tip = dayTip(d.k, d.correct, d.total);

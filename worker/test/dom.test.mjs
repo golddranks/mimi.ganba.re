@@ -686,9 +686,16 @@ test("dashboard: the sound-file matrix has synced metric + count/% switches that
   assert.notEqual(win.voiceconf.innerHTML, countHtml, "the sound-file matrix re-rendered in % mode");
 });
 
-test("dashboard: daily activity follows the counts/% toggle (full-height accuracy bars in %)", { skip: LIVE }, async (t) => {
+test("dashboard: daily activity follows the counts/% toggle (full-height accuracy bars in %, <20-answer days empty)", { skip: LIVE }, async (t) => {
   const uid = await freshTestUser();
-  await postEvents(uid, saFixture(Date.now()));   // 6 answers in one day, 2 correct
+  // Yesterday: the 6-answer saFixture (under the 20-answer % threshold).
+  // Today: 20 answers (12 right) — enough for % mode to show.
+  const t0 = Date.now();
+  await postEvents(uid, [
+    ...saFixture(t0 - 86400000),
+    ...Array.from({ length: 20 }, (_, i) =>
+      ({ ts: t0 + i, target: "sa", idx: 0, picked: i < 12 ? "sa" : "za", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 })),
+  ]);
   const { win, close } = await openPage(`/dashboard/?uid=${uid}`, { setup: (w) => w.localStorage.setItem("uid", uid) });
   t.after(close);
   await waitFor(() => win.dailychart.querySelector("rect") ? true : null, WAIT);
@@ -697,10 +704,12 @@ test("dashboard: daily activity follows the counts/% toggle (full-height accurac
   const pct = win.dailymode.querySelector('input[value="pct"]');
   pct.checked = true; pct.dispatchEvent(new win.Event("change", { bubbles: true }));
   await waitFor(() => win.dailychart.innerHTML !== countHtml ? true : null, WAIT);
-  // In % mode the day renders as a full-height bar (magnitude 100 = the axis max):
-  // the bad-bar rect spans the full inner plot height, 160 of the 200 box = 80%.
+  // In % mode a qualifying day renders as a full-height bar (magnitude 100 = the
+  // axis max): its bad-bar rect spans the full inner plot height, 160/200 = 80%.
+  // Exactly ONE such bar — yesterday's 6-answer day is disregarded as empty.
   const heights = [...win.dailychart.querySelectorAll("rect")].map((r) => r.getAttribute("height"));
-  assert.ok(heights.includes("80%"), `full-height (80% of the 200-box) bar present in % mode (got ${heights})`);
+  assert.equal(heights.filter((h) => h === "80%").length, 1,
+    `one full-height bar in % mode — the <20-answer day stays empty (got ${heights})`);
 });
 
 test("dashboard: the sound-file matrix's row filter relabels 'min % wrong' → 'min %' for non-answered metrics", { skip: LIVE }, async (t) => {
