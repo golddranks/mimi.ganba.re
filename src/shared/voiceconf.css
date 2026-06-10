@@ -31,15 +31,32 @@
     text-transform: uppercase;
 }
 
+/* Centre each button's label on both axes, so a wrapped option like "re-listened"
+   or "after-played" reads centred instead of stuck top-left. The hidden radio is
+   position:absolute, so the label's only in-flow content is its text. (Set here in
+   the CSS both pages @import, atop the per-page .modeswitch rules — they set only
+   colour/padding, so display/alignment merge cleanly.) */
+.modeswitch label {
+    display: flex;
+    flex-direction: column;   /* column so the text fills the width and WRAPS (a row flex would size it to max-content and never wrap) */
+    justify-content: center;  /* vertical centring */
+    text-align: center;       /* horizontal centring of the wrapped lines */
+}
+
+/* Cap the switch at its container so a too-wide one (the 5-option metric switch on
+   a phone) shrinks and its buttons wrap their text — which the rule above then
+   centres — instead of spilling off the screen edge. No effect on desktop, where
+   the switch is well under its container's width. */
+.modeswitch {
+    max-width: 100%;
+}
+
 /* Keep the short-label switches a comfortable tap target — the "%" (counts/%) and
    "all" (population) labels would otherwise be too small to hit on a phone. Scoped
-   to those switches so the already-wide 5-option metric switch isn't widened
-   further. (Set here, in the CSS both pages @import, so it lands on top of the
-   per-page .modeswitch rules without touching their padding/colour.) */
+   to those switches so the already-wide 5-option metric switch isn't widened. */
 .modeswitch[data-switch="mode"] label,
 .modeswitch[data-switch="pop"] label {
     min-width: 2.5rem;
-    text-align: center;
 }
 
 .vcfield {
@@ -121,11 +138,12 @@
     text-align: left;
     padding: 0 .35rem 0 .15rem;
     cursor: pointer;
-    /* The voice-name column scales with the viewport: full width on desktop (so the
-       four vowel-group tables sit side by side), shrinking on a phone so the table
-       fits its width. Longer names ellipsis-truncate via the span below (full name
-       in the th's title). */
-    max-width: min(9rem, 30vw);
+    /* Cap the voice-name column at a fixed width and let longer names ellipsis-
+       truncate (full name in the th's title). It does NOT shrink by viewport — it
+       uses the space it has; if a whole table is too wide for a phone, the matrix
+       scrolls horizontally (see the media query) rather than shrinking text while
+       the row still has room to the right. */
+    max-width: 9rem;
 }
 
 .vconfgrid tbody th.vname>span {
@@ -145,6 +163,9 @@
     border: 1px solid var(--panel-2);
     font-size: 0.7rem;
     color: var(--fg);
+    /* Halo in the card colour so the number stays legible on a saturated cell fill
+       (which in dark mode can sit close to --fg's luminance — light on light). */
+    text-shadow: 0 0 2px var(--panel), 0 0 2px var(--panel);
 }
 
 .vconfgrid td.diag {
@@ -158,10 +179,21 @@
 }
 
 /* On a phone, tighten the grid (smaller cells, font, gaps) so a vowel-group table
-   fits the screen — the voice-name column already scales via min(…, 30vw) above. */
+   mostly fits; a table still too wide scrolls horizontally rather than widening the
+   card or shrinking the voice-name column prematurely. */
 @media (max-width: 560px) {
     #voiceconf {
         gap: .6rem 1rem;
+        overflow-x: auto;
+    }
+
+    /* Give each switch its own full-width row so a wide one (the 5-option metric
+       switch) has room to fit — or, on a very narrow phone, wraps its buttons
+       (their text centred by the .modeswitch label rule) — instead of overflowing
+       beside the group label. */
+    .vcgroup .modeswitch {
+        flex-basis: 100%;
+        flex-wrap: wrap;
     }
 
     .vconfgrid thead th,

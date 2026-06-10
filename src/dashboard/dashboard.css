@@ -374,17 +374,40 @@ body {
 
 /* On mobile (single column) the .stack isn't stretched to the per-sound card's
    height, so its minmax(0, 1fr) rows would squash these absolutely-positioned
-   chart SVGs to nothing (just the heading showing). Let the rows size to content
-   and give each chart a legible floor. */
+   chart SVGs to nothing (just the heading showing); and daily activity's wide
+   aspect-ratio leaves it a sliver tall. Give all four charts one legible height. */
 @media (max-width: 879px) {
     .stack {
         grid-auto-rows: auto;
     }
 
+    #dailychart {
+        aspect-ratio: auto;
+    }
+
+    #dailychart,
     #hourlychart,
     #streakchart,
     #rtchart {
-        min-height: 9rem;
+        min-height: 10rem;
+    }
+}
+
+/* Phone: reclaim horizontal space (body + card both inset, doubling the gutter)
+   and let a wide matrix scroll inside its card rather than widening the whole page
+   — page-level overflow was clipping the per-sound readouts off the right edge. */
+@media (max-width: 560px) {
+    body {
+        padding: .5rem;
+    }
+
+    .card {
+        padding: 1rem .8rem;
+    }
+
+    #confchart,
+    #conschart {
+        overflow-x: auto;
     }
 }
 

@@ -41,6 +41,11 @@ export function niceTicks(max) {
 // arrive as percentages (see below) to append "%" to; optional
 // `annotate(max, X, Y)` adds a corner label; `grid` draws week/month date guides.
 export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = false) {
+  // Show only the most-recent days that fit the container at a legible bar pitch, so
+  // a long history doesn't render as hair-thin bars on a narrow screen. ~7px/day
+  // against the element's real width (the SVG is %-geometry, stretched to it).
+  const fitDays = Math.max(7, Math.floor(((el.clientWidth || 960) - 20) / 7));
+  if (days.length > fitDays) days = days.slice(-fitDays);
   const w = 960, innerH = h - 40, y0 = h - 20;
   const max = Math.max(1, ...days.map(mag));
   const binW = Math.min((w - 40) / Math.max(1, days.length), 18);

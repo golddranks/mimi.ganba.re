@@ -431,6 +431,10 @@ body {
     border: 1px solid var(--panel-2);
     font-size: .72rem;
     color: var(--fg);
+    /* The cell fill (a teal/orange tint) can land close to --fg's luminance — light
+       on light in dark mode. A halo in the card colour keeps the number legible on
+       any cell intensity, in both themes. */
+    text-shadow: 0 0 2px var(--panel), 0 0 2px var(--panel);
 }
 
 /* Consonant matrix: centered, with larger cells than the per-vowel grids
