@@ -1086,7 +1086,11 @@ test("admin: minacc filter drops low-accuracy users from the confusion matrices"
   assert.equal(await offeredZa(90) - before90, 0, "minacc=90 excludes the low-accuracy user");
 });
 
-test("voice-attempts: per-recording matrix coverage = min over same-vowel confusers", async () => {
+// skip on LIVE: the counted answers need a role-0 uid (EXCLUDE_TEST keeps test
+// users out of voice-attempts), and a bare randomUUID() the janitor never purges
+// (role 1 only) would permanently pollute prod aggregates — so this runs only in
+// the isolated sandbox, like the other role-0-data tests.
+test("voice-attempts: per-recording matrix coverage = min over same-vowel confusers", { skip: LIVE }, async () => {
   const get = async () => (await fetch(`${WORKER}/v1/voice-attempts`)).json();
   const real = randomUUID();   // not a TestUser → counted
   const t0 = Date.now();
