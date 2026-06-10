@@ -188,12 +188,12 @@ export function confusionBg(mag, diag, maxOn, maxOff, scheme = "outcome") {
 }
 
 // Mix strength: the % of the base hue in the cell fill, normalised within the
-// cell's category (the same a as confusionBg). 10% floor — enough that a nonzero
-// cell reads as data (vs the .empty grey), faint enough that a cell far below the
-// view's worst looks nearly white instead of alarmingly colourful.
+// cell's category (the same a as confusionBg). 5% floor — just enough that a
+// nonzero cell reads as data (vs the .empty grey), faint enough that a cell far
+// below the view's worst looks nearly white instead of alarmingly colourful.
 function mixPct(mag, diag, maxOn, maxOff) {
   const a = diag ? (maxOn ? mag / maxOn : 0) : (maxOff ? mag / maxOff : 0);
-  return Math.round(10 + a * (diag ? 60 : 70));
+  return Math.round(5 + a * (diag ? 65 : 75));
 }
 
 // Whether a cell's fill is strong enough that light mode's near-black text reads
