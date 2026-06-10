@@ -488,8 +488,8 @@ body {
     justify-content: center;
 }
 
-/* Same specificity trick as #uidform — explicit [hidden] override beats
-   the #-selector display rule above. */
+/* The #-selector display rule above outranks the UA [hidden] rule on
+   specificity, so spell out the hidden case explicitly. */
 #uidpopup[hidden] {
     display: none;
 }

@@ -48,12 +48,11 @@ const uid = params.get("uid") || viewerUid;
 let viewedTzMin = -new Date().getTimezoneOffset();
 let tzKnown = false;
 
-// Capture the elements that async callbacks (the form reveal, renderReminders, the
-// view-as gate) touch after a fetch resolves. Holding the node means a callback
+// Capture the elements that async callbacks (the stats-link reveal, renderReminders,
+// the view-as gate) touch after a fetch resolves. Holding the node means a callback
 // that lands after navigation still sets a (now-detached) element instead of
-// throwing on a window global that's gone — which in tests surfaces as an
-// "uidform/reminders is not defined" rejection when the page is torn down mid-fetch.
-const uidform = document.getElementById("uidform");
+// throwing on a window global that's gone — which in tests surfaces as a
+// "statslink/reminders is not defined" rejection when the page is torn down mid-fetch.
 const statslink = document.getElementById("statslink");
 const reminders = document.getElementById("reminders");
 const reminderstatus = document.getElementById("reminderstatus");
@@ -70,16 +69,9 @@ if (params.get("uid")) {
   document.querySelector(".back").href = "../?uid=" + encodeURIComponent(params.get("uid"));
 }
 
-uidform.onsubmit = (e) => {
-  e.preventDefault();
-  const v = uidinput.value.trim();
-  if (!v) return;
-  location.search = "?uid=" + encodeURIComponent(v);
-};
-
-// Viewer's power level (cached promise): drives the view-as gate, the uid-load
-// form, and the reminder readout. The resolved level is also remembered in
-// localStorage so the form can reveal synchronously next time (see below).
+// Viewer's power level (cached promise): drives the view-as gate, the stats link,
+// and the reminder readout. The resolved level is also remembered in localStorage
+// so the link can reveal synchronously next time (see below).
 let viewerLevelP;
 const viewerLevel = () => (viewerLevelP ||= viewerUid
   ? fetch(STATS_URL + "/v1/user/" + encodeURIComponent(viewerUid))
@@ -101,7 +93,6 @@ let displayMode = wireSwitchGroup(document.querySelectorAll('[data-switch="mode"
 });
 
 if (uid) {
-  uidinput.value = uid;
   if (uid === viewerUid) {
     load(uid);                       // your own dashboard — always allowed
   } else {
@@ -184,20 +175,14 @@ reminderbtn.onclick = async () => {
 
 renderReminders();
 
-// Reveal the load-form only at level 2. View-as itself works at level 1 (so a
-// shared ?uid= link opens), but the form — typing in arbitrary uids — is useless
-// below level 2: uids are only obtainable from the DB or the level-2 admin page.
-// Showing it to level-1 users would just invite snooping with uids they can't get.
-//
-// Reveal it synchronously from the remembered level first (this script runs
-// before first paint), so it doesn't flash in after the async check on every
-// refresh; the check then confirms or corrects (and records the level).
 // The aggregate-stats (/stats/) link is a level-1 feature, same gate as view-as;
-// it carries no uid (the page authorises by the viewer's own uid). Same synchronous
-// reveal-from-cache as the form, confirmed by the async check.
+// it carries no uid (the page authorises by the viewer's own uid). Reveal it
+// synchronously from the remembered level first (this script runs before first
+// paint), so it doesn't flash in after the async check on every refresh; the
+// check then confirms or corrects (and records the level). View-as itself is
+// driven by the URL: paste ?uid=… or follow a link from /admin/ — no load form.
 if (viewerUid && +localStorage.dashLevel >= 1) statslink.hidden = false;
-if (viewerUid && +localStorage.dashLevel >= 2) uidform.hidden = false;
-viewerLevel().then((level) => { statslink.hidden = level < 1; uidform.hidden = level < 2; });
+viewerLevel().then((level) => { statslink.hidden = level < 1; });
 
 // First paint shows the dash skeleton (zeros + reserved chart space). #msg
 // stays empty (and therefore display:none) during the loading window, so the

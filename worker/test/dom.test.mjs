@@ -1249,7 +1249,6 @@ test("dashboard: no drift notice when viewing someone else's data", { skip: LIVE
 
   await waitFor(() => cell("sa", "za")?.textContent === "3/5", WAIT);
   assert.equal(win.syncnotice.hidden, true, "another user's matrix never flags local drift");
-  assert.equal(win.uidform.hidden, true, "level-1 viewer can view a shared link but gets no load-as form");
   assert.equal(win.statslink.hidden, false, "level-1 viewer gets the aggregate-stats link");
   assert.equal(win.statslink.getAttribute("href"), "../stats/", "stats link authorises by the viewer's own uid — no viewed ?uid");
 });
@@ -1381,7 +1380,6 @@ test("dashboard: a power user sees the viewed uid's reminder state, read-only", 
   await waitFor(() => !win.reminders.hidden && win.reminderstatus.textContent.includes("Daily reminders") ? true : null, WAIT);
   assert.match(win.reminderstatus.textContent, /Daily reminders: on for this user/);
   assert.equal(win.reminderbtn.hidden, true, "view-as shows no toggle button");
-  assert.equal(win.uidform.hidden, false, "level-2 viewer gets the load-as form");
 });
 
 test("dashboard view-as: shows a declined reminder opt-in (not just on/off)", { skip: LIVE }, async (t) => {

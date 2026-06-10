@@ -310,7 +310,7 @@ body {
 }
 
 /* The #-selector display:flex above outranks the UA [hidden] rule, so spell
-   out the hidden case (same trick as the dashboard's #uidform). */
+   out the hidden case explicitly. */
 #remindprompt[hidden] {
     display: none;
 }
