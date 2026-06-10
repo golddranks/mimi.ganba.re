@@ -183,11 +183,23 @@ export function confusionValue(maps, t, p, mode) {
 // would imply a "wrong" that isn't there. Only the hue changes; intensity is the same.
 export function confusionBg(mag, diag, maxOn, maxOff, scheme = "outcome") {
   if (!(mag > 0)) return "transparent";
-  const a = diag ? (maxOn ? mag / maxOn : 0) : (maxOff ? mag / maxOff : 0);
   const base = scheme === "neutral" ? "var(--accent)" : (diag ? "var(--good)" : "var(--bad)");
-  const pct = Math.round((diag ? 15 : 20) + a * (diag ? 55 : 60));
-  return `color-mix(in srgb, ${base} ${pct}%, transparent)`;
+  return `color-mix(in srgb, ${base} ${mixPct(mag, diag, maxOn, maxOff)}%, transparent)`;
 }
+
+// Mix strength: the % of the base hue in the cell fill, normalised within the
+// cell's category (the same a as confusionBg).
+function mixPct(mag, diag, maxOn, maxOff) {
+  const a = diag ? (maxOn ? mag / maxOn : 0) : (maxOff ? mag / maxOff : 0);
+  return Math.round((diag ? 15 : 20) + a * (diag ? 55 : 60));
+}
+
+// Whether a cell's fill is strong enough that light mode's near-black text reads
+// muddy on it — both painters tag such cells .deep, and light-mode CSS flips
+// their text to white. (Dark mode is unaffected: its strong fills are bright,
+// and the card-coloured halo covers them.)
+export const confusionDeep = (mag, diag, maxOn, maxOff) =>
+  mag > 0 && mixPct(mag, diag, maxOn, maxOff) >= 60;
 
 // Paint a set of td[data-t][data-p] cells from `maps`: two passes (find the
 // per-category maxima, then colour). Sets background, textContent and .empty.
@@ -207,5 +219,6 @@ export function fillConfusionCells(cells, maps, mode, scheme = "outcome") {
     td.style.background = v.raw === 0 ? "" : confusionBg(v.mag, diag, maxOn, maxOff, scheme);
     td.textContent = v.display;
     td.classList.toggle("empty", v.raw === 0);
+    td.classList.toggle("deep", v.raw !== 0 && confusionDeep(v.mag, diag, maxOn, maxOff));
   }
 }

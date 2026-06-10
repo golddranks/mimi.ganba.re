@@ -3,7 +3,7 @@
 // (the viewer's own data). DOM-touching, frontend-only.
 
 import { HIRAGANA, KATAKANA, VOWEL_GROUPS } from "./kana.js";
-import { confusionBg } from "./confusion.js";
+import { confusionBg, confusionDeep } from "./confusion.js";
 
 // Click-to-play a recording. VOICE_MAP (injected by build) maps mora -> [voice
 // names]; audio lives at ../audio/<vowel>/<mora>/<idx>.opus relative to the page
@@ -112,7 +112,8 @@ export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, mi
       for (const p of morae) {
         const val = valueFor(row.m, row.voice, p);
         const diag = row.m === p;
-        const cls = ((diag ? "diag" : "") + (val.raw === 0 ? " empty" : "")).trim();
+        const cls = ((diag ? "diag" : "") + (val.raw === 0 ? " empty" : "")
+          + (val.raw !== 0 && confusionDeep(val.mag, diag, maxOn, maxOff) ? " deep" : "")).trim();
         // No-data cells: no inline bg, so the .empty CSS (light grey) shows.
         const style = val.raw === 0 ? "" : ` style="background:${confusionBg(val.mag, diag, maxOn, maxOff, scheme)}"`;
         body += `<td class="${cls}"${style} title="${row.m} (${row.voice}) → ${p}: ${val.raw}">${val.display}</td>`;

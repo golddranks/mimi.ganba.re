@@ -451,8 +451,14 @@ body {
 @media (prefers-color-scheme: light) {
     .confgrid td {
         /* In light mode the same halo is a white glow around dark glyphs — it
-           blurs them, and no light-mode fill gets near the text colour anyway. */
+           blurs them. */
         text-shadow: none;
+    }
+
+    /* Strong fills (.deep, tagged by the painter) are dark enough that the
+       near-black text reads muddy — flip those cells to white text. */
+    .confgrid td.deep {
+        color: #fff;
     }
 }
 
