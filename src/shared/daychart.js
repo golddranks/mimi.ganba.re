@@ -49,8 +49,24 @@ export function niceTicks(max) {
 export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = false) {
   const binW = 18, barW = 14;          // px per day / bar — constant on every screen
   const innerH = h - 40, y0 = h - 20;
+  const max = Math.max(1, ...days.map(mag));   // before padding — pad days carry no value
+  // Left-pad the calendar to a minimum span: the plot is data-sized, so a short
+  // history would otherwise render a sliver of an SVG whose week/month guides and
+  // labels cover almost none of the visible chart — a lone bar floats with no
+  // calendar anchoring. 150 days × 18px ≈ 2700px, wider than any card (#dash caps
+  // at 1400px), so the guides always span the whole container. Pad days have no
+  // magnitude → no bars, no click bands; they're pure calendar.
+  const MIN_DAYS = 150;
+  if (days.length > 0 && days.length < MIN_DAYS) {
+    const d = new Date(days[0].k + "T00:00:00Z");
+    const pad = [];
+    for (let i = days.length; i < MIN_DAYS; i++) {
+      d.setUTCDate(d.getUTCDate() - 1);
+      pad.unshift({ k: `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}` });
+    }
+    days = [...pad, ...days];
+  }
   const w = days.length * binW + 40;   // the plot SVG's real pixel width
-  const max = Math.max(1, ...days.map(mag));
   const xRightmost = w - 20 - barW;
   // X/Y emit percentages of the plot SVG's box. The box's width is w real pixels,
   // so X percentages are fixed pixel positions in disguise — the callbacks keep
