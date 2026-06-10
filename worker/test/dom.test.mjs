@@ -682,8 +682,8 @@ test("dashboard: the sound-file matrix has synced metric + count/% switches that
   const countHtml = win.voiceconf.innerHTML;
   mainPct.checked = true; mainPct.dispatchEvent(new win.Event("change", { bubbles: true }));
   await waitFor(() => voicePct.checked ? true : null, WAIT);
-  assert.ok(voicePct.checked, "the voice count/% copy synced to per-sound %");
-  assert.notEqual(win.voiceconf.innerHTML, countHtml, "the sound-file matrix re-rendered in per-sound % mode");
+  assert.ok(voicePct.checked, "the voice count/% copy synced to % mode");
+  assert.notEqual(win.voiceconf.innerHTML, countHtml, "the sound-file matrix re-rendered in % mode");
 });
 
 test("dashboard: the sound-file matrix's row filter relabels 'min % wrong' → 'min %' for non-answered metrics", { skip: LIVE }, async (t) => {

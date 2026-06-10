@@ -3,9 +3,9 @@
    component looks identical on both. */
 
 /* The confusion matrices' controls, split into labelled rows under the card
-   heading — "data shown" / "data filters" / "user filters" — so the kinds of
-   setting are obvious. A matrix shows only the rows it has: the kana matrix has no
-   "data filters"; the dashboard (one user) has no "user filters". */
+   heading — "display" / "rows" / "users" — so the kinds of setting are obvious. A
+   matrix shows only the rows it has: the kana matrix has no "rows" (no row
+   thresholds); the dashboard (one user) has no "users". */
 .vccontrols {
     display: flex;
     flex-direction: column;
@@ -22,13 +22,24 @@
     color: var(--muted);
 }
 
-/* Fixed-width prefix so the three rows' controls line up in a column; wide enough
-   to keep "data filters" / "user filters" on one line. */
+/* Fixed-width prefix so the rows' controls line up in a column; sized for the
+   longest short label ("display"). */
 .vcgroup-label {
-    flex: 0 0 6.5rem;
+    flex: 0 0 4rem;
     font-size: .68rem;
     letter-spacing: .08em;
     text-transform: uppercase;
+}
+
+/* Keep the short-label switches a comfortable tap target — the "%" (counts/%) and
+   "all" (population) labels would otherwise be too small to hit on a phone. Scoped
+   to those switches so the already-wide 5-option metric switch isn't widened
+   further. (Set here, in the CSS both pages @import, so it lands on top of the
+   per-page .modeswitch rules without touching their padding/colour.) */
+.modeswitch[data-switch="mode"] label,
+.modeswitch[data-switch="pop"] label {
+    min-width: 2.5rem;
+    text-align: center;
 }
 
 .vcfield {
@@ -110,10 +121,11 @@
     text-align: left;
     padding: 0 .35rem 0 .15rem;
     cursor: pointer;
-    /* Cap on the voice-name column; longer names ellipsis-truncate via the span
-       below (full name in the th's title). Sized so all four vowel-group tables
-       fit horizontally. */
-    max-width: 9rem;
+    /* The voice-name column scales with the viewport: full width on desktop (so the
+       four vowel-group tables sit side by side), shrinking on a phone so the table
+       fits its width. Longer names ellipsis-truncate via the span below (full name
+       in the th's title). */
+    max-width: min(9rem, 30vw);
 }
 
 .vconfgrid tbody th.vname>span {
@@ -143,4 +155,28 @@
    blank white (matches the main confusion matrix). */
 .vconfgrid td.empty {
     background: color-mix(in srgb, var(--panel-2) 45%, transparent);
+}
+
+/* On a phone, tighten the grid (smaller cells, font, gaps) so a vowel-group table
+   fits the screen — the voice-name column already scales via min(…, 30vw) above. */
+@media (max-width: 560px) {
+    #voiceconf {
+        gap: .6rem 1rem;
+    }
+
+    .vconfgrid thead th,
+    .vconfgrid tbody th.vmora {
+        width: 1.4rem;
+        height: 1.4rem;
+        font-size: .8rem;
+    }
+
+    .vconfgrid td {
+        width: 1.4rem;
+        font-size: .62rem;
+    }
+
+    .vconfgrid tbody th.vname {
+        font-size: .62rem;
+    }
 }
