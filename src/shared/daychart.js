@@ -33,35 +33,28 @@ export function niceTicks(max) {
   return out;
 }
 
-// Day-bar chart into `el` (logical 960×h box; bottom 20 units are the label
-// gutter). Bins cap at 18 units and right-anchor — newest day flush right, short
-// ranges leave the left empty rather than smearing thinly, like the app's
-// #topbar. `mag(d)` is the bar magnitude (drives the y-axis scale);
-// `bar(d, x, barW, bh, y0)` returns the SVG for one day's bar(s) — its coords
-// arrive as percentages (see below) to append "%" to; optional
-// `annotate(max, X, Y)` adds a corner label; `grid` draws week/month date guides.
+// Day-bar chart into `el`. Every day is rendered at a FIXED physical pitch into a
+// plot SVG that gets a real pixel width and sits right-anchored inside an
+// overflow-hidden clipper — so the container's width (any width, live through
+// resizes/rotation, no JS measurement) simply decides how many recent days are
+// visible. Newest day flush right; short ranges leave the left empty rather than
+// smearing. The y-axis tick labels live in a separate SVG pinned left of the
+// clipper, since they must not clip away with the old days. Vertically everything
+// is still %-of-h (the logical height; bottom 20 units are the label gutter), so
+// the bars stretch to whatever height the container gives.
+// `mag(d)` is the bar magnitude (drives the y-axis scale); `bar(d, x, barW, bh,
+// y0, bandX, bandW)` returns the SVG for one day's bar(s) — its coords arrive as
+// percentages (numbers) to append "%" to; optional `annotate(max, X, Y, w)` adds
+// a corner label; `grid` draws week/month date guides.
 export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = false) {
-  const w = 960, innerH = h - 40, y0 = h - 20;
-  // The geometry distributes a LOGICAL 960-unit box across the element's real
-  // width, so the historical 18-unit bin cap — a desktop aesthetic — renders as a
-  // ~6px sliver on a phone however few days are drawn. Express the floor in
-  // physical pixels instead: bins are at least ~16px on screen (18 logical units
-  // when that's bigger, preserving the desktop look), and only the most recent
-  // days that fit at that pitch are shown — a phone gets ~3 weeks of fat bars,
-  // not a month of hairlines. The bar cap scales with the bin so the bar:gap
-  // ratio stays the desktop 14:18.
-  const scale = w / (el.clientWidth || w);   // logical units per physical px
-  const binCap = Math.max(18, 16 * scale);
-  const fitDays = Math.max(7, Math.floor((w - 40) / binCap));
-  if (days.length > fitDays) days = days.slice(-fitDays);
+  const binW = 18, barW = 14;          // px per day / bar — constant on every screen
+  const innerH = h - 40, y0 = h - 20;
+  const w = days.length * binW + 40;   // the plot SVG's real pixel width
   const max = Math.max(1, ...days.map(mag));
-  const binW = Math.min((w - 40) / Math.max(1, days.length), binCap);
-  const barW = Math.min(binW * 0.8, 14 * binCap / 18);
   const xRightmost = w - 20 - barW;
-  // Geometry stays in the logical 960×h box, but every coordinate is emitted as
-  // a percentage (no viewBox) so the SVG stretches to fill its container with
-  // crisp, non-scaling px text. `bar`/`annotate` callbacks receive percentages
-  // (numbers) and append "%". X spans the width, Y the height.
+  // X/Y emit percentages of the plot SVG's box. The box's width is w real pixels,
+  // so X percentages are fixed pixel positions in disguise — the callbacks keep
+  // their existing "append %" contract — while Y stays container-relative.
   const X = (v) => Math.round(v / w * 1e4) / 100, Y = (v) => Math.round(v / h * 1e4) / 100;
   let bars = "", labels = "", lastMonth = "", gridlines = "", lastLabelX = -Infinity;
   for (let i = 0; i < days.length; i++) {
@@ -74,10 +67,9 @@ export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = f
     const month = d.k.slice(0, 7);
     if (month !== lastMonth) {
       lastMonth = month;
-      // The label text is fixed physical px (no viewBox scaling), so the spacing
-      // guard converts its ~52px footprint into logical units — on a narrow chart
-      // a month label is skipped rather than colliding with its neighbour.
-      if (x - lastLabelX >= 52 * scale) {
+      // Labels are ~52px wide (fixed-px text); skip one that would collide with
+      // its predecessor rather than overlapping.
+      if (x - lastLabelX >= 52) {
         labels += `<text x="${X(x)}%" y="${Y(h - 4)}%" fill="var(--muted)" font-size="10">${month}</text>`;
         lastLabelX = x;
       }
@@ -87,13 +79,13 @@ export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = f
   // bin slots from the newest day leftward, extrapolating the calendar, so the
   // grid reads continuously even over the right-anchor's empty-left margin. (k is
   // YYYY-MM-DD; parse as UTC so getUTCDay/Date give the calendar weekday cleanly.)
-  // Strokes are px (no viewBox scaling), so lines stay 1px at any size; --muted
-  // dim for weeks, stronger for months (--panel-2 was ~invisible on the panel).
+  // Strokes are px, --muted dim for weeks, stronger for months (--panel-2 was
+  // ~invisible on the panel).
   if (grid && days.length) {
     const newest = new Date(days[days.length - 1].k + "T00:00:00Z");
     for (let j = 0; ; j++) {
       const lx = xRightmost - j * binW - (binW - barW) / 2;
-      if (lx < 18) break;
+      if (lx < 0) break;
       const sx = X(lx);
       const d = new Date(newest); d.setUTCDate(d.getUTCDate() - j);
       if (d.getUTCDate() === 1) {
@@ -103,13 +95,21 @@ export function dayBarChart(el, days, h, mag, bar, annotate = () => "", grid = f
       }
     }
   }
-  let axis = "";
+  let tickLines = "", tickText = "";
   for (const t of niceTicks(max)) {
     const y = y0 - t / max * innerH;
-    axis += `<text x="0" y="${Y(y + 3)}%" fill="var(--muted)" font-size="10">${t}</text>`;
-    axis += `<line x1="${X(20)}%" x2="100%" y1="${Y(y)}%" y2="${Y(y)}%" stroke="var(--panel-2)" stroke-width=".5"/>`;
+    tickText += `<text x="0" y="${Y(y + 3)}%" fill="var(--muted)" font-size="10">${t}</text>`;
+    tickLines += `<line x1="0" x2="100%" y1="${Y(y)}%" y2="${Y(y)}%" stroke="var(--panel-2)" stroke-width=".5"/>`;
   }
-  el.innerHTML = `<svg>${axis}${gridlines}${bars}${labels}${annotate(max, X, Y)}</svg>`;
+  // Styles are inline so the component carries its own layout to every page (the
+  // pages' generic `.card svg { width:100% }` rules are overridden). The clipper
+  // starts right of the 26px tick-label rail, so bars never run under the labels.
+  el.style.position = "relative";
+  el.innerHTML =
+    `<div style="position:absolute;inset:0 0 0 26px;overflow:hidden">`
+    + `<svg style="position:absolute;top:0;right:0;height:100%;width:${w}px">${tickLines}${gridlines}${bars}${labels}${annotate(max, X, Y, w)}</svg>`
+    + `</div>`
+    + `<svg style="position:absolute;left:0;top:0;width:26px;height:100%;overflow:visible">${tickText}</svg>`;
 }
 
 // Tooltip text for a day's activity: "YYYY-MM-DD  correct/total · NN%" (the %

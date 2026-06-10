@@ -702,7 +702,7 @@ function renderStreak(events) {
   dayBarChart(streakchart, days, 160, (d) => d.run,
     (d, x, barW, bh, y0) =>
       `<rect x="${x}%" y="${y0 - bh}%" width="${barW}%" height="${bh}%" fill="var(--accent)"><title>${d.k}  peak streak ${d.run}</title></rect>`,
-    (max, X, Y) => `<text x="${X(940)}%" y="${Y(14)}%" fill="var(--muted)" font-size="11" text-anchor="end">peak: ${max}</text>`, true);
+    (max, X, Y, w) => `<text x="${X(w - 20)}%" y="${Y(14)}%" fill="var(--muted)" font-size="11" text-anchor="end">peak: ${max}</text>`, true);
 }
 
 // ---------- reaction time ----------
