@@ -150,10 +150,11 @@
 /* The voice-name column is the table's one flexible part: the kana grid is fixed,
    so the name span gets the real leftover, never truncating while width is spare
    (full name in the th's title). Two regimes inside the clamp:
-     · 25cqw - 12.2rem — the four-up share: a quarter of the container minus one
-       table's grids/gaps. The 12.2rem constant is anchored empirically: four-up
-       fits with 6.5rem names at a ~1188px container, so at full screen the names
-       widen to soak up the slack instead of leaving ~150px unused.
+     · 25cqw - 12.7rem — the four-up share: a quarter of the container minus one
+       table's grids/gaps. The 12.7rem constant is anchored empirically: four-up
+       fits with 6.5rem names at a ~1229px container (slack for a classic-scrollbar
+       gutter the headless verify lacks), so at full screen the names widen to
+       soak up the slack instead of leaving ~150px unused.
      · min(100cqw - 13rem, 6.5rem) — narrower containers (tables wrapped 2-up or
        stacked): the old fixed cap, shrinking only when even a stacked table is
        tight. max() picks whichever regime affords more.
@@ -164,7 +165,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 6.5rem;
-    max-width: clamp(3rem, max(25cqw - 12.2rem, min(100cqw - 13rem, 6.5rem)), 9rem);
+    max-width: clamp(3rem, max(25cqw - 12.7rem, min(100cqw - 13rem, 6.5rem)), 9rem);
 }
 
 .vconfgrid tbody th.vname:hover {
