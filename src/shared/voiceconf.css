@@ -149,17 +149,19 @@
 
 /* The voice-name column is the table's one flexible part: the kana grid is fixed,
    so the name span gets the leftover — container width minus the widest grid
-   (vmora + 6 kana columns + padding/borders ≈ 13rem) — capped at 9rem and floored
-   so names stay identifiable. Names only start truncating once that leftover is
-   genuinely used up (full name in the th's title). Plain 9rem first as the
-   fallback where cqw isn't supported. */
+   (vmora + 6 kana columns + padding/borders ≈ 13rem) — capped and floored so
+   names stay identifiable. The cap is what lets all four vowel-group tables sit
+   in one row on a full-width (1400px) screen: ~322px per table minus the ~212px
+   grid leaves ~6.8rem for the name. Names only start truncating once the leftover
+   is genuinely used up (full name in the th's title). Plain fallback first for
+   browsers without cqw. */
 .vconfgrid tbody th.vname>span {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 9rem;
-    max-width: clamp(3rem, calc(100cqw - 13rem), 9rem);
+    max-width: 6.5rem;
+    max-width: clamp(3rem, calc(100cqw - 13rem), 6.5rem);
 }
 
 .vconfgrid tbody th.vname:hover {
