@@ -85,4 +85,19 @@ export const MIGRATIONS = [
     up: "ALTER TABLE events ADD COLUMN start_ts INTEGER",
     down: "ALTER TABLE events DROP COLUMN start_ts",
   },
+  {
+    // Backfill delete_after for users who predate it: migration 8 added the column
+    // null, and it's only ever computed on an events POST, so users who haven't
+    // trained since it shipped showed no "kept until" date. Same MAX(first_seen-arm,
+    // last_seen-arm) formula as handleEvents (30d + 1d per 10 answers; second arm
+    // counts only the trailing-30d answers). Only fills nulls, leaving values a POST
+    // has already computed alone. Irreversible (can't recover which rows were null),
+    // so no down.
+    id: 10,
+    up: "UPDATE users SET delete_after = MAX("
+      + "first_seen + 2592000000 + (SELECT COUNT(*) FROM events e WHERE e.uid = users.uid AND ev IN ('a','g','y','n')) * 8640000, "
+      + "last_seen + 2592000000 + (SELECT COUNT(*) FROM events e WHERE e.uid = users.uid AND ev IN ('a','g','y','n') AND e.ts >= users.last_seen - 2592000000) * 8640000) "
+      + "WHERE delete_after IS NULL",
+    down: null,
+  },
 ];
