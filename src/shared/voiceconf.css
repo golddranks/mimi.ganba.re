@@ -247,8 +247,15 @@
         flex-basis: auto;
     }
 
+    /* Slightly tighter buttons on a phone so the 5-option metric switch makes
+       one row on common widths (~390px) instead of wrapping for a few px. */
     .vcgroup .modeswitch {
         flex-wrap: wrap;
+        font-size: .72rem;
+    }
+
+    .vcgroup .modeswitch label {
+        padding: .2rem .42rem;
     }
 
     .vconfgrid thead th {
