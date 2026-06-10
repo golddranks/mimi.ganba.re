@@ -10,6 +10,7 @@
 import "./retry-fetch.mjs";   // tolerate wrangler dev's occasional keep-alive socket resets
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { TEST_NICK, TEST_TZ } from "./sentinel.mjs";
 
 const BASE = (process.env.BASE || "http://127.0.0.1:8787").replace(/\/$/, "");
 // All-zeros UUID with valid v4 bits — same sentinel as seed.sql.
@@ -43,7 +44,7 @@ test("GET /v1/version reports the deploy SHA (or 'dev' locally)", async () => {
 });
 
 test("POST /v1/user tags the sentinel user", async () => {
-  const u = await req("POST", "/v1/user", { uid: UID, nickname: "TestUser", role: 1 });
+  const u = await req("POST", "/v1/user", { uid: UID, nickname: TEST_NICK, role: 1, tz: TEST_TZ });
   assert.equal(u.status, 200);
 });
 

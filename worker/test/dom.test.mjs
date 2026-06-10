@@ -4,12 +4,15 @@
 //   - local (default): built dist/ + a worker booted by scripts/e2e.sh
 //   - live (SITE set): the deployed Pages site + live worker, post-deploy, via
 //     scripts/verify.sh
-// openPage() hides the difference. Every uid the suite writes under is
-// registered with nickname "TestUser", which the worker excludes from
-// production aggregates (EXCLUDE_TEST) — so a fresh uid sees only its own
-// events and the exact-count assertions hold against prod too. The admin test
-// is the lone exception (it needs power_user via local SQL *and* its rows must
-// stay in the aggregate), so it skips in live mode.
+// openPage() hides the difference. HARD RULE: every uid the suite posts answers
+// under goes through freshTestUser(), which stamps the TestUser canary (nickname
+// TEST_NICK + sentinel tz TEST_TZ; see sentinel.mjs) so a test row can NEVER look
+// organic — even role-0 "counted" users that aggregates must include (those just
+// can't be role 1, which the worker excludes; they stay in the aggregate but the
+// nickname keeps them identifiable, and showing up in prod is then a visible
+// canary). Tests whose data must count in a global aggregate use freshTestUser({
+// role: 0 }) and skip in live mode (their rows would otherwise pollute prod). The
+// guard test at the end enforces the canary nickname on every answer-posting uid.
 import "./retry-fetch.mjs";   // tolerate wrangler dev's occasional keep-alive socket resets
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -17,6 +20,7 @@ import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { openPage, waitFor, readConfusion, LIVE, ISOLATED, WORKER } from "./dom.mjs";
 import { daysAgo } from "../../src/shared/dates.js";
+import { TEST_NICK, TEST_TZ } from "./sentinel.mjs";
 
 const getEvents = async (uid) =>
   (await (await fetch(`${WORKER}/v1/user/${encodeURIComponent(uid)}/events`)).json()).events || [];
@@ -31,21 +35,26 @@ const postEvents = (uid, events, tz) =>
     body: JSON.stringify(tz == null ? { uid, events } : { uid, events, tz }),
   });
 
-// Register a uid as an automatic test user (role 1) so the worker excludes its
-// rows from production aggregates (EXCLUDE_TEST = role 0). Every uid the suite
-// writes under goes through this — keeping writes prod-safe and isolated (a
-// fresh uid sees only its own events, so exact counts hold live as well as
-// local).
-const registerTestUser = (uid) =>
+// Register a uid as a test user. ALWAYS stamps the canary nickname (TEST_NICK)
+// and a sentinel tz (TEST_TZ) so no test row can ever look organic — even role-0
+// "counted" users that aggregates must include (role 1 is the prod-excluded,
+// janitor-purged kind; role 0 stays visible as a leak canary). The guard test at
+// the end of this file enforces the nickname on every user that posts answers.
+//   role: 0 = counted in aggregates, 1 = excluded (default), 2 = native.
+//   tz:   pass null to leave it unset — only the "no tz → JST default" tests
+//         (which must exercise a real stale-client's null tz) do this.
+const registerTestUser = (uid, { role = 1, tz = TEST_TZ } = {}) =>
   fetch(`${WORKER}/v1/user`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ uid, nickname: "TestUser", role: 1 }),
+    body: JSON.stringify(tz == null
+      ? { uid, nickname: TEST_NICK, role }
+      : { uid, nickname: TEST_NICK, role, tz }),
   });
 
-const freshTestUser = async () => {
+const freshTestUser = async (opts) => {
   const uid = randomUUID();
-  await registerTestUser(uid);
+  await registerTestUser(uid, opts);
   return uid;
 };
 
@@ -165,11 +174,11 @@ test("native pairs: keeps high-wrong recordings, drops expert-vetted ones", { sk
       cap: 2, ms: 500, ev: "a", opts: ["zo", confuser], skill: 0,
     })));
   // (zo#0, so): a normal listener picks 'so' 3/3 → high wrong-rate, no expert data → kept.
-  await answer(randomUUID(), "so", 3);
+  await answer(await freshTestUser({ role: 0 }), "so", 3);
   // (zo#0, syo): a normal listener also confuses it (3/3 wrong) ...
-  await answer(randomUUID(), "syo", 3);
+  await answer(await freshTestUser({ role: 0 }), "syo", 3);
   // ... but 6 high-accuracy (100% 'zo') offers of 'syo' vet it → dropped despite the wrong-rate.
-  await answer(randomUUID(), "syo", 6, true);
+  await answer(await freshTestUser({ role: 0 }), "syo", 6, true);
 
   const { pairs } = await (await fetch(`${WORKER}/v1/native/pairs`)).json();
   assert.ok(Array.isArray(pairs) && pairs.every((p) => p.mora && Number.isInteger(p.idx) && p.confuser),
@@ -185,11 +194,11 @@ test("native pairs: keeps high-wrong recordings, drops expert-vetted ones", { sk
 // skip on LIVE: posts role-0 seed data and role-0 native answers.
 test("app: native mode drills forced 2-choice pairs from the ranking", { skip: LIVE }, async (t) => {
   // Seed a confusable recording so the ranking has a pair to serve.
-  await postEvents(randomUUID(), Array.from({ length: 3 }, (_, i) => ({
+  await postEvents(await freshTestUser({ role: 0 }), Array.from({ length: 3 }, (_, i) => ({
     ts: Date.now() + i, target: "su", idx: 0, picked: "zu", cap: 2, ms: 500, ev: "a", opts: ["su", "zu"], skill: 0,
   })));
 
-  const { win, close } = await openPage("/", { setup: (w) => { w.localStorage.setItem("nativeMode", "1"); } });
+  const { win, close } = await openPage("/", { setup: (w) => { w.localStorage.setItem("nativeMode", "1"); w.localStorage.setItem("nick", TEST_NICK); } });
   t.after(close);
   const uid = win.localStorage.uid;
 
@@ -226,10 +235,10 @@ test("app: native mode drills forced 2-choice pairs from the ranking", { skip: L
 
 // skip on LIVE: posts role-0 seed + a native re-listen/answer.
 test("app: a re-listen then an answer share one start_ts (the re-listen is creditable)", { skip: LIVE }, async (t) => {
-  await postEvents(randomUUID(), Array.from({ length: 3 }, (_, i) => ({
+  await postEvents(await freshTestUser({ role: 0 }), Array.from({ length: 3 }, (_, i) => ({
     ts: Date.now() + i, target: "su", idx: 0, picked: "zu", cap: 2, ms: 500, ev: "a", opts: ["su", "zu"], skill: 0,
   })));
-  const { win, close } = await openPage("/", { setup: (w) => { w.localStorage.setItem("nativeMode", "1"); } });
+  const { win, close } = await openPage("/", { setup: (w) => { w.localStorage.setItem("nativeMode", "1"); w.localStorage.setItem("nick", TEST_NICK); } });
   t.after(close);
   const uid = win.localStorage.uid;
 
@@ -765,12 +774,12 @@ test("dashboard: Y/N answers count as activity (answers + accuracy)", async (t) 
 });
 
 test("stats: confusion matrix uses server-aggregated pick-when-offered counts", { skip: LIVE }, async (t) => {
-  // Local-only: needs power_user granted via local SQL, and unlike the rest its
-  // rows must stay *in* the aggregate (so its uid is NOT a TestUser). The stats
-  // matrix is global (all users), so we can't assert exact counts against a
-  // snapshot — add the sa fixture and assert robust shape: "picked/offered" with
-  // picked<=offered.
-  const uid = randomUUID();
+  // Local-only: needs power_user granted via local SQL, and unlike role-1 test
+  // users its rows must stay *in* the aggregate — so it's role 0 (but still tagged
+  // TestUser, per the canary rule). The stats matrix is global (all users), so we
+  // can't assert exact counts against a snapshot — add the sa fixture and assert
+  // robust shape: "picked/offered" with picked<=offered.
+  const uid = await freshTestUser({ role: 0 });
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
   grantPowerUser(uid, 1);
 
@@ -791,7 +800,7 @@ test("stats: confusion matrix uses server-aggregated pick-when-offered counts", 
 });
 
 test("stats: normal/native population toggle defaults to normal and syncs both copies", { skip: LIVE }, async (t) => {
-  const uid = randomUUID();
+  const uid = await freshTestUser({ role: 0 });
   await postEvents(uid, saFixture(Date.now()));
   grantPowerUser(uid, 1);
   const { win, close } = await openPage(`/stats/?uid=${uid}`);
@@ -823,10 +832,10 @@ test("stats: normal/native population toggle defaults to normal and syncs both c
 });
 
 test("stats: the confusion metric switch (synced copy) drives both aggregate matrices", { skip: LIVE }, async (t) => {
-  // Role-0 uid so it counts in the global aggregate. A guess of za, plus a re-listen
-  // + its answer, so the alternate metrics have data. The aggregate is global, so
-  // assert >= our contribution, not exact counts.
-  const uid = randomUUID();
+  // Role-0 uid so it counts in the global aggregate (tagged TestUser per the canary
+  // rule). A guess of za, plus a re-listen + its answer, so the alternate metrics
+  // have data. The aggregate is global, so assert >= our contribution, not exact.
+  const uid = await freshTestUser({ role: 0 });
   const t0 = Date.now();
   await postEvents(uid, [
     { ts: t0 + 1, start_ts: t0, target: "sa", idx: 0, picked: "za", cap: 2, ms: 500, ev: "g", opts: ["sa", "za"], skill: 0 },
@@ -861,7 +870,7 @@ test("stats: overview shows app-wide totals (level-1, no device IDs)", { skip: L
   // The overview counters moved to /stats/ (power_user >= 1), read from
   // /v1/admin/stats. Global aggregate, so assert the 6 sa answers are present
   // (>=), not exact totals.
-  const uid = randomUUID();
+  const uid = await freshTestUser({ role: 0 });
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
   grantPowerUser(uid, 1);
 
@@ -878,8 +887,9 @@ test("stats: overview shows app-wide totals (level-1, no device IDs)", { skip: L
 
 test("stats: aggregate hour-of-day buckets each user's local hour (JST default)", { skip: LIVE }, async () => {
   // An answer at 02:30 UTC by a user with no tz on record → defaults to JST (+540),
-  // so it belongs at hour 11, not the raw UTC hour 2.
-  const uid = randomUUID();
+  // so it belongs at hour 11, not the raw UTC hour 2. (tz: null on purpose — this
+  // is the stale-client no-tz path; the canary nickname still tags the row.)
+  const uid = await freshTestUser({ role: 0, tz: null });
   const ts = Date.UTC(2026, 0, 1, 2, 30, 0);
   await postEvents(uid, [{ ts, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }]);
   grantPowerUser(uid, 1);
@@ -892,7 +902,8 @@ test("stats: aggregate hour-of-day buckets each user's local hour (JST default)"
 
 test("admin: daily activity buckets each user's local day (JST default)", { skip: LIVE }, async () => {
   // 16:00 UTC Jan 1 = 01:00 JST Jan 2; with no tz on record it defaults to JST → Jan 2.
-  const uid = randomUUID();
+  // (tz: null on purpose — the no-tz default path; canary nickname still tags it.)
+  const uid = await freshTestUser({ role: 0, tz: null });
   const ts = Date.UTC(2026, 0, 1, 16, 0, 0);
   await postEvents(uid, [{ ts, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }]);
   grantPowerUser(uid, 2);
@@ -910,7 +921,7 @@ test("admin: level-2 page renders per-user histograms, no overview/confusion", {
   // user — a global aggregate, so assert >= 1, not an exact total. The overview
   // and confusion matrix moved to /stats/, so they're absent here. Also assert a
   // clean render (no thrown errors in the boot scripts).
-  const uid = randomUUID();
+  const uid = await freshTestUser({ role: 0 });
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
   grantPowerUser(uid, 2);
 
@@ -942,8 +953,9 @@ test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, asyn
   // The admin matrix is a global aggregate, so we can't assert absolute counts;
   // instead assert the *delta* a Y/N batch adds to the sa/za cell — robust against
   // whatever else is in the aggregate, since only this batch lands between reads.
-  // Needs a non-TestUser uid (so the rows stay in the aggregate) + power_user.
-  const uid = randomUUID();
+  // Needs a role-0 uid (so the rows stay in the aggregate; still tagged TestUser
+  // per the canary rule) + power_user.
+  const uid = await freshTestUser({ role: 0 });
   const stats = async () =>
     (await fetch(`${WORKER}/v1/admin/stats?uid=${encodeURIComponent(uid)}`)).json();
   const nFor = (data, map, col) =>
@@ -972,7 +984,7 @@ test("admin: Y/N answers feed the server confusion matrix", { skip: LIVE }, asyn
 // and check each population's view moves only for its own population.
 test("admin: ?natives switches the confusion matrix between normal and native data", { skip: LIVE }, async () => {
   const ans = (target, picked) => ({ ts: Date.now(), target, idx: 0, picked, cap: 2, ms: 500, ev: "a", opts: [target, picked], skill: 0 });
-  const admin = randomUUID();
+  const admin = await freshTestUser({ role: 0 });
   await postEvents(admin, [ans("sa", "sa")]);   // creates the row for grantPowerUser
   grantPowerUser(admin, 1);
 
@@ -985,12 +997,8 @@ test("admin: ?natives switches the confusion matrix between normal and native da
     nSo: await shownN("", "so", "tyo"), vSo: await shownN("&natives=1", "so", "tyo")
   };
 
-  await postEvents(randomUUID(), [ans("su", "tu"), ans("su", "tu")]);   // role 0
-  const native = randomUUID();
-  await fetch(`${WORKER}/v1/user`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ uid: native, nickname: "Native", role: 2 }),
-  });
+  await postEvents(await freshTestUser({ role: 0 }), [ans("su", "tu"), ans("su", "tu")]);   // role 0
+  const native = await freshTestUser({ role: 2 });   // role 2, tagged TestUser
   await postEvents(native, [ans("so", "tyo"), ans("so", "tyo")]);       // role 2
 
   assert.equal(await shownN("", "su", "tu") - before.nSu, 2, "normal view counts the normal confusion");
@@ -1031,8 +1039,8 @@ test("admin: sound-file matrix exposes per-recording shown/offered (vs the kana)
   // The sound-file confusion matrix normalises a cell by how often that kana was
   // offered FOR THIS RECORDING (not how often the recording was asked). Assert the
   // delta a batch adds to one recording's sa/za cell. Global aggregate → delta;
-  // non-TestUser uid so the rows count; power_user for the admin endpoint.
-  const uid = randomUUID();
+  // role-0 uid so the rows count (still tagged TestUser); power_user for the read.
+  const uid = await freshTestUser({ role: 0 });
   const t0 = Date.now();
   // Seed one event so the user row exists (for grantPowerUser) and so we can read
   // back the worker-assigned voice name for the sa recording at idx 0.
@@ -1062,7 +1070,7 @@ test("admin: minacc filter drops low-accuracy users from the confusion matrices"
   // Robust against the global aggregate by measuring the DELTA that adding ONE
   // low-accuracy user causes, at two thresholds: counted at minacc=0, excluded at
   // minacc=90. A separate uid carries power_user for the admin reads.
-  const admin = randomUUID();
+  const admin = await freshTestUser({ role: 0 });
   await postEvents(admin, [{ ts: Date.now(), target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }]);
   grantPowerUser(admin, 1);
   const offeredZa = async (minacc) => {
@@ -1074,7 +1082,7 @@ test("admin: minacc filter drops low-accuracy users from the confusion matrices"
   const before90 = await offeredZa(90);
 
   // A 10%-accuracy user: 1 correct さ, 9 confused さ→ざ (za offered every time).
-  const low = randomUUID();
+  const low = await freshTestUser({ role: 0 });
   const t0 = Date.now();
   const events = [{ ts: t0, target: "sa", idx: 0, picked: "sa", cap: 2, ms: 500, ev: "a", opts: ["sa", "za"], skill: 0 }];
   for (let i = 1; i <= 9; i++) {
@@ -1092,7 +1100,7 @@ test("admin: minacc filter drops low-accuracy users from the confusion matrices"
 // the isolated sandbox, like the other role-0-data tests.
 test("voice-attempts: per-recording matrix coverage = min over same-vowel confusers", { skip: LIVE }, async () => {
   const get = async () => (await fetch(`${WORKER}/v1/voice-attempts`)).json();
-  const real = randomUUID();   // not a TestUser → counted
+  const real = await freshTestUser({ role: 0 });   // role 0 → counted, but tagged
   const t0 = Date.now();
   const all = ["sa", "za", "sya", "zya", "tya"];   // sa + its 4 same-vowel confusers
   const a = (i, idx, opts) => ({ ts: t0 + i, target: "sa", idx, picked: "sa", cap: opts.length, ms: 500, ev: "a", opts, skill: 0 });
@@ -1164,7 +1172,7 @@ test("dashboard: no drift notice when viewing someone else's data", { skip: LIVE
   // answers — so drilling into another uid never flags it, however stale.
   const other = await freshTestUser();
   assert.equal((await postEvents(other, saFixture(Date.now()))).status, 200);
-  const me = randomUUID();
+  const me = await freshTestUser({ role: 0 });
   await postEvents(me, saFixture(Date.now()));   // create me's row, then grant power
   grantPowerUser(me, 1);                          // viewing another's dashboard is power-gated
 
@@ -1243,7 +1251,7 @@ const subscribePush = (uid) => {
 };
 
 test("admin reminder: reports a uid's push-subscription state, gated to power users", { skip: LIVE }, async () => {
-  const admin = randomUUID();
+  const admin = await freshTestUser({ role: 0 });
   await postEvents(admin, saFixture(Date.now()));   // creates the row for grantPowerUser
   grantPowerUser(admin, 1);
   const target = randomUUID();
@@ -1258,13 +1266,14 @@ test("admin reminder: reports a uid's push-subscription state, gated to power us
 
 test("admin: a user's timezone is recorded from events, not just subscriptions", { skip: LIVE }, async () => {
   // A normal (role 0) user who never subscribed to reminders, but whose events
-  // POST carried tz — should still show a timezone in the admin overview.
-  const uid = randomUUID();
+  // POST carried tz — should still show a timezone in the admin overview. Tagged
+  // TestUser but registered tz:null, so the 540 it shows comes FROM the events POST.
+  const uid = await freshTestUser({ role: 0, tz: null });
   await fetch(`${WORKER}/v1/events`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ uid, tz: 540, events: [{ ts: Date.now(), target: "sa", idx: 0, picked: "sa", cap: 2, ms: 100, ev: "a", opts: ["sa", "za"], skill: 0 }] }),
   });
-  const admin = randomUUID();
+  const admin = await freshTestUser({ role: 0 });
   await postEvents(admin, saFixture(Date.now()));
   grantPowerUser(admin, 2);
   const data = await (await fetch(`${WORKER}/v1/admin/stats/users?uid=${encodeURIComponent(admin)}`)).json();
@@ -1272,7 +1281,7 @@ test("admin: a user's timezone is recorded from events, not just subscriptions",
 });
 
 test("admin reminder: reports the opt-in engagement state (declined / offered / none)", { skip: LIVE }, async () => {
-  const admin = randomUUID();
+  const admin = await freshTestUser({ role: 0 });
   await postEvents(admin, saFixture(Date.now()));
   grantPowerUser(admin, 1);
   const evt = { ts: Date.now(), target: "sa", idx: 0, picked: "sa", cap: 2, ms: 100, ev: "a", opts: ["sa", "za"], skill: 0 };
@@ -1283,16 +1292,16 @@ test("admin reminder: reports the opt-in engagement state (declined / offered / 
   const stateOf = (t) => fetch(`${WORKER}/v1/admin/reminder?uid=${encodeURIComponent(admin)}&target=${encodeURIComponent(t)}`)
     .then((r) => r.json()).then((d) => d.state);
 
-  const decliner = randomUUID(); await post(decliner, "declined");
-  const offered = randomUUID(); await post(offered, "offered");
-  const fresh = randomUUID(); await post(fresh, null);   // no opt-in signal
+  const decliner = await freshTestUser({ role: 0 }); await post(decliner, "declined");
+  const offered = await freshTestUser({ role: 0 }); await post(offered, "offered");
+  const fresh = await freshTestUser({ role: 0 }); await post(fresh, null);   // no opt-in signal
   assert.equal(await stateOf(decliner), "declined");
   assert.equal(await stateOf(offered), "offered");
   assert.equal(await stateOf(fresh), null, "no signal → not-shown");
 });
 
 test("dashboard: a power user sees the viewed uid's reminder state, read-only", { skip: LIVE }, async (t) => {
-  const admin = randomUUID();
+  const admin = await freshTestUser({ role: 0 });
   await postEvents(admin, saFixture(Date.now()));
   grantPowerUser(admin, 2);
   const target = await freshTestUser();
@@ -1314,10 +1323,10 @@ test("dashboard: a power user sees the viewed uid's reminder state, read-only", 
 });
 
 test("dashboard view-as: shows a declined reminder opt-in (not just on/off)", { skip: LIVE }, async (t) => {
-  const admin = randomUUID();
+  const admin = await freshTestUser({ role: 0 });
   await postEvents(admin, saFixture(Date.now()));
   grantPowerUser(admin, 1);
-  const decliner = randomUUID();
+  const decliner = await freshTestUser({ role: 0 });
   await fetch(`${WORKER}/v1/events`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ uid: decliner, remind_state: "declined", events: saFixture(Date.now()) }),
@@ -1390,6 +1399,25 @@ test("dashboard: native testers (role 2) get a native-testing badge", { skip: LI
   t.after(close);
   await waitFor(() => win.nativebadge && !win.nativebadge.hidden ? true : null, WAIT);
   assert.match(win.nativebadge.textContent, /native testing mode/);
+});
+
+// The canary backstop (isolated only, queries via local SQL — no fetch, so the
+// janitor test's dead socket doesn't matter; placed before it so it sees every
+// API-written user). The isolated DB starts empty, so every row was written by
+// this suite, and the HARD RULE is that any uid posting answers must be
+// unmistakably ours: nickname = TEST_NICK, even role-0 "counted" users. Forget to
+// route a writer through freshTestUser and this goes red, naming the offenders.
+// (Nickname is the universal canary; the sentinel tz is the factory default, but
+// the no-tz-default tests deliberately set it null — so tz isn't asserted here.)
+test("guard: every uid that posts answers carries the TestUser canary nickname", { skip: !ISOLATED }, () => {
+  const bad = localSql(
+    `SELECT u.uid, u.role, u.nickname, u.tz_offset,
+            (SELECT COUNT(*) FROM events e WHERE e.uid = u.uid) AS n_events
+     FROM users u
+     WHERE EXISTS (SELECT 1 FROM events e WHERE e.uid = u.uid AND e.ev IN ('a','g','y','n'))
+       AND u.nickname IS NOT '${TEST_NICK}'`);
+  assert.equal(bad.length, 0,
+    `untagged answer-posting users (must be nickname='${TEST_NICK}' — route via freshTestUser):\n${JSON.stringify(bad, null, 2)}`);
 });
 
 // Runs LAST: triggering /__scheduled drops this process's keep-alive socket to the
