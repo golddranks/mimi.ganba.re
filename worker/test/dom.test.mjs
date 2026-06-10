@@ -686,6 +686,23 @@ test("dashboard: the sound-file matrix has synced metric + count/% switches that
   assert.notEqual(win.voiceconf.innerHTML, countHtml, "the sound-file matrix re-rendered in % mode");
 });
 
+test("dashboard: daily activity follows the counts/% toggle (full-height accuracy bars in %)", { skip: LIVE }, async (t) => {
+  const uid = await freshTestUser();
+  await postEvents(uid, saFixture(Date.now()));   // 6 answers in one day, 2 correct
+  const { win, close } = await openPage(`/dashboard/?uid=${uid}`, { setup: (w) => w.localStorage.setItem("uid", uid) });
+  t.after(close);
+  await waitFor(() => win.dailychart.querySelector("rect") ? true : null, WAIT);
+
+  const countHtml = win.dailychart.innerHTML;
+  const pct = win.dailymode.querySelector('input[value="pct"]');
+  pct.checked = true; pct.dispatchEvent(new win.Event("change", { bubbles: true }));
+  await waitFor(() => win.dailychart.innerHTML !== countHtml ? true : null, WAIT);
+  // In % mode the day renders as a full-height bar (magnitude 100 = the axis max):
+  // the bad-bar rect spans the full inner plot height, 160 of the 200 box = 80%.
+  const heights = [...win.dailychart.querySelectorAll("rect")].map((r) => r.getAttribute("height"));
+  assert.ok(heights.includes("80%"), `full-height (80% of the 200-box) bar present in % mode (got ${heights})`);
+});
+
 test("dashboard: the sound-file matrix's row filter relabels 'min % wrong' → 'min %' for non-answered metrics", { skip: LIVE }, async (t) => {
   const uid = await freshTestUser();
   await postEvents(uid, saFixture(Date.now()));

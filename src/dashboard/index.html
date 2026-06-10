@@ -75,7 +75,12 @@
         </section>
 
         <section class="card span2">
-            <h2>Daily activity</h2>
+            <h2>Daily activity
+                <span class="modeswitch" data-switch="mode" id="dailymode">
+                    <label><input type="radio" name="dailymode" value="count" checked>counts</label>
+                    <label><input type="radio" name="dailymode" value="pct">%</label>
+                </span>
+            </h2>
             <div id="dailychart"></div>
         </section>
 

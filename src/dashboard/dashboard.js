@@ -90,6 +90,7 @@ let displayMode = wireSwitchGroup(document.querySelectorAll('[data-switch="mode"
   drawMora();
   drawConsMora();
   drawVoiceConf();
+  drawDaily();
 });
 
 if (uid) {
@@ -319,20 +320,34 @@ function calendarDays(events, valueFor) {
   return calendarSpan(firstKey, lastKey, valueFor);
 }
 
+// Events stashed for redraws, so the count/% toggle can re-render without a
+// reload (same pattern as the voice-confusion maps).
+let dailyEvents = null;
+
 function renderDaily(events) {
+  dailyEvents = events;
+  drawDaily();
+}
+
+function drawDaily() {
+  if (!dailyEvents) return;
   const map = new Map();
-  for (const e of events) {
+  for (const e of dailyEvents) {
     if (!isAnswer(e)) continue;
     const k = dayKeyTz(e.ts, viewedTzMin);
     const v = map.get(k) || { correct: 0, wrong: 0 };
     if (answeredRight(e)) v.correct++; else v.wrong++;
     map.set(k, v);
   }
-  const days = calendarDays(events, (k) => {
+  const days = calendarDays(dailyEvents, (k) => {
     const v = map.get(k) || { correct: 0, wrong: 0 };
     return { ...v, total: v.correct + v.wrong };
   });
-  dayBarChart(dailychart, days, 200, (d) => d.total, (d, x, barW, bh, y0) => {
+  // counts: bar height ∝ the day's answer volume. %: every day is a full-height
+  // bar split by its accuracy, so days compare by rate rather than volume — the
+  // daily analogue of the per-sound card's % mode. The tooltip carries both.
+  const mag = displayMode === "pct" ? (d) => (d.total ? 100 : 0) : (d) => d.total;
+  dayBarChart(dailychart, days, 200, mag, (d, x, barW, bh, y0) => {
     const cH = d.correct / d.total * bh;
     const tip = dayTip(d.k, d.correct, d.total);
     return `<rect x="${x}%" y="${y0 - bh}%" width="${barW}%" height="${bh}%" fill="var(--bad-bar)"><title>${tip}</title></rect>`
