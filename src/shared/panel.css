@@ -379,14 +379,32 @@ body {
 }
 
 /* ---- level histograms ---- */
+/* The four per-vowel charts snap 4 → 2+2 → 1-per-row (a flex-wrap would pass
+   through a lopsided 3+1 stage). The card is the query container; thresholds
+   follow the charts' comfortable ~14rem column. */
+.card:has(#levelhist) {
+    container-type: inline-size;
+}
+
 #levelhist {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
 }
 
+@container (max-width: 56rem) {
+    #levelhist {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@container (max-width: 27rem) {
+    #levelhist {
+        grid-template-columns: 1fr;
+    }
+}
+
 .lvlcol {
-    flex: 1 1 220px;
     min-width: 0;
 }
 
