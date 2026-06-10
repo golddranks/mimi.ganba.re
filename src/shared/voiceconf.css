@@ -90,6 +90,10 @@
     flex-wrap: wrap;
     align-items: flex-start;
     gap: 1rem 1.5rem;
+    /* Size container: lets the voice-name span compute "leftover width" in cqw
+       (container width minus the fixed kana grid), so the NAME column is the
+       flexible part of the table — the grid never shrinks or scrolls. */
+    container-type: inline-size;
 }
 
 .vconfgrid {
@@ -118,7 +122,10 @@
     font-weight: 400;
     color: var(--muted);
     font-size: 0.9rem;
-    width: 1.7rem;
+    /* Wide enough for a two-kana mora (シャ…) on one line — at the kana-cell width
+       it wrapped into two stacked lines, inflating every row of the group. */
+    width: 2rem;
+    white-space: nowrap;
 }
 
 /* Spacer row between successive mora groups inside a single vowel-group table —
@@ -138,19 +145,21 @@
     text-align: left;
     padding: 0 .35rem 0 .15rem;
     cursor: pointer;
-    /* Cap the voice-name column at a fixed width and let longer names ellipsis-
-       truncate (full name in the th's title). It does NOT shrink by viewport — it
-       uses the space it has; if a whole table is too wide for a phone, the matrix
-       scrolls horizontally (see the media query) rather than shrinking text while
-       the row still has room to the right. */
-    max-width: 9rem;
 }
 
+/* The voice-name column is the table's one flexible part: the kana grid is fixed,
+   so the name span gets the leftover — container width minus the widest grid
+   (vmora + 6 kana columns + padding/borders ≈ 13rem) — capped at 9rem and floored
+   so names stay identifiable. Names only start truncating once that leftover is
+   genuinely used up (full name in the th's title). Plain 9rem first as the
+   fallback where cqw isn't supported. */
 .vconfgrid tbody th.vname>span {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 9rem;
+    max-width: clamp(3rem, calc(100cqw - 13rem), 9rem);
 }
 
 .vconfgrid tbody th.vname:hover {
@@ -178,13 +187,17 @@
     background: color-mix(in srgb, var(--panel-2) 45%, transparent);
 }
 
-/* On a phone, tighten the grid (smaller cells, font, gaps) so a vowel-group table
-   mostly fits; a table still too wide scrolls horizontally rather than widening the
-   card or shrinking the voice-name column prematurely. */
+/* On a phone, tighten the grid (smaller cells, font, gaps); the name column keeps
+   absorbing the width deficit (smaller grid term than desktop). overflow-x is a
+   last-ditch fallback for sub-clamp-floor widths, not the fitting mechanism. */
 @media (max-width: 560px) {
     #voiceconf {
         gap: .6rem 1rem;
         overflow-x: auto;
+    }
+
+    .vconfgrid tbody th.vname>span {
+        max-width: clamp(2.5rem, calc(100cqw - 11rem), 9rem);
     }
 
     /* Give each switch its own full-width row so a wide one (the 5-option metric
@@ -196,10 +209,14 @@
         flex-wrap: wrap;
     }
 
-    .vconfgrid thead th,
-    .vconfgrid tbody th.vmora {
+    .vconfgrid thead th {
         width: 1.4rem;
         height: 1.4rem;
+        font-size: .8rem;
+    }
+
+    .vconfgrid tbody th.vmora {
+        width: 1.8rem;
         font-size: .8rem;
     }
 
