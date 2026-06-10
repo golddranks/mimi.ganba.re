@@ -272,6 +272,7 @@ body {
 
 #overview .uid .uid-value {
     font-family: ui-monospace, Menlo, monospace;
+    letter-spacing: -.04em;   /* monospace advance reads airy at this size; tighten the uid slightly */
 }
 
 /* Native-testing tag prefixes the Device-ID line. Kept on one piece (no
