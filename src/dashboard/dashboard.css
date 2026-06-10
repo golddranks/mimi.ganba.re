@@ -61,7 +61,7 @@ body {
 #hdr {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: .5rem;
     margin: 0 auto 1rem;
     max-width: 1200px;
     flex-wrap: wrap;
@@ -393,16 +393,27 @@ body {
     }
 }
 
-/* Phone: reclaim horizontal space (body + card both inset, doubling the gutter)
-   and let a wide matrix scroll inside its card rather than widening the whole page
-   — page-level overflow was clipping the per-sound readouts off the right edge. */
+/* Phone: cards go edge-to-edge — a sliver of body gutter serves nothing at this
+   width, so the cards integrate with the screen sides (no side borders/radius;
+   the 1rem grid gap still separates them vertically). Bare text rows (header,
+   messages) keep a small inset of their own. A wide matrix scrolls inside its
+   card rather than widening the whole page. */
 @media (max-width: 560px) {
     body {
-        padding: .5rem;
+        padding: .5rem 0;
+    }
+
+    #hdr,
+    #msg {
+        padding-left: .6rem;
+        padding-right: .6rem;
     }
 
     .card {
         padding: 1rem .8rem;
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
     }
 
     #confchart,

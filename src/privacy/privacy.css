@@ -33,7 +33,7 @@ body {
 #hdr {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: .5rem;
     max-width: 720px;
     margin: 0 auto 1.5rem;
 }
