@@ -147,38 +147,8 @@
             </section>
 
             <section class="card span2">
-                <h2>
-                    Sound-file confusion matrix <span class="sub">— per recording, grouped by sound</span>
-                    <span class="modeswitch" data-switch="metric" id="confmetricv">
-                        <label><input type="radio" name="confmetricv" value="answered" checked />answered</label>
-                        <label><input type="radio" name="confmetricv" value="guessed" />guessed</label>
-                        <label><input type="radio" name="confmetricv" value="slow" />slow</label>
-                        <label><input type="radio" name="confmetricv" value="relistened" />re-listened</label>
-                        <label><input type="radio" name="confmetricv" value="afterplayed" />after-played</label>
-                    </span>
-                    <span
-                        class="modeswitch"
-                        data-switch="mode"
-                        id="voiceconfmode"
-                    >
-                        <label
-                            ><input
-                                type="radio"
-                                name="voiceconfmode"
-                                value="count"
-                                checked
-                            />counts</label
-                        >
-                        <label
-                            ><input
-                                type="radio"
-                                name="voiceconfmode"
-                                value="pct"
-                            />per-sound %</label
-                        >
-                    </span>
-                </h2>
-                <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" minacc="<span class='minaccfilter'>min user accuracy: <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</span>" pop="<span class='modeswitch' data-switch='pop' id='confpop2'><label><input type='radio' name='confpop2' value='0' checked>normal users</label><label><input type='radio' name='confpop2' value='2'>natives</label></span>"-->
+                <h2>Sound-file confusion matrix <span class="sub">— per recording, grouped by sound</span></h2>
+                <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" userfilters="<div class='vcgroup'><span class='vcgroup-label'>user filters</span><span class='modeswitch' data-switch='pop' id='confpop2'><label><input type='radio' name='confpop2' value='0' checked>normal users</label><label><input type='radio' name='confpop2' value='2'>natives</label></span><label class='vcfield'>min user accuracy <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</label></div>"-->
             </section>
         </main>
 

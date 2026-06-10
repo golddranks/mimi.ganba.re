@@ -22,6 +22,57 @@
     width: 4rem;
 }
 
+/* The sound-file matrix's controls, split into three labelled rows under the card
+   heading — "data shown" / "data filters" / "user filters" — so the kinds of
+   setting are obvious. Identical on stats and the dashboard (the dashboard just
+   omits the user-filters row). */
+.vccontrols {
+    display: flex;
+    flex-direction: column;
+    gap: .45rem;
+    margin: 0 0 .9rem;
+}
+
+.vcgroup {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .5rem;
+    font-size: .85rem;
+    color: var(--muted);
+}
+
+/* Fixed-width prefix so the three rows' controls line up in a column; wide enough
+   to keep "data filters" / "user filters" on one line. */
+.vcgroup-label {
+    flex: 0 0 6.5rem;
+    font-size: .68rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.vcfield {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+}
+
+/* The segmented switches carry an h2-context margin-left; inside a flex group the
+   gap handles spacing, so drop it to keep the rows aligned. */
+.vcgroup .modeswitch {
+    margin-left: 0;
+}
+
+.vcgroup input[type="number"] {
+    width: 3.5rem;
+    padding: .25rem .5rem;
+    border-radius: 4px;
+    border: 1px solid var(--panel-2);
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+}
+
 /* Four vowel-group tables laid out horizontally (wrapping on narrow screens).
    Within each table, voices for the same mora cluster together and the first
    row of each new mora gets .moragap — a thin spacer row — to separate sounds

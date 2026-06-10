@@ -1,13 +1,34 @@
-<!-- Sound-file confusion matrix body (filters + grid container), shared by admin
-     (all-users) and the dashboard (per-user). Default filter thresholds differ —
-     one user has far fewer attempts than the aggregate — so they're {{vcmin}} /
-     {{vcwrong}} args. drawVoiceConfusion (shared/voiceconf.js) fills #voiceconf. -->
-<div class="voicefilter">
-    min attempts:
-    <input id="vcmin" type="number" min="0" value="{{vcmin}}" inputmode="numeric">
-    <span id="vcwronglabel">min % wrong</span>:
-    <input id="vcwrong" type="number" min="0" value="{{vcwrong}}" inputmode="numeric" title="row's strongest cell must hit at least this percentage of the row's attempts — independent of the counts/per-sound-% display toggle">
-    {{minacc}}
-    {{pop}}
+<!-- Sound-file confusion-matrix controls + grid, shared by stats (all users) and
+     the dashboard (one user). The controls split into three labelled groups so the
+     distinct concerns read at a glance:
+       · data shown   — which metric, and counts vs per-sound %
+       · data filters — thresholds on the displayed rows (min attempts, min % wrong)
+       · user filters — which users' data feeds the matrix ({{userfilters}}: empty on
+         the dashboard, which is already a single user)
+     Default thresholds differ (one user has far fewer attempts than the aggregate),
+     so they're {{vcmin}}/{{vcwrong}} args. drawVoiceConfusion (shared/voiceconf.js)
+     fills #voiceconf; the metric/mode switches sync with the kana matrix's via their
+     data-switch group (see wireSwitchGroup). -->
+<div class="vccontrols">
+    <div class="vcgroup">
+        <span class="vcgroup-label">data shown</span>
+        <span class="modeswitch" data-switch="metric" id="confmetricv">
+            <label><input type="radio" name="confmetricv" value="answered" checked>answered</label>
+            <label><input type="radio" name="confmetricv" value="guessed">guessed</label>
+            <label><input type="radio" name="confmetricv" value="slow">slow</label>
+            <label><input type="radio" name="confmetricv" value="relistened">re-listened</label>
+            <label><input type="radio" name="confmetricv" value="afterplayed">after-played</label>
+        </span>
+        <span class="modeswitch" data-switch="mode" id="confmodev">
+            <label><input type="radio" name="confmodev" value="count" checked>counts</label>
+            <label><input type="radio" name="confmodev" value="pct">per-sound %</label>
+        </span>
+    </div>
+    <div class="vcgroup">
+        <span class="vcgroup-label">data filters</span>
+        <label class="vcfield">min attempts <input id="vcmin" type="number" min="0" value="{{vcmin}}" inputmode="numeric"></label>
+        <label class="vcfield"><span id="vcwronglabel">min % wrong</span> <input id="vcwrong" type="number" min="0" value="{{vcwrong}}" inputmode="numeric" title="row's strongest cell must hit at least this percentage of the row's attempts — independent of the counts/per-sound-% display toggle"></label>
+    </div>
+    {{userfilters}}
 </div>
 <div id="voiceconf"></div>

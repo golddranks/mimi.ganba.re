@@ -193,8 +193,7 @@ body {
     min-width: 0;
 }
 
-.card h2,
-#voiceconfdetails > summary {
+.card h2 {
     margin: 0 0 .8rem;
     font-size: .8rem;
     color: var(--muted);
@@ -202,14 +201,7 @@ body {
     text-transform: uppercase;
 }
 
-/* The foldable per-user sound-file matrix: its summary reads like a card heading
-   but is clickable; <details> is collapsed by default (dense, secondary view). */
-#voiceconfdetails > summary {
-    cursor: pointer;
-}
-
-.card h2 .sub,
-#voiceconfdetails > summary .sub {
+.card h2 .sub {
     text-transform: none;
     letter-spacing: 0;
     margin-left: .4rem;
