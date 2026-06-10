@@ -252,8 +252,22 @@ body {
 #overview .uid {
     font-size: .8rem;
     color: var(--muted);
-    word-break: break-all;
     margin-bottom: .8rem;
+}
+
+/* The badge and the "Device ID: <uid>" unit are flex items: one row while they
+   fit, and when they don't, the whole unit drops to the next row — cutting the
+   line cleanly at the badge's "·" instead of plain-wrap's mid-uid break. Within
+   the unit the uid still break-alls when it alone is too long for a line. */
+#overview .uid {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: .35rem;   /* the badge's trailing space collapses under flex — this is the "· Device" word gap */
+}
+
+#overview .uid .uid-id {
+    word-break: break-all;
+    min-width: 0;
 }
 
 #overview .uid .uid-value {

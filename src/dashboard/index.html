@@ -21,7 +21,7 @@
 
     <main id="dash">
         <section id="overview" class="card span2">
-            <div class="uid"><span id="nativebadge" hidden>native testing mode · </span>Device ID: <span class="uid-value"></span></div>
+            <div class="uid"><span id="nativebadge" hidden>native testing mode · </span><span class="uid-id">Device ID: <span class="uid-value"></span></span></div>
             <script>document.currentScript.previousElementSibling.querySelector(".uid-value").textContent=new URLSearchParams(location.search).get("uid")||localStorage.getItem("uid")||"";</script>
             <div class="stats">
                 <div class="stat"><div class="n" data-stat="answers">0</div><div class="l">answers</div></div>
