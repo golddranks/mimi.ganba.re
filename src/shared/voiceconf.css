@@ -231,12 +231,23 @@
         max-width: clamp(2.5rem, calc(100cqw - 11rem), 9rem);
     }
 
-    /* Give each switch its own full-width row so a wide one (the 5-option metric
-       switch) has room to fit — or, on a very narrow phone, wraps its buttons
-       (their text centred by the .modeswitch label rule) — instead of overflowing
-       beside the group label. */
+    /* Each control group stacks fully vertically — the label, then every
+       control on its own line — rather than wrapping piecemeal (e.g. "min %
+       wrong" alone dropping under the "rows" line). A switch wider than the
+       screen (the 5-option metric one) wraps its buttons, their text centred by
+       the .modeswitch label rule. */
+    .vcgroup {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    /* In column direction the label's row-layout basis (flex: 0 0 4rem) would
+       become a 4rem HEIGHT — reset it. */
+    .vcgroup-label {
+        flex-basis: auto;
+    }
+
     .vcgroup .modeswitch {
-        flex-basis: 100%;
         flex-wrap: wrap;
     }
 
