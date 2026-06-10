@@ -317,15 +317,24 @@ body {
 }
 
 /* ---- per-mora ---- */
+/* The bar charts are one shared grid: label and readout columns size to their
+   actual max-content across ALL rows (subgrid), so the bar gets every spare px
+   and the only space between bar and number is the deliberate .5rem gap — no
+   guessed fixed reserves, no dead margin. */
+#morachart,
+#consmorachart {
+    display: grid;
+    grid-template-columns: max-content 1fr max-content;
+    column-gap: .5rem;
+    row-gap: .5rem;
+}
+
 .mrow {
     display: grid;
-    /* Label column fits a two-kana mora (シャ…) on ONE line — at 2rem it wrapped
-       into two stacked lines, doubling the row height (airy, uneven rows). The
-       readout column is sized to the widest realistic "738/887 · 83%". */
-    grid-template-columns: 2.8rem 1fr 6.2rem;
+    grid-template-columns: 2.8rem 1fr 6.2rem;   /* fallback where subgrid is unsupported */
+    grid-template-columns: subgrid;
+    grid-column: 1 / -1;
     align-items: center;
-    gap: .6rem;
-    margin: .25rem 0;
 }
 
 .mname {
