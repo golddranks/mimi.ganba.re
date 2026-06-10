@@ -510,7 +510,10 @@ body {
 /* ---- per-mora ---- */
 .mrow {
     display: grid;
-    grid-template-columns: 2rem 1fr 7rem;
+    /* Label column fits a two-kana mora (シャ…) on ONE line — at 2rem it wrapped
+       into two stacked lines, doubling the row height (airy, uneven rows). The
+       readout column is sized to the widest realistic "738/887 · 83%". */
+    grid-template-columns: 2.8rem 1fr 6.2rem;
     align-items: center;
     gap: .6rem;
     margin: .25rem 0;
