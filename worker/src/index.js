@@ -587,13 +587,20 @@ async function handleAdminStats(req, env, url) {
   // Only the confusion aggregations honour it (the difficulty/activity ones don't).
   const minacc = Math.max(0, Math.min(100, parseInt(url.searchParams.get("minacc"), 10) || 0));
 
-  // ?natives=1 switches the confusion matrices to the native testers (role 2)
-  // instead of normal users (role 0) — to review what genuinely confuses natives,
-  // exclusive of each other. Only the confusion aggregations honour it; the
-  // activity/difficulty sections always reflect normal users.
-  const POP = url.searchParams.get("natives") === "1"
-    ? "uid IN (SELECT uid FROM users WHERE role = 2)"
-    : EXCLUDE_TEST;
+  // ?pop selects whose confusions the matrices show (only the confusion
+  // aggregations honour it; the activity/difficulty sections always reflect normal
+  // users): "2" = native testers, "all" = every real human (normal + native), "me"
+  // = just the requesting power user's own data, anything else = normal users
+  // (role 0, the default). `natives=1` is still read as "2" for older cached
+  // clients. "me" inlines the requester's uid, sanitised to UUID chars so it can't
+  // inject (it's also already an authorised uid by the time we get here).
+  const popParam = url.searchParams.get("pop") || (url.searchParams.get("natives") === "1" ? "2" : "0");
+  const meUid = (url.searchParams.get("uid") || "").replace(/[^0-9a-fA-F-]/g, "");
+  const POP =
+    popParam === "2"   ? "uid IN (SELECT uid FROM users WHERE role = 2)" :
+    popParam === "all" ? EXCLUDE_AUTO :
+    popParam === "me"  ? `uid = '${meUid}'` :
+                         EXCLUDE_TEST;
 
   const ACC_FILTER = minacc > 0
     ? `AND uid IN (SELECT uid FROM events WHERE ${ANSWER_EVS} AND ${POP}

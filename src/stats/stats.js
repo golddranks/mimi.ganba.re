@@ -34,7 +34,7 @@ const uid = new URLSearchParams(location.search).get("uid") || localStorage.getI
 // clears on a hard reload), exactly like the number-input filters.
 const confusionParams = () =>
   "&minacc=" + Math.max(0, Math.min(100, parseInt(confminacc.value, 10) || 0))
-  + (confpopRole === "2" ? "&natives=1" : "");
+  + "&pop=" + confpopRole;   // 0 normal · 2 natives · all (normal+native) · me (just this viewer)
 
 // Seed the count/% and normal/natives toggles from their restored-or-default
 // state and wire user changes — before the first load(), so its fetch + render

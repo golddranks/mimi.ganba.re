@@ -1044,11 +1044,36 @@ test("admin: ?natives switches the confusion matrix between normal and native da
   assert.equal(await shownN("", "so", "tyo") - before.nSo, 0, "normal view ignores the native confusion");
 });
 
+test("stats: ?pop=all spans normal+native, ?pop=me is just the requester", { skip: LIVE }, async () => {
+  // Delta-based (robust against the shared DB). Three distinct, otherwise-unused
+  // u-group cells: a normal user's zyu/syu, a native's tyu/syu, and the requester's
+  // own zyu/tyu. "all" should count normal+native; "me" only the requester.
+  const ans = (target, picked) => ({ ts: Date.now(), target, idx: 0, picked, cap: 2, ms: 500, ev: "a", opts: [target, picked], skill: 0 });
+  const me = await freshTestUser({ role: 0 });
+  await postEvents(me, [ans("sa", "sa")]);   // create the row for grantPowerUser
+  grantPowerUser(me, 1);
+  const shownN = async (pop, t, p) =>
+    ((await (await fetch(`${WORKER}/v1/admin/stats?uid=${me}&pop=${pop}`)).json()).confusion_shown || [])
+      .find((r) => r.t === t && r.p === p)?.n || 0;
+
+  const before = {
+    allNorm: await shownN("all", "zyu", "syu"), allNat: await shownN("all", "tyu", "syu"),
+    meNorm: await shownN("me", "zyu", "syu"), meMine: await shownN("me", "zyu", "tyu"),
+  };
+  await postEvents(await freshTestUser({ role: 0 }), [ans("zyu", "syu"), ans("zyu", "syu")]);   // another normal user
+  await postEvents(await freshTestUser({ role: 2 }), [ans("tyu", "syu"), ans("tyu", "syu")]);   // a native
+  await postEvents(me, [ans("zyu", "tyu"), ans("zyu", "tyu")]);                                  // the requester's own
+
+  assert.equal(await shownN("all", "zyu", "syu") - before.allNorm, 2, "all counts the normal user");
+  assert.equal(await shownN("all", "tyu", "syu") - before.allNat, 2, "all counts the native user");
+  assert.equal(await shownN("me", "zyu", "tyu") - before.meMine, 2, "me counts the requester's own confusion");
+  assert.equal(await shownN("me", "zyu", "syu") - before.meNorm, 0, "me excludes another normal user's confusion");
+});
+
 test("dashboard: per-user sound-file confusion matrix renders the viewer's recordings", async (t) => {
   // Per-uid, exact counts. saFixture is all idx 0, so every answer is the same
   // sa recording; the worker assigns its voice at ingest. For that recording, za
-  // is picked 3× of 5 offered. The matrix lives in a collapsed <details> but is
-  // rendered into the DOM regardless.
+  // is picked 3× of 5 offered.
   const uid = await freshTestUser();
   assert.equal((await postEvents(uid, saFixture(Date.now()))).status, 200);
   const voice = (await getEvents(uid)).find((e) => e.target === "sa" && e.idx === 0)?.voice;

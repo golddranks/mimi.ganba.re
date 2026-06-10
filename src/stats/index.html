@@ -94,8 +94,10 @@
                     <div class="vcgroup">
                         <span class="vcgroup-label">user filters</span>
                         <span class="modeswitch" data-switch="pop" id="confpop" title="which population's confusions to show — gates both this matrix and the sound-file one">
+                            <label><input type="radio" name="confpop" value="all" />all</label>
                             <label><input type="radio" name="confpop" value="0" checked />normal users</label>
                             <label><input type="radio" name="confpop" value="2" />natives</label>
+                            <label><input type="radio" name="confpop" value="me" />just me</label>
                         </span>
                         <label class="vcfield">min user accuracy <input id="confminacc" type="number" min="0" max="100" value="0" inputmode="numeric" title="exclude users whose overall correct rate is below this % from every confusion matrix — this one and the sound-file matrix below">%</label>
                     </div>
@@ -110,7 +112,7 @@
 
             <section class="card span2">
                 <h2>Sound-file confusion matrix <span class="sub">— per recording, grouped by sound</span></h2>
-                <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" userfilters="<div class='vcgroup'><span class='vcgroup-label'>user filters</span><span class='modeswitch' data-switch='pop' id='confpop2'><label><input type='radio' name='confpop2' value='0' checked>normal users</label><label><input type='radio' name='confpop2' value='2'>natives</label></span><label class='vcfield'>min user accuracy <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</label></div>"-->
+                <!--include:voice-confusion-body.html vcmin="3" vcwrong="15" userfilters="<div class='vcgroup'><span class='vcgroup-label'>user filters</span><span class='modeswitch' data-switch='pop' id='confpop2'><label><input type='radio' name='confpop2' value='all'>all</label><label><input type='radio' name='confpop2' value='0' checked>normal users</label><label><input type='radio' name='confpop2' value='2'>natives</label><label><input type='radio' name='confpop2' value='me'>just me</label></span><label class='vcfield'>min user accuracy <input id='confminacc2' type='number' min='0' max='100' value='0' inputmode='numeric'>%</label></div>"-->
             </section>
         </main>
 
