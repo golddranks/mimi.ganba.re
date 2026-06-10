@@ -62,12 +62,15 @@ export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, mi
     return { display: off ? `${n}/${off}` : "", mag: pct, raw: off };
   };
 
-  const html = [];
+  // First pass: each vowel group's visible rows (filtered, recordings hardest-
+  // first within their sound), plus the colour-scale maxima over the WHOLE
+  // matrix. One collective scale across the four tables — like the kana matrix —
+  // so a table whose worst confusion is mild reads pale, instead of every
+  // table's own worst rendering equally dark.
+  const groupRows = {};
+  let maxOn = 0, maxOff = 0;
   for (const v of ["a", "i", "u", "o"]) {
     const morae = VOWEL_GROUPS[v];
-
-    // Keep the per-sound clustering (morae in fixed order), but within each sound
-    // order its recordings hardest-first by their worst per-kana confusion rate.
     const rowsInGroup = [];
     for (const m of morae) {
       const voices = (map[m] || []).filter((voice) => {
@@ -84,14 +87,19 @@ export function drawVoiceConfusion(container, shownRows, offeredRows, { mode, mi
       // added/reordered, unlike the stable voice name.
       for (const voice of voices) rowsInGroup.push({ m, voice, idx: (map[m] || []).indexOf(voice) });
     }
-
-    let maxOn = 0, maxOff = 0;
+    groupRows[v] = rowsInGroup;
     for (const row of rowsInGroup) {
       for (const p of morae) {
         const mag = valueFor(row.m, row.voice, p).mag;
         if (row.m === p) maxOn = Math.max(maxOn, mag); else maxOff = Math.max(maxOff, mag);
       }
     }
+  }
+
+  const html = [];
+  for (const v of ["a", "i", "u", "o"]) {
+    const morae = VOWEL_GROUPS[v];
+    const rowsInGroup = groupRows[v];
 
     let header = `<tr><th></th><th></th>`;
     for (const p of morae) header += `<th>${HIRAGANA[p]}</th>`;
