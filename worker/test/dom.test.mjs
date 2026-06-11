@@ -1279,6 +1279,23 @@ test("dashboard: no drift notice when viewing someone else's data", { skip: LIVE
   assert.equal(win.statslink.getAttribute("href"), "../stats/", "stats link authorises by the viewer's own uid — no viewed ?uid");
 });
 
+// skip on LIVE: needs power granted via local SQL.
+test("dashboard: a level-2 viewer sees the viewed user's nickname + timezone", { skip: LIVE }, async (t) => {
+  const other = await freshTestUser();   // registered with TEST_NICK + sentinel TEST_TZ
+  assert.equal((await postEvents(other, saFixture(Date.now()))).status, 200);
+  const me = await freshTestUser({ role: 0 });
+  await postEvents(me, saFixture(Date.now()));   // create me's row, then grant power
+  grantPowerUser(me, 2);                          // nickname + tz are level-2 data
+
+  const { win, close } = await openPage(`/dashboard/?uid=${other}`, {
+    setup: (w) => w.localStorage.setItem("uid", me),
+  });
+  t.after(close);
+
+  await waitFor(() => win.whois.hidden ? null : true, WAIT);
+  assert.equal(win.whois.textContent, `· “${TEST_NICK}” · UTC+12:07`);   // TEST_TZ = 727 min east
+});
+
 test("dashboard: a Y/N diagonal-miss doesn't keep drifting after a sync", async (t) => {
   // Regression: a Y/N "no" on a correct-kana prompt (heard the right kana, said
   // no) is a diagonal miss with no confuser. The matrix once hand-rolled its own
@@ -1349,6 +1366,21 @@ test("admin reminder: reports a uid's push-subscription state, gated to power us
   assert.equal((await (await ask(admin, target)).json()).on, false, "no subscription → off");
   await subscribePush(target);
   assert.equal((await (await ask(admin, target)).json()).on, true, "subscribed → on");
+});
+
+test("admin user: nickname + tz for the dashboard identity line, gated at level 2", { skip: LIVE }, async () => {
+  const admin = await freshTestUser({ role: 0 });
+  await postEvents(admin, saFixture(Date.now()));   // creates the row for grantPowerUser
+  const target = await freshTestUser();             // registered with TEST_NICK + TEST_TZ
+  const ask = () =>
+    fetch(`${WORKER}/v1/admin/user?uid=${encodeURIComponent(admin)}&target=${encodeURIComponent(target)}`);
+
+  grantPowerUser(admin, 1);
+  assert.equal((await ask()).status, 403, "level 1 is forbidden — nicknames are level-2 data");
+  grantPowerUser(admin, 2);
+  const d = await (await ask()).json();
+  assert.equal(d.nickname, TEST_NICK);
+  assert.equal(d.tz_offset, TEST_TZ);
 });
 
 test("admin: a user's timezone is recorded from events, not just subscriptions", { skip: LIVE }, async () => {

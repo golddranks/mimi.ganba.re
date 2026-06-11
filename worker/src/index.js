@@ -6,6 +6,7 @@
 //   GET  /v1/user/:uid/events       all events for a single user
 //   GET  /v1/admin/stats?uid=…      sound/aggregate stats with no device identifiers; requires power_user >= 1
 //   GET  /v1/admin/stats/users?uid=…  per-user / uid-drilldown stats; requires power_user >= 2
+//   GET  /v1/admin/user?uid=…&target=…  a uid's nickname + tz offset; requires power_user >= 2
 //
 // power_user tiers: 0 = none, 1 = may see the /stats/ page (the overview
 // counters, hour-of-day, per-sound + sound-file difficulty, both confusion
@@ -193,6 +194,8 @@ export default {
         res = await handleAdminUserStats(req, env, url);
       } else if (req.method === "GET" && url.pathname === "/v1/admin/reminder") {
         res = await handleAdminReminder(req, env, url);
+      } else if (req.method === "GET" && url.pathname === "/v1/admin/user") {
+        res = await handleAdminUser(req, env, url);
       } else {
         res = new Response("not found", { status: 404 });
       }
@@ -498,6 +501,24 @@ async function handleAdminReminder(req, env, url) {
     "SELECT remind_state FROM users WHERE uid = ?"
   ).bind(target).first();
   return json({ on: !!sub, state: u ? u.remind_state : null });
+}
+
+// A uid's nickname + tz offset, for the dashboard's identity line. Gated at
+// power_user >= 2 like /v1/admin/stats/users — a nickname ties a person to a
+// device id, exactly the data the level-1/2 split exists for (tz_offset rides
+// along; it's already on the public events response, but here it saves the
+// caller from cross-referencing). Same param shape as /v1/admin/reminder:
+// the requester passes their own uid; ?target is the uid being inspected.
+async function handleAdminUser(req, env, url) {
+  const uid = url.searchParams.get("uid") || "";
+  if (await powerLevel(env, uid) < 2) {
+    return new Response("forbidden", { status: 403 });
+  }
+  const target = url.searchParams.get("target") || "";
+  const u = await env.mimi_stats.prepare(
+    "SELECT nickname, tz_offset FROM users WHERE uid = ?"
+  ).bind(target).first();
+  return json({ nickname: (u && u.nickname) || null, tz_offset: u ? u.tz_offset : null });
 }
 
 async function handleUser(req, env) {

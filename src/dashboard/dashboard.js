@@ -59,6 +59,7 @@ const reminderstatus = document.getElementById("reminderstatus");
 const reminderbtn = document.getElementById("reminderbtn");
 const retention = document.getElementById("retention");
 const nativebadge = document.getElementById("nativebadge");
+const whois = document.getElementById("whois");
 const msg = document.getElementById("msg");
 const dash = document.getElementById("dash");
 
@@ -184,6 +185,23 @@ renderReminders();
 // driven by the URL: paste ?uid=… or follow a link from /admin/ — no load form.
 if (viewerUid && +localStorage.dashLevel >= 1) statslink.hidden = false;
 viewerLevel().then((level) => { statslink.hidden = level < 1; });
+
+// A level-2 viewer gets the viewed user's identity — nickname + timezone — on
+// the Device-ID line. That's per-user data (the /admin/ tier, one above the
+// view-as gate), so it comes from the level-2 endpoint and a level-1 viewer
+// never even fetches it. Missing pieces are simply omitted; nothing on record
+// leaves the line hidden.
+viewerLevel().then(async (level) => {
+  if (level < 2 || !uid) return;
+  const res = await fetch(STATS_URL + "/v1/admin/user?uid=" + encodeURIComponent(viewerUid)
+    + "&target=" + encodeURIComponent(uid)).catch(() => null);
+  if (!res || !res.ok) return;
+  const { nickname, tz_offset } = await res.json();
+  const parts = [];
+  if (nickname) parts.push(`“${nickname}”`);
+  if (tz_offset != null) parts.push(tzLabel(tz_offset));
+  if (parts.length) { whois.textContent = "· " + parts.join(" · "); whois.hidden = false; }
+});
 
 // First paint shows the dash skeleton (zeros + reserved chart space). #msg
 // stays empty (and therefore display:none) during the loading window, so the
